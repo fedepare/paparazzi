@@ -28,12 +28,9 @@
 #define FOLLOW_H
 
 extern void follow_init(void);
-extern void follow_change_wp(unsigned char *buffer);
+void follow_change_wp(struct EnuCoor_i * new_pos);
 
-#define ParseRemoteGps() { \
-    if (DL_REMOTE_GPS_ac_id(dl_buffer) == FOLLOW_AC_ID) { \
-      follow_change_wp(dl_buffer); \
-    } \
-  }
+extern void follow_parse_ACINFO(void);
+extern void follow_parse_REMOTEGPS(void);
 
 #endif // FOLLOW
