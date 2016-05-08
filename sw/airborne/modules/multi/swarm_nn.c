@@ -321,6 +321,16 @@ void guidance_h_module_run(bool in_flight)
     return;
   }
 
+  /* safety check
+   * if vehicle exceeds maximum bank angle switch immediately to hover mode
+   * to regain stable flight
+   */
+  if( stateGetNedToBodyEulers_f()->phi > RadOfDeg(STABILIZATION_ATTITUDE_SP_MAX_PHI + 5) ||
+      stateGetNedToBodyEulers_f()->theta > RadOfDeg(STABILIZATION_ATTITUDE_SP_MAX_THETA + 5))
+  {
+    autopilot_set_mode(AP_MODE_HOVER_Z_HOLD);
+  }
+
   /* get formation parameters */
   compute_spacial_inputs();
 
