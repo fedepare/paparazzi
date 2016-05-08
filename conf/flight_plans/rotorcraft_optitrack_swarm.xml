@@ -11,10 +11,6 @@
     <waypoint name="TD1" x="2" y="1"/>
     <waypoint name="TD2" x="-1" y="1.5"/>
     <waypoint name="TD3" x="-1" y="-2.5"/>
-    <waypoint lat="51.990630" lon="4.376823" name="p1"/>
-    <waypoint lat="51.990614" lon="4.376779" name="p2"/>
-    <waypoint lat="51.990636" lon="4.376759" name="p3"/>
-    <waypoint lat="51.990651" lon="4.376805" name="p4"/>
     <waypoint lat="51.9906213" lon="4.3768628" name="FA1"/>
     <waypoint lat="51.9905874" lon="4.3767766" name="FA2"/>
     <waypoint lat="51.9906409" lon="4.3767226" name="FA3"/>

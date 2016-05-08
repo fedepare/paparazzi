@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2010 Martin Muller
- * Copyright (C) 2016 Gautier Hattenberger
+ * Copyright (C) 2013 Martin Mueller <martinmm@pfump.org>
+ * Copyright (C) 2016 Gautier Hattenberger <gautier.hattenberger@enac.fr>
  *
- * This file is part of paparazzi.
+ * This file is part of paparazzi
  *
  * paparazzi is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,23 +20,18 @@
  */
 
 /**
- * @file modules/adcs/adc_generic.h
- *
- * This module can be used to read one or two values from the ADC channels
- * in a generic way. Data is reported through the default telemetry
- * channel (by default) or can be redirected to an other one (alternate
- * telemetry, datalogger) at a frequency defined in the telemetry xml file.
+ * @file modules/sensors/airspeed_uADC.h
+ * UART interface for Aeroprobe uADC air data computer.
  *
  */
 
-#ifndef ADC_GENERIC_H
-#define ADC_GENERIC_H
+#ifndef AIRSPEED_uADC_H
+#define AIRSPEED_uADC_H
 
 #include "std.h"
 
-extern uint16_t adc_generic_val1;
-extern uint16_t adc_generic_val2;
-void adc_generic_init(void);
-void adc_generic_periodic(void);
+extern void airspeed_uADC_init(void);
+extern void airspeed_uADC_event(void);
+extern void airspeed_uADC_periodic(void);
 
-#endif /* ADC_GENERIC_H */
+#endif

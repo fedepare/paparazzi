@@ -28,6 +28,7 @@
       <message name="OPTIC_FLOW_EST"         period="0.25"/>
       <message name="VECTORNAV_INFO"      period="0.5"/>
       <message name="POTENTIAL"              period="0.11"/>
+      <message name="ROTORCRAFT_CMD"           period=".05"/>
     </mode>
 
     <mode name="ppm">

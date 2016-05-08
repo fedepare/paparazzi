@@ -156,7 +156,7 @@
   </section>
   <section name="STABILIZATION_ATTITUDE" prefix="STABILIZATION_ATTITUDE_">
     <!-- setpoints -->
-    <define name="SP_MAX_PHI" value="45" unit="deg"/>
+    <define name="SP_MAX_PHI" value="20" unit="deg"/>
     <define name="SP_MAX_THETA" value="45" unit="deg"/>
     <define name="SP_MAX_R" value="180" unit="deg/s"/>
     <define name="DEADBAND_A" value="0"/>
@@ -200,7 +200,7 @@
     <define name="VGAIN" value="0"/>
     <define name="AGAIN" value="40"/>
     <define name="REF_TAU" value="0.3"/>
-    <define name="REF_MAX_SPEED" value="1."/>
+    <define name="REF_MAX_SPEED" value="10."/>
   </section>
 
   <section name="SIMULATOR" prefix="NPS_">
@@ -214,7 +214,7 @@
     <define name="MODE_STARTUP" value="AP_MODE_NAV"/>
     <define name="MODE_MANUAL" value="AP_MODE_HOVER_DIRECT"/>
     <define name="MODE_AUTO1" value="AP_MODE_GUIDED"/>
-    <define name="MODE_AUTO2" value="AP_MODE_NAV"/>
+    <define name="MODE_AUTO2" value="AP_MODE_ATTITUDE_Z_HOLD"/>
     <define name="ARRIVED_AT_WAYPOINT" value="0.15"/>
     <define name="AUTOPILOT_IN_FLIGHT_MIN_THRUST" value="1500"/>
     <!--   <define name="NO_RC_THRUST_LIMIT" value="TRUE"/> -->
