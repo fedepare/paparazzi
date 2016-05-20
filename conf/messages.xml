@@ -185,15 +185,15 @@
   </message>
 
   <message name="VECTORNAV_INFO" id="23">
-    <field name="timestamp" 	type="float" 	unit="s"/>
-    <field name="chksm_error" 	type="uint32"/>
-    <field name="hdr_error" 	type="uint32"/>
+    <field name="timestamp"     type="float"    unit="s"/>
+    <field name="chksm_error"   type="uint32"/>
+    <field name="hdr_error"     type="uint32"/>
     <field name="counter" type="uint16"/>
     <field name="ins_status" type="uint8" values="NoTracking|OutOfSpecs|OK"/>
     <field name="ins_err" type="uint8"/>
-    <field name="YprU1" 	type="float" 	unit="deg"/>
-    <field name="YprU2" 	type="float" 	unit="deg"/>
-    <field name="YprU3" 	type="float" 	unit="deg"/>
+    <field name="YprU1"     type="float"    unit="deg"/>
+    <field name="YprU2"     type="float"    unit="deg"/>
+    <field name="YprU3"     type="float"    unit="deg"/>
   </message>
 
   <!--24 is free -->
@@ -623,9 +623,9 @@
   </message>
 
   <message name="GX3_INFO" id="73">
-    <field name="GX3_freq" 	type="float" 	unit="hz"/>
-    <field name="chksm_error" 	type="uint32"/>
-    <field name="hdr_error" 	type="uint32"/>
+    <field name="GX3_freq"  type="float"    unit="hz"/>
+    <field name="chksm_error"   type="uint32"/>
+    <field name="hdr_error"     type="uint32"/>
     <field name="GX3_chksm"	type="uint16"/>
   </message>
 
@@ -636,14 +636,14 @@
   </message>
 
   <message name="VIDEO_TELEMETRY" id="75">
-    <field name="blob_x1" 	type="int32" 	unit="pixels"/>
-    <field name="blob_y1" 	type="int32" 	unit="pixels"/>
-    <field name="blob_x2" 	type="int32" 	unit="pixels"/>
-    <field name="blob_y2" 	type="int32" 	unit="pixels"/>
-    <field name="blob_x3" 	type="int32" 	unit="pixels"/>
-    <field name="blob_y3" 	type="int32" 	unit="pixels"/>
-    <field name="blob_x4" 	type="int32" 	unit="pixels"/>
-    <field name="blob_y4" 	type="int32" 	unit="pixels"/>
+    <field name="blob_x1"   type="int32"    unit="pixels"/>
+    <field name="blob_y1"   type="int32"    unit="pixels"/>
+    <field name="blob_x2"   type="int32"    unit="pixels"/>
+    <field name="blob_y2"   type="int32"    unit="pixels"/>
+    <field name="blob_x3"   type="int32"    unit="pixels"/>
+    <field name="blob_y3"   type="int32"    unit="pixels"/>
+    <field name="blob_x4"   type="int32"    unit="pixels"/>
+    <field name="blob_y4"   type="int32"    unit="pixels"/>
   </message>
 
   <message name="VF_UPDATE" id="76">
@@ -1029,7 +1029,7 @@
   </message>
 
  <message name="TIMESTAMP" id="129">
- 	<field name="timestamp" type="uint32"/>
+    <field name="timestamp" type="uint32"/>
  </message>
 
   <message name="STAB_ATTITUDE_FLOAT" id="130">
@@ -1106,16 +1106,17 @@
   </message>
 
   <message name="RATE_LOOP" id="136">
-    <field name="sp_p" type="int32"/>
-    <field name="sp_q" type="int32"/>
-    <field name="sp_r" type="int32"/>
-    <field name="sumerr_p" type="int32"/>
-    <field name="sumerr_q" type="int32"/>
-    <field name="sumerr_r" type="int32"/>
-    <field name="fb_p" type="int32"/>
-    <field name="fb_q" type="int32"/>
-    <field name="fb_r" type="int32"/>
-    <field name="delta_t" type="int32"/>
+    <description>Rotorcraft rate control loop.</description>
+    <field name="sp_p"     type="float" unit="rad/s" alt_unit="deg/s">rate setpoint</field>
+    <field name="sp_q"     type="float" unit="rad/s" alt_unit="deg/s">rate setpoint</field>
+    <field name="sp_r"     type="float" unit="rad/s" alt_unit="deg/s">rate setpoint</field>
+    <field name="sumerr_p" type="float">integrated quaternion error</field>
+    <field name="sumerr_q" type="float">integrated quaternion error</field>
+    <field name="sumerr_r" type="float">integrated quaternion error</field>
+    <field name="fb_p"     type="float">feedback command on pitch (pprz scale)</field>
+    <field name="fb_q"     type="float">feedback command on roll  (pprz scale)</field>
+    <field name="fb_r"     type="float">feedback command on yaw   (pprz scale)</field>
+    <field name="delta_t"  type="int32">thrust command</field>
   </message>
 
   <message name="FILTER_ALIGNER" id="137">
@@ -1572,13 +1573,18 @@
   </message>
 
 
-  <message name="FLOW_AP_OTF" id="179">
-     <field name="counter"    type="uint32"/>
-     <field name="velocity"   type="int16"  unit="cm/s" alt_unit="m/s"/>
-     <field name="a_attack"   type="int16"  unit="centideg" alt_unit="deg"/>
-     <field name="a_sidesl"   type="int16"  unit="centideg" alt_unit="deg"/>
-     <field name="altitude"   type="int32"  unit="cm" alt_unit="m"/>
-     <field name="checksum"   type="uint8"/>
+  <message name="AEROPROBE" id="179">
+    <description>
+      Airflow data returned by OTF and uADC 3D probes from Aeroprobe.
+    </description>
+    <field name="counter"    type="uint32"/>
+    <field name="velocity"   type="int16"  unit="cm/s" alt_unit="m/s"/>
+    <field name="a_attack"   type="int16"  unit="centideg" alt_unit="deg"/>
+    <field name="a_sideslip" type="int16"  unit="centideg" alt_unit="deg"/>
+    <field name="altitude"   type="int32"  unit="cm" alt_unit="m"/>
+    <field name="dynamic_p"  type="int32"  unit="Pa"/>
+    <field name="static_p"   type="int32"  unit="Pa"/>
+    <field name="checksum"   type="uint8"/>
   </message>
 
   <message name="FMS_TIME" id="180">
@@ -1954,7 +1960,15 @@
     <field name="AMSL_GPS" type="float" unit="ft" alt_unit="m"/>
   </message>
 
- <!--224 is free -->
+ <message name="DIVERGENCE" id="224">
+    <field name="divergence" type="float"> vertical velocity / height from optitrack (unit = 1/sec)</field>
+    <field name="divergence_vision" type="float"> vertical velocity / height from vision (unit = 1/sec)</field>
+    <field name="normalized_thrust" type="float"> thrust / max thrust paparazzi (-)</field>
+    <field name="cov_div" type="float"> covariance of divergence and thrust, or past divergence depending on the mode (-)</field>
+    <field name="pstate" type="float"> gain state in adaptive gain control: indicative of height (-) </field>
+    <field name="pused" type="float"> gain used for control, includes the effect of the p-gain of adaptive control (-) </field>
+    <field name="sonar" type="float"> measurement from the sonar (mm)</field>
+ </message>
 
   <message name="VIDEO_SYNC" id="225">
     <field name="id" type="uint8"/>
@@ -2119,7 +2133,19 @@
     <field name="vz"   type="float" unit="m/s"/>
   </message>
 
-  <!-- 245 is free -->
+  <message name="ESC" id="245">
+    <description>
+      Electronic Speed Controller data
+    </description>
+    <field name="amps"        type="float" unit="A">Current consumption</field>
+    <field name="bat_volts"   type="float" unit="V">Input battery voltage</field>
+    <field name="power"       type="float" unit="W">Electrical power</field>
+    <field name="rpm"         type="float" unit="rpm">Motor rotation speed</field>
+    <field name="motor_volts" type="float" unit="V">Motor voltage</field>
+    <field name="energy"      type="float" unit="Wh">Accumulated consumed energy</field>
+    <field name="motor_id"    type="uint8">Motor ID</field>
+  </message>
+
   <!-- 246 is free -->
 
 
@@ -2239,7 +2265,7 @@
   <field name="course" type="int16" unit="decideg"></field>
   <field name="utm_east"  type="int32" unit="cm"></field>
   <field name="utm_north"  type="int32" unit="cm"></field>
-  <field name="alt"    type="int32" unit="cm"></field>
+  <field name="alt"    type="int32" unit="cm">Height above Mean Sea Level (geoid)</field>
   <field name="utm_zone"  type="int16"></field>
   <field name="itow"  type="uint32" unit="ms"></field>
   <field name="speed"  type="uint16" unit="cm/s"></field>
@@ -2510,11 +2536,11 @@
   </message>
 
   <message name="REMOTE_GPS_SMALL" id="54" link="forwarded">
-    <field name="ac_id"   	type="uint8"/>
     <field name="heading"   type="int16"  unit="rad*1e4"/>
     <field name="pos_xyz"  	type="uint32" unit="cm">bits 31-21 x position in cm : bits 20-10 y position in cm : bits 9-0 z position in cm</field>
     <field name="speed_xyz" type="uint32" unit="cm/s">bits 31-21 speed x in cm/s : bits 20-10 speed y in cm/s : bits 9-0 speed z in cm/s</field>
     <field name="tow"   	type="uint32" unit="ms" alt_unit="m"/>
+    <field name="ac_id"   	type="uint8"/>
   </message>
 
   <message name="REMOTE_GPS" id="55" link="forwarded">
@@ -2525,8 +2551,8 @@
     <field name="ecef_z"  type="int32" unit="cm"   alt_unit="m"/>
     <field name="lat"     type="int32" unit="1e7deg" alt_unit="deg" alt_unit_coef="0.0000001"/>
     <field name="lon"     type="int32" unit="1e7deg" alt_unit="deg" alt_unit_coef="0.0000001"/>
-    <field name="alt"     type="int32" unit="mm"   alt_unit="m"/>
-    <field name="hmsl"    type="int32" unit="mm"   alt_unit="m"/>
+    <field name="alt"     type="int32" unit="mm"   alt_unit="m">Height above WGS84 reference ellipsoid</field>
+    <field name="hmsl"    type="int32" unit="mm"   alt_unit="m">Height above Mean Sea Level (geoid)</field>
     <field name="ecef_xd" type="int32" unit="cm/s" alt_unit="m/s"/>
     <field name="ecef_yd" type="int32" unit="cm/s" alt_unit="m/s"/>
     <field name="ecef_zd" type="int32" unit="cm/s" alt_unit="m/s"/>
@@ -2544,57 +2570,57 @@
     <field name="command"     type="uint8[]"/>
   </message>
 
- <message name="SET_ACTUATOR" id="100" link="forwarded">
-   <field name="value" type="uint16"/>
-   <field name="no" type="uint8"/>
-   <field name="ac_id" type="uint8"/>
- </message>
+  <message name="SET_ACTUATOR" id="100" link="forwarded">
+    <field name="value" type="uint16"/>
+    <field name="no" type="uint8"/>
+    <field name="ac_id" type="uint8"/>
+  </message>
 
- <message name="CSC_SERVO_CMD" id="101">
-   <field name="servo_1" type="uint16"/>
-   <field name="servo_2" type="uint16"/>
-   <field name="servo_3" type="uint16"/>
-   <field name="servo_4" type="uint16"/>
- </message>
+  <message name="CSC_SERVO_CMD" id="101">
+    <field name="servo_1" type="uint16"/>
+    <field name="servo_2" type="uint16"/>
+    <field name="servo_3" type="uint16"/>
+    <field name="servo_4" type="uint16"/>
+  </message>
 
- <message name="BOOZ2_FMS_COMMAND" id="149" link="forwarded">
-   <field name="h_mode" type="uint8" values="KILL|RATE|ATTITUDE|HOVER|NAV"/>
-   <field name="v_mode" type="uint8" values="KILL|DIRECT|CLIMB_RC|CLIMB|ALT|NAV"/>
-   <field name="v_sp"   type="int32"/>
-   <field name="h_sp_1" type="int32"/>
-   <field name="h_sp_2" type="int32"/>
-   <field name="h_sp_3" type="int32"/>
-   <field name="ac_id"  type="uint8"/>
- </message>
+  <message name="BOOZ2_FMS_COMMAND" id="149" link="forwarded">
+    <field name="h_mode" type="uint8" values="KILL|RATE|ATTITUDE|HOVER|NAV"/>
+    <field name="v_mode" type="uint8" values="KILL|DIRECT|CLIMB_RC|CLIMB|ALT|NAV"/>
+    <field name="v_sp"   type="int32"/>
+    <field name="h_sp_1" type="int32"/>
+    <field name="h_sp_2" type="int32"/>
+    <field name="h_sp_3" type="int32"/>
+    <field name="ac_id"  type="uint8"/>
+  </message>
 
- <message name="BOOZ_NAV_STICK" id="150" link="forwarded">
-   <field name="ac_id" type="uint8"/>
-   <field name="vx_sp" type="int8"/>
-   <field name="vy_sp" type="int8"/>
-   <field name="vz_sp" type="int8"/>
-   <field name="r_sp"  type="int8"/>
- </message>
+  <message name="BOOZ_NAV_STICK" id="150" link="forwarded">
+    <field name="ac_id" type="uint8"/>
+    <field name="vx_sp" type="int8"/>
+    <field name="vy_sp" type="int8"/>
+    <field name="vz_sp" type="int8"/>
+    <field name="r_sp"  type="int8"/>
+  </message>
 
- <message name="EXTERNAL_FILTER_SOLUTION" id="151" link="forwarded">
-   <field name="ac_id"  type="uint8"/>
-   <field name="status" type="uint8"/>
-   <field name="x"      type="float" unit="m"/>
-   <field name="xd"     type="float" unit="m"/>
-   <field name="y"      type="float" unit="m"/>
-   <field name="yd"     type="float" unit="m"/>
- </message>
+  <message name="EXTERNAL_FILTER_SOLUTION" id="151" link="forwarded">
+    <field name="ac_id"  type="uint8"/>
+    <field name="status" type="uint8"/>
+    <field name="x"      type="float" unit="m"/>
+    <field name="xd"     type="float" unit="m"/>
+    <field name="y"      type="float" unit="m"/>
+    <field name="yd"     type="float" unit="m"/>
+  </message>
 
- <message name="ROTORCRAFT_CAM_STICK" id="152" link="forwarded">
-   <field name="ac_id" type="uint8"/>
-   <field name="tilt" type="int8"/>
-   <field name="pan" type="int8"/>
- </message>
+  <message name="ROTORCRAFT_CAM_STICK" id="152" link="forwarded">
+    <field name="ac_id" type="uint8"/>
+    <field name="tilt" type="int8"/>
+    <field name="pan" type="int8"/>
+  </message>
 
- <message name="GPS_INJECT" id="153" link="forwarded">
-   <field name="ac_id" type="uint8"/>
-   <field name="packet_id" type="uint8"/>
-   <field name="data" type="uint8[]"/>
- </message>
+  <message name="GPS_INJECT" id="153" link="forwarded">
+    <field name="ac_id" type="uint8"/>
+    <field name="packet_id" type="uint8"/>
+    <field name="data" type="uint8[]"/>
+  </message>
 
 </msg_class>
 
@@ -2911,6 +2937,11 @@
 
 
   <msg_class name="intermcu">
+
+	<!-- KEEP INTERMCU MESSAGES BELOW 8 BYTES PER MESSAGES
+		 TO ALLOW TRANSFER OVER CAN BUS -->
+
+
     <message name="IMCU_COMMANDS" id="1">
       <field name="status" type="uint8"/>
       <field name="values" type="int16[]"/>
@@ -2920,6 +2951,38 @@
       <field name="status" type="uint8"/>
       <field name="values" type="int16[]"/>
     </message>
+
+   <message name="IMCU_SPEKTRUM_SOFT_BIND" id="3"/>
+
+  <message name="IMCU_FBW_STATUS" id="4">
+    <field name="mode" type="uint8" values="MANUAL|AUTO|FAILSAFE"/>
+    <field name="rc_status" type="uint8" values="OK|LOST|REALLY_LOST"/>
+    <field name="frame_rate" type="uint8" unit="Hz"/>
+    <field name="vsupply" type="uint16" unit="decivolt"/>
+    <field name="current" type="int32" unit="mA"/>
+  </message>
+
+   <message name="IMCU_REMOTE_MAG" id="10">
+     <field name="mag_x" type="int16">RAW Magnetometer Data</field>
+     <field name="mag_y" type="int16"/>
+     <field name="mag_z" type="int16"/>
+   </message>
+
+   <message name="IMCU_REMOTE_BARO" id="11">
+     <field name="pitot_stat" type="float" unit="Pa">Static Barometric Pressure in Pascal</field>
+     <field name="pitot_temp" type="float"  unit="C">Pressure Sensor Temperature</field>
+   </message>
+
+   <message name="IMCU_REMOTE_AIRSPEED" id="12">
+     <field name="pitot_IAS"  type="float"  unit="m/s">Indicated Airspeed</field>
+   </message>
+
+   <message name="IMCU_REMOTE_GROUND" id="15">
+     <field name="mode" type="uint8" values="SWITCH|SONAR|LASER|INFRARED"/>
+     <field name="id" type="uint8">Sensor ID</field>
+     <field name="range" type="uint16" unit="cm"/>
+   </message>
+
   </msg_class>
 
 </protocol>

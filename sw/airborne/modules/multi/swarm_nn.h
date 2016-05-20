@@ -35,4 +35,16 @@ extern uint8_t use_height;
 extern void swarm_nn_init(void);
 extern void swarm_nn_periodic(void);
 
+// and own guidance_h
+#define GUIDANCE_H_MODE_MODULE_SETTING GUIDANCE_H_MODE_MODULE
+
+// Use hover mode to maintain altitude
+#define GUIDANCE_V_MODE_MODULE_SETTING GUIDANCE_V_MODE_HOVER
+
+// Implement own Vertical loops
+extern void guidance_h_module_init(void);
+extern void guidance_h_module_enter(void);
+extern void guidance_h_module_read_rc(void);
+extern void guidance_h_module_run(bool in_flight);
+
 #endif // swarm_nn_H

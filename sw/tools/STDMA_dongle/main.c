@@ -249,8 +249,6 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
   debug_print("\n");
 #endif
 
-  printf("%d %d ", server_addr.sin_family, server_addr.sin_port);
-  
   server_addr.sin_family = AF_INET;
   ssize_t size = sendto(sock, data, msg->data.len - STDMA_ADV_HEADER_LEN + 8, MSG_DONTWAIT, (struct sockaddr *)&server_addr,
          sizeof(server_addr));

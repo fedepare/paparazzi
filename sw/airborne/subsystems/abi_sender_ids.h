@@ -248,5 +248,9 @@
 #define RSSI_BLUEGIGA_ID 1
 #endif
 
+#ifndef RSSI_MODLUE_ID
+#define RSSI_MODULE_ID 2
+#endif
+
 
 #endif /* ABI_SENDER_IDS_H */

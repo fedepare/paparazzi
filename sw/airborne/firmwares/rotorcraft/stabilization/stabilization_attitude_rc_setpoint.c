@@ -248,6 +248,9 @@ void stabilization_attitude_read_rc_setpoint_eulers_f(struct FloatEulers *sp, bo
   static float last_ts = 0.f;
 
   sp->phi = get_rc_roll_f();
+  if (fabs(sp->phi) > GUIDANCE_H_MAX_BANK)
+    BoundAbs(sp->phi, GUIDANCE_H_MAX_BANK);
+
   sp->theta = get_rc_pitch_f();
 
   if (in_flight) {

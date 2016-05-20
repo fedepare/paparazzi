@@ -13,7 +13,7 @@
     </target>
 
     <target name="nps" board="pc">
-      <module name="fdm" type="jsbsim"/>
+      <subsystem name="fdm" type="jsbsim"/>
     </target>
 
     <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
@@ -21,29 +21,30 @@
     <configure name="USE_MAGNETOMETER" value="0"/>
 
 	<!-- Subsystem section -->
-    <module name="telemetry" type="transparent_udp"/>
-    <module name="radio_control" type="datalink"/>
-    <module name="motor_mixing"/>
-    <module name="actuators" type="ardrone2"/>
-    <module name="imu" type="ardrone2"/>
-    <module name="gps" type="datalink"/>
-    <module name="stabilization" type="indi"/>
-    <module name="ahrs" type="int_cmpl_quat"/>
-    <module name="ins" type="extended"/>
+    <subsystem name="telemetry" type="transparent_udp"/>
+    <!--subsystem name="telemetry" type="transparent_usb"/-->
+    <subsystem name="radio_control" type="datalink"/>
+    <subsystem name="motor_mixing"/>
+    <subsystem name="actuators" type="ardrone2"/>
+    <subsystem name="imu" type="ardrone2"/>
+    <subsystem name="gps" type="datalink"/>
+    <subsystem name="stabilization" type="indi"/>
+    <subsystem name="ahrs" type="int_cmpl_quat"/>
+    <subsystem name="ins" type="extended"/>
   </firmware>
 
   <modules main_freq="512">
-    <module name="bat_voltage_ardrone2.xml"/>
-    <!--module name="stereocam_droplet.xml" /-->
-	<module name="extra_dl.xml">
+    <load name="bat_voltage_ardrone2.xml"/>
+    <!--load name="stereocam_droplet.xml" /-->
+	  <load name="extra_dl.xml">
       <configure name="EXTRA_DL_PORT" value="UDP1"/>
       <define name="UDP1_PORT_IN" value="5000"/>
       <define name="UDP1_PORT_OUT" value="5001"/>
       <define name="UDP1_HOST" value="127.0.0.1"/>
-	</module>
-	<module name="traffic_info.xml"/>
-    <module name="swarm_nn.xml"/>
-    <module name="rssi.xml"/>
+	  </load>
+	  <load name="traffic_info.xml"/>
+    <load name="swarm_nn.xml"/>
+    <load name="rssi.xml"/>
   </modules>
 
   <commands>
@@ -111,7 +112,7 @@
 
     <!-- Use GPS heading instead of magneto -->
     <define name="USE_GPS_HEADING" value="1"/>
-    <!--define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/-->
+    <define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
   </section>
 
   <section name="INS" prefix="INS_">
@@ -155,8 +156,8 @@
   </section>
   <section name="STABILIZATION_ATTITUDE" prefix="STABILIZATION_ATTITUDE_">
     <!-- setpoints -->
-    <define name="SP_MAX_PHI" value="45" unit="deg"/>
-    <define name="SP_MAX_THETA" value="45" unit="deg"/>
+    <define name="SP_MAX_PHI" value="20" unit="deg"/>
+    <define name="SP_MAX_THETA" value="20" unit="deg"/>
     <define name="SP_MAX_R" value="180" unit="deg/s"/>
     <define name="DEADBAND_A" value="0"/>
     <define name="DEADBAND_E" value="0"/>
@@ -189,7 +190,7 @@
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <!-- Good weather -->
-    <define name="MAX_BANK" value="20" unit="deg"/>
+    <define name="MAX_BANK" value="30" unit="deg"/>
     <!-- Bad weather -->
     <!-- define name="MAX_BANK" value="32" unit="deg"/ -->
 

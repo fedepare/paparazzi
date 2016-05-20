@@ -581,12 +581,20 @@ gboolean timeout_transmit_callback(gpointer data)
        * This is primarily due to the maximum packet size of the bluetooth msgs of 19 bytes
        * increases the probability that a complete message will be accepted
        */
+<<<<<<< HEAD
+      IvySendMsg("0 REMOTE_GPS_SMALL %d %d %d %d %d", aircrafts[rigidBodies[i].id].ac_id, // uint8 rigid body ID (1 byte)
+                (int16_t)(heading * 10000),       // int16_t heading in rad*1e4 (2 bytes)
+                pos_xyz,                          // uint32 ENU X, Y and Z in CM (4 bytes)
+                speed_xyz,                        // uint32 ENU velocity X, Y, Z in cm/s (4 bytes)
+                tow);                             // uint32_t time of day
+=======
       IvySendMsg("0 REMOTE_GPS_SMALL %d %d %d %d %d",
                 (int16_t)(heading * 10000),       // int16_t heading in rad*1e4 (2 bytes)
                 pos_xyz,                          // uint32 ENU X, Y and Z in CM (4 bytes)
                 speed_xyz,                        // uint32 ENU velocity X, Y, Z in cm/s (4 bytes)
                 tow,                              // uint32_t time of day
                 aircrafts[rigidBodies[i].id].ac_id); // uint8 rigid body ID (1 byte)
+>>>>>>> 6b61e8737eeeb7a15bbe3fa9ef400a8837f3595f
 
     } else {
       IvySendMsg("0 REMOTE_GPS %d %d %d %d %d %d %d %d %d %d %d %d %d %d", aircrafts[rigidBodies[i].id].ac_id,
