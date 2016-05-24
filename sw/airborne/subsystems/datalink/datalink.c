@@ -51,9 +51,6 @@
 #include "led.h"
 #endif
 
-#define MOfCm(_x) (((float)(_x))/100.)
-#define MOfMm(_x) (((float)(_x))/1000.)
-
 #if USE_NPS
 bool datalink_enabled = true;
 #endif

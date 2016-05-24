@@ -30,6 +30,7 @@
 #include "subsystems/electrical.h"
 #include "mcu_periph/uart.h"
 
+
 #include "modules/spektrum_soft_bind/spektrum_soft_bind_fbw.h"
 
 #include BOARD_CONFIG
@@ -124,22 +125,6 @@ void intermcu_send_status(uint8_t mode)
                                 &electrical.current);
 }
 
-void intermcu_blink_fbw_led(uint16_t dv)
-{
-#ifdef FBW_MODE_LED
-  static uint16_t idv = 0;
-  if (!autopilot_motors_on) {
-    if (!(dv % (PERIODIC_FREQUENCY))) {
-      if (!(idv++ % 3)) { LED_OFF(FBW_MODE_LED);} else {LED_TOGGLE(FBW_MODE_LED);}
-    }
-  } else {
-    LED_TOGGLE(FBW_MODE_LED); // toggle makes random blinks if intermcu comm problem!
-  }
-#else
-  (void)dv;
-#endif
-}
-
 #pragma GCC diagnostic ignored "-Wcast-align"
 static void intermcu_parse_msg(void (*commands_frame_handler)(void))
 {
@@ -150,8 +135,12 @@ static void intermcu_parse_msg(void (*commands_frame_handler)(void))
       uint8_t i;
       uint8_t size = DL_IMCU_COMMANDS_values_length(imcu_msg_buf);
       int16_t *new_commands = DL_IMCU_COMMANDS_values(imcu_msg_buf);
-      uint8_t status = DL_IMCU_COMMANDS_status(imcu_msg_buf);
-      autopilot_motors_on = status & 0x1;
+      intermcu.cmd_status |= DL_IMCU_COMMANDS_status(imcu_msg_buf);
+
+      // Read the autopilot status and then clear it
+      autopilot_motors_on = INTERMCU_GET_CMD_STATUS(INTERMCU_CMD_MOTORS_ON);
+      INTERMCU_CLR_CMD_STATUS(INTERMCU_CMD_MOTORS_ON)
+
       for (i = 0; i < size; i++) {
         intermcu_commands[i] = new_commands[i];
       }
@@ -225,7 +214,7 @@ static void checkPx4RebootCommand(uint8_t b)
       //I suspect a temperature related issue, combined with the fbw f1 crystal which is out of specs
       //After a initial period on 1500000, revert to 230400
       //We still start at 1500000 to remain compatible with original PX4 firmware. (which always runs at 1500000)
-      uart_periph_set_baudrate(intermcu_device->periph, B230400);
+      uart_periph_set_baudrate(intermcu.device->periph, B230400);
       intermcu.stable_px4_baud = CHANGING_BAUD;
       px4bl_tid = sys_time_register_timer(1.0, NULL);
       return;
@@ -246,14 +235,14 @@ static void checkPx4RebootCommand(uint8_t b)
 
       //send some magic back
       //this is the same as the Pixhawk IO code would send
-      intermcu_device->put_byte(intermcu_device->periph, 0, 0x00);
-      intermcu_device->put_byte(intermcu_device->periph, 0, 0xe5);
-      intermcu_device->put_byte(intermcu_device->periph, 0, 0x32);
-      intermcu_device->put_byte(intermcu_device->periph, 0, 0x0a);
-      intermcu_device->put_byte(intermcu_device->periph, 0,
+      intermcu.device->put_byte(intermcu.device->periph, 0, 0x00);
+      intermcu.device->put_byte(intermcu.device->periph, 0, 0xe5);
+      intermcu.device->put_byte(intermcu.device->periph, 0, 0x32);
+      intermcu.device->put_byte(intermcu.device->periph, 0, 0x0a);
+      intermcu.device->put_byte(intermcu.device->periph, 0,
                                 0x66); // dummy byte, seems to be necessary otherwise one byte is missing at the fmu side...
 
-      while (((struct uart_periph *)(intermcu_device->periph))->tx_running) {
+      while (((struct uart_periph *)(intermcu.device->periph))->tx_running) {
         // tx_running is volatile now, so LED_TOGGLE not necessary anymore
 #ifdef SYS_TIME_LED
         LED_TOGGLE(SYS_TIME_LED);
