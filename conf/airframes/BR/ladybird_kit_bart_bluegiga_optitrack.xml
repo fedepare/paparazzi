@@ -197,7 +197,7 @@
  <modules main_freq="512">
    <!--module name="send_imu_mag_current.xml"/-->
    <!--module name="swarm_potential.xml"/-->
-   <module name="swarm_nn.xml"/>
+   <!--module name="swarm_nn.xml"/-->
    <module name="stereocam.xml">
      <configure name="STEREO_UART" value="UART1"/>
      <configure name="STEREO_BAUD" value="B115200"/>
