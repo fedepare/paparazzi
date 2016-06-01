@@ -31,21 +31,81 @@
 #include <inttypes.h>
 #include <math/pprz_geodetic_int.h>
 
-struct ac_info_ {
+/**
+ * @defgroup ac_info Data availability representations
+ * @{
+ */
+#define AC_INFO_POS_UTM_I 0
+#define AC_INFO_POS_LLA_I 1
+#define AC_INFO_POS_NED_I 2
+#define AC_INFO_POS_UTM_F 3
+#define AC_INFO_POS_LLA_F 4
+#define AC_INFO_POS_NED_F 5
+#define AC_INFO_VEL_NED_I 6
+#define AC_INFO_VEL_NED_F 7
+
+struct acInfo {
   uint8_t ac_id;
-  struct UtmCoor_i utm;
-  uint16_t course; ///< decideg (CW)
-  uint16_t gspeed; ///< cm/s
-  uint16_t climb;  ///< cm/s
-  uint32_t itow;   ///< ms
+  /**
+   * Holds the status bits for all acinfo position and velocity representations.
+   * When the corresponding bit is set the representation
+   * is already computed.
+   */
+  uint16_t status;
+
+  /**
+   * Position in UTM coordinates.
+   * Units x,y: centimetres.
+   * Units z: millimetres above MSL
+   */
+  struct UtmCoor_i utm_pos_i;
+
+  /**
+   * Position in Latitude, Longitude and Altitude.
+   * Units lat,lon: degrees*1e7
+   * Units alt: milimeters above reference ellipsoid
+   */
+  struct LlaCoor_i lla_pos_i;
+
+  /**
+   * Velocity in North East Down coordinates.
+   * Units: m/s in BFP with #INT32_SPEED_FRAC
+   */
+  struct NedCoor_i ned_vel_i;
+
+  /**
+   * Position in UTM coordinates.
+   * Units x,y: meters.
+   * Units z: meters above MSL
+   */
+  struct UtmCoor_f utm_pos_f;
+
+  /**
+   * Position in Latitude, Longitude and Altitude.
+   * Units lat,lon: radians
+   * Units alt: meters above reference ellipsoid
+   */
+  struct LlaCoor_f lla_pos_f;
+
+  /**
+   * @brief speed in North East Down coordinates
+   * @details Units: m/s */
+  struct NedCoor_f ned_vel_f;
+
+  uint16_t course;        ///< decideg (CW)
+  uint16_t gspeed;        ///< cm/s
+  uint16_t climb;         ///< cm/s
+  uint32_t itow;          ///< ms
 };
 
 extern uint8_t ti_acs_idx;
 extern uint8_t ti_acs_id[];
-extern struct ac_info_ ti_acs[];
+extern struct acInfo ti_acs[];
 
 extern void traffic_info_init(void);
-extern struct ac_info_ *get_ac_info(uint8_t id);
+
+/************************ Set functions ****************************/
+
 
 /**
  * Set Aircraft info.
@@ -76,6 +136,145 @@ extern void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint3
  */
 extern void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
                             int16_t course, uint16_t gspeed, int16_t climb, uint32_t itow);
+
+/** Set position from UTM coordinates (int).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] ned_vel velocity in NED (float)
+*/
+static inline void acInfoSetPositionUtm_i(uint8_t ac_id, struct UtmCoor_i *utm_pos)
+{
+  UTM_COPY(ti_acs[ti_acs_id[ac_id]].utm_pos_i, *utm_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_UTM_I);
+}
+
+/** Set position from LLA coordinates (int).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] ned_vel velocity in NED (float)
+*/
+static inline void acInfoSetPositionLla_i(uint8_t ac_id, struct LlaCoor_i *lla_pos)
+{
+  LLA_COPY(ti_acs[ti_acs_id[ac_id]].lla_pos_i, *lla_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_LLA_I);
+}
+
+/** Set position from UTM coordinates (float).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] ned_vel velocity in NED (float)
+*/
+static inline void acInfoSetPositionUtm_f(uint8_t ac_id, struct UtmCoor_f *utm_pos)
+{
+  UTM_COPY(ti_acs[ti_acs_id[ac_id]].utm_pos_f, *utm_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_UTM_F);
+}
+
+/** Set position from LLA coordinates (float).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] ned_vel velocity in NED (float)
+*/
+static inline void acInfoSetPositionLla_f(uint8_t ac_id, struct LlaCoor_f *lla_pos)
+{
+  LLA_COPY(ti_acs[ti_acs_id[ac_id]].lla_pos_i, *lla_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_LLA_F);
+}
+
+/** Set velocity from NED coordinates (int).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] ned_vel velocity in NED (float)
+*/
+static inline void acInfoSetVelocityNed_i(uint8_t ac_id, struct NedCoor_i *ned_vel)
+{
+  VECT3_COPY(ti_acs[ti_acs_id[ac_id]].ned_vel_i, *ned_vel);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_VEL_NED_I);
+}
+
+/** Set velocity from NED coordinates (float).
+ * @param[in] aircraft id of aircraft info to set
+ * @param[in] ned_vel velocity in NED (float)
+ */
+static inline void acInfoSetPositionNed_F(uint8_t ac_id, struct NedCoor_f *ned_vel)
+{
+  VECT3_COPY(ti_acs[ti_acs_id[ac_id]].ned_vel_i, *ned_vel);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_VEL_NED_F);
+}
+
+/************************ Get functions ****************************/
+
+extern void acInfoCalcPositionUtm_i(uint8_t ac_id);
+extern void acInfoCalcPositionUtm_f(uint8_t ac_id);
+extern void acInfoCalcPositionLla_i(uint8_t ac_id);
+extern void acInfoCalcPositionLla_f(uint8_t ac_id);
+
+/** Get position from UTM coordinates (int).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetPositionUtm_i(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)) {
+    acInfoCalcPositionUtm_i(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].utm_pos_i;
+}
+
+/** Get position from LLA coordinates (int).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetPositionLla_i(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)) {
+    acInfoCalcPositionLla_i(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].lla_pos_i;
+}
+
+/** Get position from UTM coordinates (float).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetPositionUtm_f(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)) {
+    acInfoCalcPositionUtm_f(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].utm_pos_f;
+}
+
+/** Get position from LLA coordinates (float).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetPositionLla_f(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)) {
+    acInfoCalcPositionLla_f(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].lla_pos_f;
+}
+
+/** Get position from NED coordinates (int).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetVelocityNed_i(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)) {
+    acInfoCalcVelocityNed_i(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].utm_pos_i;
+}
+
+/** Get position from NED coordinates (float).
+ * @param[in] aircraft id of aircraft info to get
+ */
+static inline struct UtmCoor_i *stateGetVelocityNed_f(uint8_t ac_id)
+{
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)) {
+    acInfoCalcPositionNed_f(ac_id);
+  }
+  return &ti_acs[ti_acs_id[ac_id]].utm_pos_f;
+}
 
 /** Parsing datalink and telemetry functions that contain other vehicle position
 */
