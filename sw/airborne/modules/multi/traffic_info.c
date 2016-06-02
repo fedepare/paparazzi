@@ -26,16 +26,14 @@
 
 #include "modules/multi/traffic_info.h"
 
+#include "math/pprz_algebra.h"
+
 #include "generated/airframe.h"     // AC_ID
 #include "generated/flight_plan.h"  // NAV_MSL0
 
 #include "subsystems/datalink/datalink.h"
 #include "pprzlink/dl_protocol.h"
 #include "pprzlink/messages.h"
-
-#include "math/pprz_geodetic_int.h"
-#include "math/pprz_geodetic_float.h"
-#include "math/pprz_geodetic_utm.h"
 
 #include "subsystems/gps.h"
 
@@ -85,7 +83,7 @@ int parse_acinfo_dl()
           climb |= 0xFC00;  // fix for twos complements
         }
 
-        set_acInfolla(sender_id,
+        set_ac_info_lla(sender_id,
                         DL_GPS_SMALL_lla_lat(dl_buffer),
                         DL_GPS_SMALL_lla_lon(dl_buffer),
                         (int32_t)DL_GPS_SMALL_alt(dl_buffer) * 10,
@@ -109,7 +107,7 @@ int parse_acinfo_dl()
       }
       break;
       case DL_GPS_LLA: {
-        set_acInfolla(sender_id,
+        set_ac_info_lla(sender_id,
                         DL_GPS_LLA_lat(dl_buffer),
                         DL_GPS_LLA_lon(dl_buffer),
                         DL_GPS_LLA_alt(dl_buffer),
@@ -144,12 +142,12 @@ int parse_acinfo_dl()
 
   return 1;
 }
-
+/*
 struct acInfo *get_ac_info(uint8_t _id)
 {
   return &ti_acs[ti_acs_id[_id]];
 }
-
+*/
 void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
                  uint16_t gspeed, uint16_t climb, uint32_t itow)
 {
@@ -159,31 +157,39 @@ void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt
       ti_acs[ti_acs_id[id]].ac_id = id;
     }
 
+    ti_acs[ti_acs_id[id]].status = 0;
+
     uint16_t my_zone = UtmZoneOfLlaLonDeg(gps.lla_pos.lon);
     if (utm_zone == my_zone) {
       ti_acs[ti_acs_id[id]].utm_pos_i.east = utm_east;
       ti_acs[ti_acs_id[id]].utm_pos_i.north = utm_north;
+      ti_acs[ti_acs_id[id]].utm_pos_i.alt = alt;
+      ti_acs[ti_acs_id[id]].utm_pos_i.zone = utm_zone;
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_UTM_I);
     } else { // store other uav in utm extended zone
       struct UtmCoor_i utm = {.east = utm_east, .north = utm_north, .alt = alt, .zone = utm_zone};
       struct LlaCoor_i lla;
       lla_of_utm_i(&lla, &utm);
+      LLA_COPY(ti_acs[ti_acs_id[id]].lla_pos_i, lla);
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_LLA_I);
+
       utm.zone = my_zone;
       utm_of_lla_i(&utm, &lla);
 
-      ti_acs[ti_acs_id[id]].utm_pos_i.east = utm.east;
-      ti_acs[ti_acs_id[id]].utm_pos_i.north = utm.north;
+      UTM_COPY(ti_acs[ti_acs_id[id]].utm_pos_i, utm);
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_UTM_I);
     }
 
-    ti_acs[ti_acs_id[id]].utm_pos_i.alt = alt;
-    ti_acs[ti_acs_id[id]].utm_pos_i.zone = utm_zone;
-    ti_acs[ti_acs_id[id]].course = course;
-    ti_acs[ti_acs_id[id]].gspeed = gspeed;
-    ti_acs[ti_acs_id[id]].climb = climb;
+    ti_acs[ti_acs_id[id]].course = RadOfDeciDeg(course);
+    ti_acs[ti_acs_id[id]].gspeed = MOfCm(gspeed);
+    ti_acs[ti_acs_id[id]].climb = MOfCm(climb);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_VEL_LOCAL_F);
+
     ti_acs[ti_acs_id[id]].itow = itow;
   }
 }
 
-void set_acInfolla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
+void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
                      int16_t course, uint16_t gspeed, int16_t climb, uint32_t itow)
 {
 
@@ -193,16 +199,24 @@ void set_acInfolla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
       ti_acs[ti_acs_id[id]].ac_id = id;
     }
 
+    ti_acs[ti_acs_id[id]].status = 0;
+
     struct LlaCoor_i lla = {.lat = lat, .lon = lon, .alt = alt};
+    LLA_COPY(ti_acs[ti_acs_id[id]].lla_pos_i, lla);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_LLA_I);
+
     struct UtmCoor_i utm;
     utm.zone = UtmZoneOfLlaLonDeg(gps.lla_pos.lon);   // use my zone as reference, i.e zone extend
-
     utm_of_lla_i(&utm, &lla);
 
-    UTM_COPY(ti_acs[ti_acs_idx[id]].utm_pos_i, utm);
-    ti_acs[ti_acs_id[id]].course = course;
-    ti_acs[ti_acs_id[id]].gspeed = gspeed;
-    ti_acs[ti_acs_id[id]].climb = climb;
+    UTM_COPY(ti_acs[ti_acs_id[id]].utm_pos_i, utm);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_UTM_I);
+
+    ti_acs[ti_acs_id[id]].course = RadOfDeciDeg(course);
+    ti_acs[ti_acs_id[id]].gspeed = MOfCm(gspeed);
+    ti_acs[ti_acs_id[id]].climb = MOfCm(climb);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_VEL_LOCAL_F);
+
     ti_acs[ti_acs_id[id]].itow = itow;
   }
 }
@@ -222,14 +236,14 @@ void acInfoCalcPositionUtm_i(uint8_t ac_id)
     utm_of_lla_i(&ti_acs[ti_acs_id[ac_id]].utm_pos_i, &ti_acs[ti_acs_id[ac_id]].lla_pos_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F))
   {
-    UTM_BFP_OF_FLOAT(&ti_acs[ti_acs_id[ac_id]].utm_pos_i, &ti_acs[ti_acs_id[ac_id]].utm_pos_f);
+    UTM_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].utm_pos_i, ti_acs[ti_acs_id[ac_id]].utm_pos_f);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F))
   {
     ti_acs[ti_acs_id[ac_id]].utm_pos_i.zone = 0;
     utm_of_lla_f(&ti_acs[ti_acs_id[ac_id]].utm_pos_f, &ti_acs[ti_acs_id[ac_id]].lla_pos_f);
     SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F);
 
-    UTM_BFP_OF_FLOAT(&ti_acs[ti_acs_id[ac_id]].utm_pos_i, &ti_acs[ti_acs_id[ac_id]].utm_pos_f);
+    UTM_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].utm_pos_i, ti_acs[ti_acs_id[ac_id]].utm_pos_f);
   }
 
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I);
@@ -244,16 +258,16 @@ void acInfoCalcPositionLla_i(uint8_t ac_id)
 
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F))
   {
-    LLA_BFP_OF_FLOAT(&ti_acs[ti_acs_id[ac_id]].lla_pos_i, &ti_acs[ti_acs_id[ac_id]].lla_pos_f);
+    LLA_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].lla_pos_i, ti_acs[ti_acs_id[ac_id]].lla_pos_f);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I))
   {
     // use my zone as reference, i.e zone extend
     lla_of_utm_i(&ti_acs[ti_acs_id[ac_id]].lla_pos_i, &ti_acs[ti_acs_id[ac_id]].utm_pos_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F))
   {
-    lla_of_utm_f(&ti_acs[ti_acs_id[ac_id]].utm_pos_f, &ti_acs[ti_acs_id[ac_id]].lla_pos_f);
+    lla_of_utm_f(&ti_acs[ti_acs_id[ac_id]].lla_pos_f, &ti_acs[ti_acs_id[ac_id]].utm_pos_f);
     SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F);
-    LLA_BFP_OF_FLOAT(&ti_acs[ti_acs_id[ac_id]].lla_pos_i, &ti_acs[ti_acs_id[ac_id]].lla_pos_f);
+    LLA_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].lla_pos_i, ti_acs[ti_acs_id[ac_id]].lla_pos_f);
   }
 
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I);
@@ -268,14 +282,14 @@ void acInfoCalcPositionUtm_f(uint8_t ac_id)
 
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I))
   {
-    UTM_FLOAT_OF_BFP(&ti_acs[ti_acs_id[ac_id]].utm_pos_f, &ti_acs[ti_acs_id[ac_id]].utm_pos_i);
+    UTM_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].utm_pos_f, ti_acs[ti_acs_id[ac_id]].utm_pos_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I))
   {
     // use my zone as reference, i.e zone extend
     ti_acs[ti_acs_id[ac_id]].utm_pos_i.zone = 0;
     utm_of_lla_i(&ti_acs[ti_acs_id[ac_id]].utm_pos_i, &ti_acs[ti_acs_id[ac_id]].lla_pos_i);
     SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I);
-    UTM_FLOAT_OF_BFP(&ti_acs[ti_acs_id[ac_id]].utm_pos_f, &ti_acs[ti_acs_id[ac_id]].utm_pos_i);
+    UTM_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].utm_pos_f, ti_acs[ti_acs_id[ac_id]].utm_pos_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F))
   {
     /* not very accurate with float ~5cm */
@@ -294,13 +308,13 @@ void acInfoCalcPositionLla_f(uint8_t ac_id)
 
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I))
   {
-    LLA_FLOAT_OF_BFP(&ti_acs[ti_acs_id[ac_id]].lla_pos_f, &ti_acs[ti_acs_id[ac_id]].lla_pos_i);
+    LLA_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].lla_pos_f, ti_acs[ti_acs_id[ac_id]].lla_pos_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I))
   {
-    lla_of_utm_i(&ti_acs[ti_acs_id[ac_id]].utm_pos_i, &ti_acs[ti_acs_id[ac_id]].lla_pos_i);
+    lla_of_utm_i(&ti_acs[ti_acs_id[ac_id]].lla_pos_i, &ti_acs[ti_acs_id[ac_id]].utm_pos_i);
     SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I);
 
-    LLA_FLOAT_OF_BFP(&ti_acs[ti_acs_id[ac_id]].lla_pos_f, &ti_acs[ti_acs_id[ac_id]].lla_pos_i);
+    LLA_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].lla_pos_f, ti_acs[ti_acs_id[ac_id]].lla_pos_i);
   }
 
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F);
@@ -315,13 +329,13 @@ void acInfoCalcVelocityNed_i(uint8_t ac_id)
 
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F))
   {
-    SPEEDS_BFP_OF_REAL(&ti_acs[ti_acs_id[ac_id]].ned_vel_i, &ti_acs[ti_acs_id[ac_id]].ned_vel_f);
+    SPEEDS_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].enu_vel_i, ti_acs[ti_acs_id[ac_id]].enu_vel_f);
   } else {
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.x = ti_acs[ti_acs_id[ac_id]].gspeed * sinf(ti_acs[ti_acs_id[ac_id]].course);
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.x = ti_acs[ti_acs_id[ac_id]].gspeed * sinf(ti_acs[ti_acs_id[ac_id]].course);
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
     SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F);
-    SPEEDS_BFP_OF_REAL(&ti_acs[ti_acs_id[ac_id]].ned_vel_i, &ti_acs[ti_acs_id[ac_id]].ned_vel_f);
+    SPEEDS_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].enu_vel_i, ti_acs[ti_acs_id[ac_id]].enu_vel_f);
   }
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_I);
 }
@@ -335,11 +349,11 @@ void acInfoCalcVelocityNed_f(uint8_t ac_id)
 
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_I))
   {
-    SPEEDS_REAL_OF_BFP(&ti_acs[ti_acs_id[ac_id]].ned_vel_f, &ti_acs[ti_acs_id[ac_id]].ned_vel_i);
-  } else {
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.x = ti_acs[ti_acs_id[ac_id]].gspeed * sinf(ti_acs[ti_acs_id[ac_id]].course);
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
-    ti_acs[ti_acs_id[ac_id]].ned_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
+    SPEEDS_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].enu_vel_f, ti_acs[ti_acs_id[ac_id]].enu_vel_i);
+  } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_LOCAL_F)) {
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.x = ti_acs[ti_acs_id[ac_id]].gspeed * sinf(ti_acs[ti_acs_id[ac_id]].course);
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
+    ti_acs[ti_acs_id[ac_id]].enu_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
   }
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F);
 }

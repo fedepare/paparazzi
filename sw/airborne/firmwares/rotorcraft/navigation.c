@@ -675,19 +675,18 @@ void nav_oval(uint8_t p1, uint8_t p2, float radius)
 #ifdef TRAFFIC_INFO
 #include "modules/multi/traffic_info.h"
 
-void nav_follow(uint8_t _ac_id, uint32_t distance, uint32_t height)
+void nav_follow(uint8_t ac_id, uint32_t distance, uint32_t height)
 {
-  struct EnuCoor_i target;
+  struct EnuCoor_i target = acInfoGetPositionEnu_i(ac_id);
 
-  struct ac_info_ * ac = get_ac_info(_ac_id);
 
-  float alpha = M_PI / 2 - ac->course;
+  float alpha = M_PI / 2 - acInfoGetCourse(ac_id);
   float ca = cosf(alpha), sa = sinf(alpha);
-  target.x = POS_BFP_OF_REAL(ac->utm.east - distance * ca - stateGetPositionUtm_f()->east);
-  target.y = POS_BFP_OF_REAL(ac->utm.north - distance * sa  - stateGetPositionUtm_f()->north);
-  target.z = POS_BFP_OF_REAL(Max(ac->utm.alt + height, SECURITY_HEIGHT));	// todo add ground height to check
+  target.x += - distance * ca;
+  target.y += - distance * sa;
+  target.z = (Max(target.z + height, SECURITY_HEIGHT));	// todo add ground height to check
 
-  VECT3_COPY(navigation_target, target);
+  ENU_OF_TO_NED(navigation_target, target);
 }
 #else
 void nav_follow(uint8_t  __attribute__((unused)) _ac_id, uint32_t  __attribute__((unused)) distance, uint32_t  __attribute__((unused)) height){}

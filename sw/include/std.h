@@ -88,6 +88,9 @@ typedef uint8_t unit_t;
 #define RadOfDeg(x) ((x) * (M_PI/180.))
 #define RadOfDeciDeg(x) ((x) * (M_PI/1800.))
 
+#define MOfCm(_x) (((float)(_x))/100.)
+#define MOfMm(_x) (((float)(_x))/1000.)
+
 #define Min(x,y) (x < y ? x : y)
 #define Max(x,y) (x > y ? x : y)
 
