@@ -273,6 +273,26 @@ void acInfoCalcPositionLla_i(uint8_t ac_id)
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I);
 }
 
+void acInfoCalcPositionEnu_i(uint8_t ac_id)
+{
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_I))
+  {
+    return;
+  }
+
+  if (!state.ned_initialized_i && (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I) || bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)))
+  {
+    enu_of_lla_point_i(&ti_acs[ti_acs_id[ac_id]].enu_pos_i, &state.ned_origin_i, acInfoGetPositionLla_i(ac_id));
+  } else if (!state.ned_initialized_f && (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F) || bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)))
+  {
+    enu_of_lla_point_f(&ti_acs[ti_acs_id[ac_id]].enu_pos_f, &state.ned_origin_f, acInfoGetPositionLla_f(ac_id));
+    SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_F);
+    ENU_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].enu_pos_i, ti_acs[ti_acs_id[ac_id]].enu_pos_f)
+  }
+
+  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_I);
+}
+
 void acInfoCalcPositionUtm_f(uint8_t ac_id)
 {
   if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F))
@@ -320,34 +340,54 @@ void acInfoCalcPositionLla_f(uint8_t ac_id)
   SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F);
 }
 
-void acInfoCalcVelocityNed_i(uint8_t ac_id)
+void acInfoCalcPositionEnu_f(uint8_t ac_id)
 {
-  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_I))
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_F))
   {
     return;
   }
 
-  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F))
+  if (!state.ned_initialized_f && (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F) || bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)))
+  {
+    enu_of_lla_point_f(&ti_acs[ti_acs_id[ac_id]].enu_pos_f, &state.ned_origin_f, acInfoGetPositionLla_f(ac_id));
+  } else if (!state.ned_initialized_i && (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I) || bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)))
+  {
+    enu_of_lla_point_i(&ti_acs[ti_acs_id[ac_id]].enu_pos_i, &state.ned_origin_i, acInfoGetPositionLla_i(ac_id));
+    SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_I);
+    ENU_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].enu_pos_f, ti_acs[ti_acs_id[ac_id]].enu_pos_i)
+  }
+
+  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_ENU_F);
+}
+
+void acInfoCalcVelocityEnu_i(uint8_t ac_id)
+{
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_I))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_F))
   {
     SPEEDS_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].enu_vel_i, ti_acs[ti_acs_id[ac_id]].enu_vel_f);
   } else {
     ti_acs[ti_acs_id[ac_id]].enu_vel_f.x = ti_acs[ti_acs_id[ac_id]].gspeed * sinf(ti_acs[ti_acs_id[ac_id]].course);
     ti_acs[ti_acs_id[ac_id]].enu_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
     ti_acs[ti_acs_id[ac_id]].enu_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
-    SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F);
+    SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_F);
     SPEEDS_BFP_OF_REAL(ti_acs[ti_acs_id[ac_id]].enu_vel_i, ti_acs[ti_acs_id[ac_id]].enu_vel_f);
   }
-  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_I);
+  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_I);
 }
 
-void acInfoCalcVelocityNed_f(uint8_t ac_id)
+void acInfoCalcVelocityEnu_f(uint8_t ac_id)
 {
-  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F))
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_F))
   {
     return;
   }
 
-  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_I))
+  if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_I))
   {
     SPEEDS_FLOAT_OF_BFP(ti_acs[ti_acs_id[ac_id]].enu_vel_f, ti_acs[ti_acs_id[ac_id]].enu_vel_i);
   } else if (bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_LOCAL_F)) {
@@ -355,5 +395,5 @@ void acInfoCalcVelocityNed_f(uint8_t ac_id)
     ti_acs[ti_acs_id[ac_id]].enu_vel_f.y = ti_acs[ti_acs_id[ac_id]].gspeed * cosf(ti_acs[ti_acs_id[ac_id]].course);
     ti_acs[ti_acs_id[ac_id]].enu_vel_f.z = ti_acs[ti_acs_id[ac_id]].climb;
   }
-  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_NED_F);
+  SetBit(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_F);
 }

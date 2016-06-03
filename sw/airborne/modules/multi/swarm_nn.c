@@ -77,24 +77,23 @@ struct EnuCoor_f cmd_sp;
 static void send_periodic(struct transport_tx *trans, struct link_device *dev)
 {
   struct EnuCoor_i* my_pos = stateGetPositionEnu_i();
-  my_pos.alt = gps.hmsl;
 
   /* send log data to gs */
-  struct ac_info_ * ac1 = get_ac_info(ti_acs[2].ac_id);
-  struct ac_info_ * ac2 = get_ac_info(ti_acs[3].ac_id);
+  struct EnuCoor_i* ac1 = acInfoGetPositionEnu_i(ti_acs[2].ac_id);
+  struct EnuCoor_i* ac2 = acInfoGetPositionEnu_i(ti_acs[3].ac_id);
 
-  int32_t tempx1 = (ac1->utm.east  - my_pos.east);
-  int32_t tempy1 = (ac1->utm.north - my_pos.north);
-  int32_t tempx2 = (ac2->utm.east  - my_pos.east);
-  int32_t tempy2 = (ac2->utm.north - my_pos.north);
+  int32_t tempx1 = (ac1->x - my_pos->x);
+  int32_t tempy1 = (ac1->y - my_pos->y);
+  int32_t tempx2 = (ac2->x - my_pos->x);
+  int32_t tempy2 = (ac2->y - my_pos->y);
 
   struct EnuCoor_f my_enu_pos = *stateGetPositionEnu_f();
 
   pprz_msg_send_SWARMNN(trans, dev, AC_ID, &cmd_sp.x, &cmd_sp.y, &cmd_sp.z,
                             &rx, &ry, &rz, &d,
                             &my_enu_pos.x, &my_enu_pos.y, &my_enu_pos.z,
-                            &ac1->ac_id, &tempx1, &tempy1,
-                            &ac2->ac_id, &tempx2, &tempy2);
+                            &ti_acs[2].ac_id, &tempx1, &tempy1,
+                            &ti_acs[3].ac_id, &tempx2, &tempy2);
 }
 #endif
 
@@ -221,25 +220,24 @@ void compute_spacial_inputs(void)
   /* counters */
   uint8_t i;
 
-  struct UtmCoor_i my_pos = utm_int_from_gps(&gps, 0);
-  my_pos.alt = gps.hmsl;
+  struct EnuCoor_f* my_pos = stateGetPositionEnu_f();
 
   // compute nn inputs
   for (i = 0; i < ti_acs_idx; i++) {
     if (ti_acs[i].ac_id == 0 || ti_acs[i].ac_id == AC_ID) { continue; }
-    struct EnuCoor_i other_pos = acInfoGetPositionEnu_i(ac_id);
-    struct EnuCoor_i other_vel = acInfoGetVelocityEnu_f(ac_id);
+    struct EnuCoor_f* other_pos = acInfoGetPositionEnu_f(ti_acs[i].ac_id);
+    struct EnuCoor_f* other_vel = acInfoGetVelocityEnu_f(ti_acs[i].ac_id);
 
-    // time since last update (ms)
-    float delta_t = ABS((int32_t)(gps.tow - acInfoGetItow(ac_id)))/1000.;
+    // time since last update (s)
+    float delta_t = ABS((int32_t)(gps.tow - acInfoGetItow(ti_acs[i].ac_id)))/1000.;
 
     // If AC not responding for too long, skip
     if(delta_t > 5.) { continue; }
 
     // get distance to other with the assumption of constant velocity since last position message
-    float de = (other_pos.x - my_pos.east) / 100. + other_vel.x * delta_t / 100.;
-    float dn = (other_pos.y - my_pos.north) / 100. + other_vel.y * delta_t / 100.;
-    float da = (other_pos.z - my_pos.alt + other_vel.z * delta_t) / 1000.;
+    float de = other_pos->x - my_pos->x + other_vel->x * delta_t;
+    float dn = other_pos->y - my_pos->y + other_vel->y * delta_t;
+    float da = other_pos->z - my_pos->z + other_vel->z * delta_t;
 
     float dist2 = de * de + dn * dn;
     if (use_height) { dist2 += da * da; }
