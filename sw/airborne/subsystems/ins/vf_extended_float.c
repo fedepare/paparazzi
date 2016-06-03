@@ -35,13 +35,9 @@
 #include "generated/airframe.h"
 #include "std.h"
 
-#ifndef DEBUG_VFF_EXTENDED
-#define DEBUG_VFF_EXTENDED 0
-#else
+#ifdef DEBUG_VFF_EXTENDED
 PRINT_CONFIG_VAR(DEBUG_VFF_EXTENDED)
-#endif
 
-#if DEBUG_VFF_EXTENDED
 #include "mcu_periph/uart.h"
 #include "pprzlink/messages.h"
 #include "subsystems/datalink/downlink.h"
@@ -65,7 +61,7 @@ PRINT_CONFIG_VAR(DEBUG_VFF_EXTENDED)
 
 struct VffExtended vff;
 
-#if PERIODIC_TELEMETRY
+#ifdef PERIODIC_TELEMETRY
 #include "subsystems/datalink/telemetry.h"
 
 static void send_vffe(struct transport_tx *trans, struct link_device *dev)
@@ -96,7 +92,7 @@ void vff_init(float init_z, float init_zdot, float init_accel_bias, float init_b
     vff.P[i][i] = VFF_EXTENDED_INIT_PXX;
   }
 
-#if PERIODIC_TELEMETRY
+#ifdef PERIODIC_TELEMETRY
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_VFF_EXTENDED, send_vffe);
 #endif
 }
@@ -153,7 +149,7 @@ void vff_propagate(float accel, float dt)
   vff.P[2][2] = FPF22 + Qbiasbias;
   vff.P[3][3] = FPF33 + Qoffoff;
 
-#if DEBUG_VFF_EXTENDED
+#ifdef DEBUG_VFF_EXTENDED
   RunOnceEvery(10, send_vffe(&(DefaultChannel).trans_tx, &(DefaultDevice).device));
 #endif
 }

@@ -684,7 +684,7 @@ void nav_follow(uint8_t ac_id, uint32_t distance, uint32_t height)
   struct EnuCoor_i* target = acInfoGetPositionEnu_i(ac_id);
 
 
-  float alpha = M_PI / 2 - acInfoGetCourse(ac_id);
+  float alpha = M_PI / 2 - *acInfoGetCourse(ac_id);
   float ca = cosf(alpha), sa = sinf(alpha);
   target->x += - distance * ca;
   target->y += - distance * sa;

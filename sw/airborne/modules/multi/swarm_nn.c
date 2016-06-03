@@ -36,7 +36,7 @@
 
 #include "modules/multi/traffic_info.h"     // other aircraft info
 
-#include "stabilization.h"
+#include "firmwares/rotorcraft/stabilization/stabilization_attitude.h"
 
 #ifdef EXTRA_DOWNLINK_DEVICE
 #include "modules/datalink/extra_pprz_dl.h"

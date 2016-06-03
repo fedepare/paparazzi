@@ -26,8 +26,6 @@
 
 #include "modules/multi/traffic_info.h"
 
-#include "math/pprz_algebra.h"
-
 #include "generated/airframe.h"     // AC_ID
 #include "generated/flight_plan.h"  // NAV_MSL0
 
@@ -36,6 +34,7 @@
 #include "pprzlink/messages.h"
 
 #include "subsystems/gps.h"
+#include "state.h"
 
 #ifndef NB_ACS_ID
 #define NB_ACS_ID 256
@@ -58,7 +57,7 @@ void traffic_info_init(void)
   ti_acs_idx = 2;
 }
 
-int parse_acinfo_dl()
+int parse_acinfo_dl(void)
 {
   uint8_t sender_id = SenderIdOfPprzMsg(dl_buffer);
   uint8_t msg_id = IdOfPprzMsg(dl_buffer);
@@ -142,12 +141,8 @@ int parse_acinfo_dl()
 
   return 1;
 }
-/*
-struct acInfo *get_ac_info(uint8_t _id)
-{
-  return &ti_acs[ti_acs_id[_id]];
-}
-*/
+
+
 void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
                  uint16_t gspeed, uint16_t climb, uint32_t itow)
 {

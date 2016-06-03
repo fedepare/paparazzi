@@ -25,16 +25,15 @@
  * Keeps track of other aircraft in airspace
  */
 
-#ifndef TI_H
-#define TI_H
+#ifndef TRAFFIC_INFO_H
+#define TRAFFIC_INFO_H
 
 #include <inttypes.h>
 
+#include "std.h"
 #include "math/pprz_geodetic_int.h"
 #include "math/pprz_geodetic_float.h"
 #include "math/pprz_geodetic_utm.h"
-
-#include "state.h"
 
 /**
  * @defgroup ac_info Data availability representations
@@ -112,7 +111,7 @@ struct acInfo {
   float course;        ///< rad
   float gspeed;        ///< m/s
   float climb;         ///< m/s
-  uint32_t itow;          ///< ms
+  uint32_t itow;       ///< ms
 };
 
 extern uint8_t ti_acs_idx;
@@ -120,9 +119,11 @@ extern uint8_t ti_acs_id[];
 extern struct acInfo ti_acs[];
 
 extern void traffic_info_init(void);
+/** Parsing datalink and telemetry functions that contain other vehicle position
+*/
+extern int parse_acinfo_dl(void);
 
 /************************ Set functions ****************************/
-
 
 /**
  * Set Aircraft info.
@@ -176,6 +177,17 @@ static inline void acInfoSetPositionLla_i(uint8_t ac_id, struct LlaCoor_i *lla_p
   ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_LLA_I);
 }
 
+/** Set velocity from ENU coordinates (int).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] enu_pos position in ENU (int)
+*/
+static inline void acInfoSetPositionEnu_i(uint8_t ac_id, struct EnuCoor_i *enu_pos)
+{
+  VECT3_COPY(ti_acs[ti_acs_id[ac_id]].enu_pos_i, *enu_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_ENU_I);
+}
+
 /** Set position from UTM coordinates (float).
 * @param[in] aircraft id of aircraft info to set
 * @param[in] enu_vel velocity in ENU (float)
@@ -198,9 +210,20 @@ static inline void acInfoSetPositionLla_f(uint8_t ac_id, struct LlaCoor_f *lla_p
   ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_LLA_F);
 }
 
+/** Set velocity from ENU coordinates (float).
+* @param[in] aircraft id of aircraft info to set
+* @param[in] enu_pos position in ENU (float)
+*/
+static inline void acInfoSetPositionEnu_f(uint8_t ac_id, struct EnuCoor_f *enu_pos)
+{
+  VECT3_COPY(ti_acs[ti_acs_id[ac_id]].enu_pos_f, *enu_pos);
+  /* clear bits for all position representations and only set the new one */
+  ti_acs[ti_acs_id[ac_id]].status = (1 << AC_INFO_POS_ENU_F);
+}
+
 /** Set velocity from ENU coordinates (int).
 * @param[in] aircraft id of aircraft info to set
-* @param[in] enu_vel velocity in ENU (float)
+* @param[in] enu_vel velocity in ENU (int)
 */
 static inline void acInfoSetVelocityEnu_i(uint8_t ac_id, struct EnuCoor_i *enu_vel)
 {
@@ -213,7 +236,7 @@ static inline void acInfoSetVelocityEnu_i(uint8_t ac_id, struct EnuCoor_i *enu_v
  * @param[in] aircraft id of aircraft info to set
  * @param[in] enu_vel velocity in ENU (float)
  */
-static inline void acInfoSetPositionEnu_f(uint8_t ac_id, struct EnuCoor_f *enu_vel)
+static inline void acInfoSetVelocityEnu_f(uint8_t ac_id, struct EnuCoor_f *enu_vel)
 {
   VECT3_COPY(ti_acs[ti_acs_id[ac_id]].enu_vel_i, *enu_vel);
   /* clear bits for all position representations and only set the new one */
@@ -322,37 +345,33 @@ static inline struct EnuCoor_f *acInfoGetVelocityEnu_f(uint8_t ac_id)
 /** Get vehicle course (float).
  * @param[in] aircraft id of aircraft info to get
  */
-static inline float acInfoGetCourse(uint8_t ac_id)
+static inline float *acInfoGetCourse(uint8_t ac_id)
 {
-  return ti_acs[ti_acs_id[ac_id]].course;
+  return &ti_acs[ti_acs_id[ac_id]].course;
 }
 
 /** Get vehicle ground speed (float).
  * @param[in] aircraft id of aircraft info to get
  */
-static inline float acInfoGetGspeed(uint8_t ac_id)
+static inline float *acInfoGetGspeed(uint8_t ac_id)
 {
-  return ti_acs[ti_acs_id[ac_id]].gspeed;
+  return &ti_acs[ti_acs_id[ac_id]].gspeed;
 }
 
 /** Get vehicle climb speed (float).
  * @param[in] aircraft id of aircraft info to get
  */
-static inline float acInfoGetClimb(uint8_t ac_id)
+static inline float *acInfoGetClimb(uint8_t ac_id)
 {
-  return ti_acs[ti_acs_id[ac_id]].climb;
+  return &ti_acs[ti_acs_id[ac_id]].climb;
 }
 
-/** Get time of week from lastest message (ms).
+/** Get time of week from latest message (ms).
  * @param[in] aircraft id of aircraft info to get
  */
-static inline uint32_t acInfoGetItow(uint8_t ac_id)
+static inline uint32_t* acInfoGetItow(uint8_t ac_id)
 {
-  return ti_acs[ti_acs_id[ac_id]].itow;
+  return &ti_acs[ti_acs_id[ac_id]].itow;
 }
-
-/** Parsing datalink and telemetry functions that contain other vehicle position
-*/
-extern int parse_acinfo_dl(void);
 
 #endif
