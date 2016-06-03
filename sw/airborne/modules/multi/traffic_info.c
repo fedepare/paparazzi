@@ -35,6 +35,7 @@
 
 #include "subsystems/gps.h"
 #include "state.h"
+#include "math/pprz_geodetic_utm.h"
 
 #ifndef NB_ACS_ID
 #define NB_ACS_ID 256

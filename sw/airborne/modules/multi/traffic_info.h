@@ -33,7 +33,6 @@
 #include "std.h"
 #include "math/pprz_geodetic_int.h"
 #include "math/pprz_geodetic_float.h"
-#include "math/pprz_geodetic_utm.h"
 
 /**
  * @defgroup ac_info Data availability representations
