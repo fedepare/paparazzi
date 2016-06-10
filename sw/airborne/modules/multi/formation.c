@@ -127,8 +127,7 @@ int stop_formation(void)
 
 int formation_flight(void)
 {
-
-  static uint8_t _1Hz   = 0;
+  static uint8_t _1Hz = 0;
   uint8_t nb = 0, i;
   float hspeed_dir = stateGetHorizontalSpeedDir_f();
   float ch = cosf(hspeed_dir);
@@ -144,9 +143,6 @@ int formation_flight(void)
     stateGetPositionEnu_f()->x += formation[ti_acs_id[AC_ID]].east;
     stateGetPositionEnu_f()->y += formation[ti_acs_id[AC_ID]].north;
   }
-  // set info for this AC
-  set_ac_info(AC_ID, stateGetPositionEnu_f()->x, stateGetPositionEnu_f()->y, hspeed_dir,
-            stateGetPositionUtm_f()->alt, form_speed, stateGetSpeedEnu_f()->z, gps.tow);
 
   // broadcast info
   uint8_t ac_id = AC_ID;
@@ -162,7 +158,7 @@ int formation_flight(void)
   if (formation[ti_acs_id[AC_ID]].status != ACTIVE) { return false; } // AC not ready
 
   // get leader info
-  struct ac_info_ * leader = get_ac_info(leader_id);
+  struct EnuCoor_f *leader = acInfoGetPositionEnu_f(leader_id);
   if (formation[ti_acs_id[leader_id]].status == UNSET ||
       formation[ti_acs_id[leader_id]].status == IDLE) {
     // leader not ready or not in formation
@@ -173,8 +169,8 @@ int formation_flight(void)
   struct slot_ form[NB_ACS];
   float cr = 0., sr = 1.;
   if (form_mode == FORM_MODE_COURSE) {
-    cr = cosf(leader->course);
-    sr = sinf(leader->course);
+    cr = cosf(acInfoGetCourse(leader_id));
+    sr = sinf(acInfoGetCourse(leader_id));
   }
   for (i = 0; i < NB_ACS; ++i) {
     if (formation[i].status == UNSET) { continue; }
@@ -183,11 +179,14 @@ int formation_flight(void)
     form[i].alt = formation[i].alt;
   }
 
+  struct EnuCoor_f *my_pos = stateGetPositionEnu_f();
   // compute control forces
   for (i = 0; i < NB_ACS; ++i) {
     if (ti_acs[i].ac_id == AC_ID) { continue; }
-    struct ac_info_ * ac = get_ac_info(ti_acs[i].ac_id);
-    float delta_t = Max((int)(gps.tow - ac->itow) / 1000., 0.);
+    struct EnuCoor_f *ac = acInfoGetPositionEnu_f(ti_acs[i].ac_id);
+    struct EnuCoor_f *ac_speed = acInfoGetVelocityEnu_f(ti_acs[i].ac_id);
+
+    float delta_t = Max((int)(gps.tow - *acInfoGetItow(ti_acs[i].ac_id)) / 1000., 0.);
     if (delta_t > FORM_CARROT) {
       // if AC not responding for too long
       formation[i].status = LOST;
@@ -195,13 +194,11 @@ int formation_flight(void)
     } else {
       // compute control if AC is ACTIVE and around the same altitude (maybe not so usefull)
       formation[i].status = ACTIVE;
-      if (ac->utm.alt> 0 && fabs(stateGetPositionUtm_f()->alt - ac->utm.alt) < form_prox) {
-        form_e += (ac->utm.east/100.  + ac->gspeed * sinf(ac->course) * delta_t - stateGetPositionEnu_f()->x)
-          - (form[i].east - form[ti_acs_id[AC_ID]].east);
-        form_n += (ac->utm.north/100. + ac->gspeed * cosf(ac->course) * delta_t - stateGetPositionEnu_f()->y)
-          - (form[i].north - form[ti_acs_id[AC_ID]].north);
-        form_a += (ac->utm.alt/1000. - stateGetPositionUtm_f()->alt) - (formation[i].alt - formation[ti_acs_id[AC_ID]].alt);
-        form_speed += ac->gspeed;
+      if (ac->z > 0 && fabs(my_pos->z - ac->z) < form_prox) {
+        form_e += (ac->x  + ac_speed->x * delta_t - my_pos->x) - (form[i].east - form[ti_acs_id[AC_ID]].east);
+        form_n += (ac->y + ac_speed->y * delta_t - my_pos->y) - (form[i].north - form[ti_acs_id[AC_ID]].north);
+        form_a += (ac->z - my_pos->z) - (formation[i].alt - formation[ti_acs_id[AC_ID]].alt);
+        form_speed += *acInfoGetGspeed(ti_acs[i].ac_id);
         //form_speed_e += ac->gspeed * sinf(ac->course);
         //form_speed_n += ac->gspeed * cosf(ac->course);
         ++nb;
@@ -224,7 +221,7 @@ int formation_flight(void)
   if (AC_ID == leader_id) {
     alt = nav_altitude;
   } else {
-    alt = leader->utm.alt/1000. - form[ti_acs_id[leader_id]].alt;
+    alt = leader->z - form[ti_acs_id[leader_id]].alt;
   }
   alt += formation[ti_acs_id[AC_ID]].alt + coef_form_alt * form_a;
   flight_altitude = Max(alt, ground_alt + SECURITY_HEIGHT);
@@ -233,12 +230,12 @@ int formation_flight(void)
   if (AC_ID != leader_id) {
     float dx = form[ti_acs_id[AC_ID]].east - form[ti_acs_id[leader_id]].east;
     float dy = form[ti_acs_id[AC_ID]].north - form[ti_acs_id[leader_id]].north;
-    desired_x = leader->utm.east/100.  + NOMINAL_AIRSPEED * form_carrot * sinf(leader->course) + dx;
-    desired_y = leader->utm.north/100. + NOMINAL_AIRSPEED * form_carrot * cosf(leader->course) + dy;
+    desired_x = leader->x  + NOMINAL_AIRSPEED * form_carrot * sinf(*acInfoGetCourse(leader_id)) + dx;
+    desired_y = leader->y + NOMINAL_AIRSPEED * form_carrot * cosf(*acInfoGetCourse(leader_id)) + dy;
     // fly to desired
     fly_to_xy(desired_x, desired_y);
-    desired_x = leader->utm.east/100.  + dx;
-    desired_y = leader->utm.north/100. + dy;
+    desired_x = leader->x  + dx;
+    desired_y = leader->y + dy;
     // lateral correction
     //float diff_heading = asin((dx*ch - dy*sh) / sqrt(dx*dx + dy*dy));
     //float diff_course = leader->course - hspeed_dir;
@@ -258,6 +255,7 @@ int formation_flight(void)
   return true;
 }
 
+// KIRK: WHAT IS THIS
 void formation_pre_call(void)
 {
   if (leader_id == AC_ID) {

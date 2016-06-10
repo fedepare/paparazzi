@@ -308,10 +308,10 @@ void cam_waypoint_target(void)
 void cam_ac_target(void)
 {
 #ifdef TRAFFIC_INFO
-  struct ac_info_ * ac = get_ac_info(cam_target_ac);
-  cam_target_x = ac->east;
-  cam_target_y = ac->north;
-  cam_target_alt = ac->alt;
+  struct EnuCoor_f ac_pos* ac = acInfoGetPositionEnu_f(cam_target_ac);
+  cam_target_x = ac->x;
+  cam_target_y = ac->y;
+  cam_target_alt = ac->z;
   cam_target();
 #endif // TRAFFIC_INFO
 }
