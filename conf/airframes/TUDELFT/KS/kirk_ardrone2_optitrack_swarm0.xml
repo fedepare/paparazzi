@@ -41,7 +41,7 @@
       <define name="UDP1_HOST" value="127.0.0.1"/>
 	</load>
 	<load name="traffic_info.xml"/>
-    <!--load name="swarm_nn.xml"/-->
+    <load name="swarm_nn.xml"/>
     <load name="rssi.xml"/>
   </modules>
 

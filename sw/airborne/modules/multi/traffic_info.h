@@ -269,7 +269,7 @@ static inline struct UtmCoor_i *acInfoGetPositionUtm_i(uint8_t ac_id)
  */
 static inline struct LlaCoor_i *acInfoGetPositionLla_i(uint8_t ac_id)
 {
-  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)) {
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_I)) {
     acInfoCalcPositionLla_i(ac_id);
   }
   return &ti_acs[ti_acs_id[ac_id]].lla_pos_i;
@@ -302,7 +302,7 @@ static inline struct UtmCoor_f *acInfoGetPositionUtm_f(uint8_t ac_id)
  */
 static inline struct LlaCoor_f *acInfoGetPositionLla_f(uint8_t ac_id)
 {
-  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)) {
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_LLA_F)) {
     acInfoCalcPositionLla_f(ac_id);
   }
   return &ti_acs[ti_acs_id[ac_id]].lla_pos_f;
@@ -324,7 +324,7 @@ static inline struct EnuCoor_f *acInfoGetPositionEnu_f(uint8_t ac_id)
  */
 static inline struct EnuCoor_i *acInfoGetVelocityEnu_i(uint8_t ac_id)
 {
-  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_I)) {
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_I)) {
     acInfoCalcVelocityEnu_i(ac_id);
   }
   return &ti_acs[ti_acs_id[ac_id]].enu_vel_i;
@@ -335,7 +335,7 @@ static inline struct EnuCoor_i *acInfoGetVelocityEnu_i(uint8_t ac_id)
  */
 static inline struct EnuCoor_f *acInfoGetVelocityEnu_f(uint8_t ac_id)
 {
-  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_POS_UTM_F)) {
+  if (!bit_is_set(ti_acs[ti_acs_id[ac_id]].status, AC_INFO_VEL_ENU_F)) {
     acInfoCalcVelocityEnu_f(ac_id);
   }
   return &ti_acs[ti_acs_id[ac_id]].enu_vel_f;

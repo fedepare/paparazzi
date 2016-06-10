@@ -82,8 +82,8 @@ static void send_periodic(struct transport_tx *trans, struct link_device *dev)
   struct EnuCoor_i* ac1 = acInfoGetPositionEnu_i(ti_acs[2].ac_id);
   struct EnuCoor_i* ac2 = acInfoGetPositionEnu_i(ti_acs[3].ac_id);
 
-  int32_t tempx1 = (ac1->x - my_pos->x);
-  int32_t tempy1 = (ac1->y - my_pos->y);
+  int32_t tempx1 = (ac1->x);// - my_pos->x);
+  int32_t tempy1 = (ac1->y);// - my_pos->y);
   int32_t tempx2 = (ac2->x - my_pos->x);
   int32_t tempy2 = (ac2->y - my_pos->y);
 
@@ -229,7 +229,7 @@ void compute_spacial_inputs(void)
     struct EnuCoor_f* other_vel = acInfoGetVelocityEnu_f(ti_acs[i].ac_id);
 
     // time since last update (s)
-    float delta_t = ABS((int32_t)(gps.tow - acInfoGetItow(ti_acs[i].ac_id)))/1000.;
+    float delta_t = ABS((int32_t)(gps.tow - *acInfoGetItow(ti_acs[i].ac_id)))/1000.;
 
     // If AC not responding for too long, skip
     if(delta_t > 5.) { continue; }
