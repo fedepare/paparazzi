@@ -53,8 +53,7 @@
 #endif
 
 #if LOG_INVARIANT_FILTER
-#include "sdLog.h"
-#include "subsystems/chibios-libopencm3/chibios_sdlog.h"
+#include "modules/loggers/sdlog_chibios.h"
 bool log_started = false;
 #endif
 
@@ -217,6 +216,15 @@ void ins_float_invariant_init(void)
 {
 
   // init position
+#if INS_FINV_USE_UTM
+  struct UtmCoor_f utm0;
+  utm0.north = (float)nav_utm_north0;
+  utm0.east = (float)nav_utm_east0;
+  utm0.alt = GROUND_ALT;
+  utm0.zone = nav_utm_zone0;
+  stateSetLocalUtmOrigin_f(&utm0);
+  stateSetPositionUtm_f(&utm0);
+#else
   struct LlaCoor_i llh_nav0; /* Height above the ellipsoid */
   llh_nav0.lat = NAV_LAT0;
   llh_nav0.lon = NAV_LON0;
@@ -228,6 +236,7 @@ void ins_float_invariant_init(void)
   ltp_def_from_ecef_i(&ltp_def, &ecef_nav0);
   ltp_def.hmsl = NAV_ALT0;
   stateSetLocalOrigin_i(&ltp_def);
+#endif
 
   B.x = INS_H_X;
   B.y = INS_H_Y;
@@ -262,14 +271,27 @@ void ins_float_invariant_init(void)
 
 void ins_reset_local_origin(void)
 {
+#if INS_FINV_USE_UTM
+  struct UtmCoor_f utm = utm_float_from_gps(&gps, 0);
+  // ground_alt
+  utm.alt = gps.hmsl  / 1000.0f;
+  // reset state UTM ref
+  stateSetLocalUtmOrigin_f(&utm);
+#else
   struct LtpDef_i ltp_def;
   ltp_def_from_ecef_i(&ltp_def, &gps.ecef_pos);
   ltp_def.hmsl = gps.hmsl;
   stateSetLocalOrigin_i(&ltp_def);
+#endif
 }
 
 void ins_reset_altitude_ref(void)
 {
+#if INS_FINV_USE_UTM
+  struct UtmCoor_f utm = state.utm_origin_f;
+  utm.alt = gps.hmsl / 1000.0f;
+  stateSetLocalUtmOrigin_f(&utm);
+#else
   struct LlaCoor_i lla = {
     .lat = state.ned_origin_i.lla.lat,
     .lon = state.ned_origin_i.lla.lon,
@@ -279,6 +301,7 @@ void ins_reset_altitude_ref(void)
   ltp_def_from_lla_i(&ltp_def, &lla);
   ltp_def.hmsl = gps.hmsl;
   stateSetLocalOrigin_i(&ltp_def);
+#endif
 }
 
 void ins_float_invariant_align(struct FloatRates *lp_gyro,
@@ -398,25 +421,33 @@ void ins_float_invariant_propagate(struct FloatRates* gyro, struct FloatVect3* a
 
 void ins_float_invariant_update_gps(struct GpsState *gps_s)
 {
+
   if (gps_s->fix >= GPS_FIX_3D && ins_float_inv.is_aligned) {
     ins_gps_fix_once = true;
 
-    if (state.ned_initialized_f) {
-      struct EcefCoor_f ecef_pos, ecef_vel;
-      ECEF_FLOAT_OF_BFP(ecef_pos, gps_s->ecef_pos);
-      ned_of_ecef_point_f(&ins_float_inv.meas.pos_gps, &state.ned_origin_f, &ecef_pos);
-      ECEF_FLOAT_OF_BFP(ecef_vel, gps_s->ecef_vel);
-      ned_of_ecef_vect_f(&ins_float_inv.meas.speed_gps, &state.ned_origin_f, &ecef_vel);
-    } else if (state.utm_initialized_f) {
-      struct UtmCoor_f utm = utm_float_from_gps(gps_s, 0);
+#if INS_FINV_USE_UTM
+    if (state.utm_initialized_f) {
+      struct UtmCoor_f utm = utm_float_from_gps(gps_s, nav_utm_zone0);
       // position (local ned)
       ins_float_inv.meas.pos_gps.x = utm.north - state.utm_origin_f.north;
       ins_float_inv.meas.pos_gps.y = utm.east - state.utm_origin_f.east;
       ins_float_inv.meas.pos_gps.z = state.utm_origin_f.alt - (gps_s->hmsl / 1000.0f);
+      // speed
       ins_float_inv.meas.speed_gps.x = gps_s->ned_vel.x / 100.0f;
       ins_float_inv.meas.speed_gps.y = gps_s->ned_vel.y / 100.0f;
       ins_float_inv.meas.speed_gps.z = gps_s->ned_vel.z / 100.0f;
     }
+#else
+    if (state.ned_initialized_f) {
+      struct NedCoor_i gps_pos_cm_ned, ned_pos;
+      ned_of_ecef_point_i(&gps_pos_cm_ned, &state.ned_origin_i, &gps_s->ecef_pos);
+      INT32_VECT3_SCALE_2(ned_pos, gps_pos_cm_ned, INT32_POS_OF_CM_NUM, INT32_POS_OF_CM_DEN);
+      NED_FLOAT_OF_BFP(ins_float_inv.meas.pos_gps, ned_pos);
+      struct EcefCoor_f ecef_vel;
+      ECEF_FLOAT_OF_BFP(ecef_vel, gps_s->ecef_vel);
+      ned_of_ecef_vect_f(&ins_float_inv.meas.speed_gps, &state.ned_origin_f, &ecef_vel);
+    }
+#endif
   }
 
 }
@@ -576,7 +607,12 @@ static inline void error_output(struct InsFloatInv *_ins)
 
   // pos and speed error only if GPS data are valid
   // or while waiting first GPS data to prevent diverging
-  if ((gps.fix >= GPS_FIX_3D && ins_float_inv.is_aligned && (state.ned_initialized_f || state.utm_initialized_f)
+  if ((gps.fix >= GPS_FIX_3D && ins_float_inv.is_aligned
+#if INS_FINV_USE_UTM
+       && state.utm_initialized_f
+#else
+       && state.ned_initialized_f
+#endif
       ) || !ins_gps_fix_once) {
     /* Ev = (V - YV)   */
     VECT3_DIFF(Ev, _ins->state.speed, _ins->meas.speed_gps);
