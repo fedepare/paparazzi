@@ -242,4 +242,8 @@ bool nav_check_wp_time(struct EnuCoor_i *wp, uint16_t stay_time);
 
 extern void navigation_update_wp_from_speed(uint8_t wp, struct Int16Vect3 speed_sp, int16_t heading_rate_sp);
 
+#define NavFollow(_ac_id, _distance, _height)   \
+  nav_follow(_ac_id, _distance, _height);
+extern void nav_follow(uint8_t _ac_id, uint32_t distance, uint32_t height);
+
 #endif /* NAVIGATION_H */

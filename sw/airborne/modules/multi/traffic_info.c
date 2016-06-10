@@ -33,15 +33,20 @@
 #include "pprzlink/dl_protocol.h"
 #include "pprzlink/messages.h"
 
-#include "math/pprz_geodetic_int.h"
-#include "math/pprz_geodetic_float.h"
+#include "subsystems/gps.h"
+#include "state.h"
 #include "math/pprz_geodetic_utm.h"
 
-#include "subsystems/gps.h"
+#ifndef NB_ACS_ID
+#define NB_ACS_ID 256
+#endif
+#ifndef NB_ACS
+#define NB_ACS 24
+#endif
 
 uint8_t ti_acs_idx;
 uint8_t ti_acs_id[NB_ACS_ID];
-struct ac_info_ ti_acs[NB_ACS];
+struct acInfo ti_acs[NB_ACS];
 
 void traffic_info_init(void)
 {
@@ -53,7 +58,7 @@ void traffic_info_init(void)
   ti_acs_idx = 2;
 }
 
-int parse_acinfo_dl()
+int parse_acinfo_dl(void)
 {
   uint8_t sender_id = SenderIdOfPprzMsg(dl_buffer);
   uint8_t msg_id = IdOfPprzMsg(dl_buffer);
@@ -138,10 +143,6 @@ int parse_acinfo_dl()
   return 1;
 }
 
-struct ac_info_ *get_ac_info(uint8_t _id)
-{
-  return &ti_acs[ti_acs_id[_id]];
-}
 
 void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
                  uint16_t gspeed, uint16_t climb, uint32_t itow)
@@ -152,26 +153,35 @@ void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt
       ti_acs[ti_acs_id[id]].ac_id = id;
     }
 
+    ti_acs[ti_acs_id[id]].status = 0;
+
     uint16_t my_zone = UtmZoneOfLlaLonDeg(gps.lla_pos.lon);
     if (utm_zone == my_zone) {
-      ti_acs[ti_acs_id[id]].utm.east = utm_east;
-      ti_acs[ti_acs_id[id]].utm.north = utm_north;
+      ti_acs[ti_acs_id[id]].utm_pos_i.east = utm_east;
+      ti_acs[ti_acs_id[id]].utm_pos_i.north = utm_north;
+      ti_acs[ti_acs_id[id]].utm_pos_i.alt = alt;
+      ti_acs[ti_acs_id[id]].utm_pos_i.zone = utm_zone;
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_UTM_I);
+
     } else { // store other uav in utm extended zone
       struct UtmCoor_i utm = {.east = utm_east, .north = utm_north, .alt = alt, .zone = utm_zone};
       struct LlaCoor_i lla;
       lla_of_utm_i(&lla, &utm);
+      LLA_COPY(ti_acs[ti_acs_id[id]].lla_pos_i, lla);
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_LLA_I);
+
       utm.zone = my_zone;
       utm_of_lla_i(&utm, &lla);
 
-      ti_acs[ti_acs_id[id]].utm.east = utm.east;
-      ti_acs[ti_acs_id[id]].utm.north = utm.north;
+      UTM_COPY(ti_acs[ti_acs_id[id]].utm_pos_i, utm);
+      SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_UTM_I);
     }
 
-    ti_acs[ti_acs_id[id]].utm.alt = alt;
-    ti_acs[ti_acs_id[id]].utm.zone = utm_zone;
-    ti_acs[ti_acs_id[id]].course = course;
-    ti_acs[ti_acs_id[id]].gspeed = gspeed;
-    ti_acs[ti_acs_id[id]].climb = climb;
+    ti_acs[ti_acs_id[id]].course = RadOfDeciDeg(course);
+    ti_acs[ti_acs_id[id]].gspeed = MOfCm(gspeed);
+    ti_acs[ti_acs_id[id]].climb = MOfCm(climb);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_VEL_LOCAL_F);
+
     ti_acs[ti_acs_id[id]].itow = itow;
   }
 }
@@ -186,16 +196,208 @@ void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
       ti_acs[ti_acs_id[id]].ac_id = id;
     }
 
+    ti_acs[ti_acs_id[id]].status = 0;
+
     struct LlaCoor_i lla = {.lat = lat, .lon = lon, .alt = alt};
-    struct UtmCoor_i utm;
-    utm.zone = UtmZoneOfLlaLonDeg(gps.lla_pos.lon);   // use my zone as reference, i.e zone extend
+    LLA_COPY(ti_acs[ti_acs_id[id]].lla_pos_i, lla);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_POS_LLA_I);
 
-    utm_of_lla_i(&utm, &lla);
+    ti_acs[ti_acs_id[id]].course = RadOfDeciDeg(course);
+    ti_acs[ti_acs_id[id]].gspeed = MOfCm(gspeed);
+    ti_acs[ti_acs_id[id]].climb = MOfCm(climb);
+    SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_VEL_LOCAL_F);
 
-    UTM_COPY(ti_acs[ti_acs_id[id]].utm, utm);
-    ti_acs[ti_acs_id[id]].course = course;
-    ti_acs[ti_acs_id[id]].gspeed = gspeed;
-    ti_acs[ti_acs_id[id]].climb = climb;
     ti_acs[ti_acs_id[id]].itow = itow;
   }
+}
+
+void acInfoCalcPositionUtm_i(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I))
+  {
+    return;
+  }
+
+  /* LLA_i -> UTM_i is more accurate than from UTM_f */
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I))
+  {
+    // use my zone as reference, i.e zone extend
+    ti_acs[ac_nr].utm_pos_i.zone = UtmZoneOfLlaLonDeg(ti_acs[ac_nr].lla_pos_i.lon);
+    utm_of_lla_i(&ti_acs[ac_nr].utm_pos_i, &ti_acs[ac_nr].lla_pos_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F))
+  {
+    UTM_BFP_OF_REAL(ti_acs[ac_nr].utm_pos_i, ti_acs[ac_nr].utm_pos_f);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F))
+  {
+    ti_acs[ac_nr].utm_pos_i.zone = 0;
+    utm_of_lla_f(&ti_acs[ac_nr].utm_pos_f, &ti_acs[ac_nr].lla_pos_f);
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F);
+
+    UTM_BFP_OF_REAL(ti_acs[ac_nr].utm_pos_i, ti_acs[ac_nr].utm_pos_f);
+  }
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I);
+}
+
+void acInfoCalcPositionLla_i(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F))
+  {
+    LLA_BFP_OF_REAL(ti_acs[ac_nr].lla_pos_i, ti_acs[ac_nr].lla_pos_f);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I))
+  {
+    // use my zone as reference, i.e zone extend
+    lla_of_utm_i(&ti_acs[ac_nr].lla_pos_i, &ti_acs[ac_nr].utm_pos_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F))
+  {
+    lla_of_utm_f(&ti_acs[ac_nr].lla_pos_f, &ti_acs[ac_nr].utm_pos_f);
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F);
+    LLA_BFP_OF_REAL(ti_acs[ac_nr].lla_pos_i, ti_acs[ac_nr].lla_pos_f);
+  }
+
+  printf("get lla: ac %d, lat: %d, lon: %d, alt: %d\n", ac_id, ti_acs[ac_nr].lla_pos_i.lat, ti_acs[ac_nr].lla_pos_i.lon, ti_acs[ac_nr].lla_pos_i.alt);
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I);
+}
+
+void acInfoCalcPositionEnu_i(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_ENU_I))
+  {
+    return;
+  }
+
+  if (state.ned_initialized_i && (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I) || bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I)))
+  {
+    enu_of_lla_point_i(&ti_acs[ac_nr].enu_pos_i, &state.ned_origin_i, acInfoGetPositionLla_i(ac_id));
+  } else if (state.ned_initialized_f && (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F) || bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F)))
+  {
+    enu_of_lla_point_f(&ti_acs[ac_nr].enu_pos_f, &state.ned_origin_f, acInfoGetPositionLla_f(ac_id));
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_ENU_F);
+    ENU_BFP_OF_REAL(ti_acs[ac_nr].enu_pos_i, ti_acs[ac_nr].enu_pos_f)
+  } else {
+    ti_acs[ac_nr].enu_pos_i = (struct EnuCoor_i) {0,0,0};
+  }
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_ENU_I);
+}
+
+void acInfoCalcPositionUtm_f(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I))
+  {
+    UTM_FLOAT_OF_BFP(ti_acs[ac_nr].utm_pos_f, ti_acs[ac_nr].utm_pos_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I))
+  {
+    // use my zone as reference, i.e zone extend
+    ti_acs[ac_nr].utm_pos_i.zone = 0;
+    utm_of_lla_i(&ti_acs[ac_nr].utm_pos_i, &ti_acs[ac_nr].lla_pos_i);
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I);
+    UTM_FLOAT_OF_BFP(ti_acs[ac_nr].utm_pos_f, ti_acs[ac_nr].utm_pos_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F))
+  {
+    /* not very accurate with float ~5cm */
+    utm_of_lla_f(&ti_acs[ac_nr].utm_pos_f, &ti_acs[ac_nr].lla_pos_f);
+  }
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F);
+}
+
+void acInfoCalcPositionLla_f(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I))
+  {
+    LLA_FLOAT_OF_BFP(ti_acs[ac_nr].lla_pos_f, ti_acs[ac_nr].lla_pos_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I))
+  {
+    lla_of_utm_i(&ti_acs[ac_nr].lla_pos_i, &ti_acs[ac_nr].utm_pos_i);
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I);
+
+    LLA_FLOAT_OF_BFP(ti_acs[ac_nr].lla_pos_f, ti_acs[ac_nr].lla_pos_i);
+  }
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F);
+}
+
+void acInfoCalcPositionEnu_f(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_ENU_F))
+  {
+    return;
+  }
+
+  if (state.ned_initialized_f && (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F) || bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_F)))
+  {
+    enu_of_lla_point_f(&ti_acs[ac_nr].enu_pos_f, &state.ned_origin_f, acInfoGetPositionLla_f(ac_id));
+  } else if (state.ned_initialized_i && (bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I) || bit_is_set(ti_acs[ac_nr].status, AC_INFO_POS_UTM_I)))
+  {
+    enu_of_lla_point_i(&ti_acs[ac_nr].enu_pos_i, &state.ned_origin_i, acInfoGetPositionLla_i(ac_id));
+    SetBit(ti_acs[ac_nr].status, AC_INFO_POS_ENU_I);
+    ENU_FLOAT_OF_BFP(ti_acs[ac_nr].enu_pos_f, ti_acs[ac_nr].enu_pos_i)
+  } else {
+    ti_acs[ac_nr].enu_pos_f = (struct EnuCoor_f) {0,0,0};
+  }
+
+  SetBit(ti_acs[ac_nr].status, AC_INFO_POS_ENU_F);
+}
+
+void acInfoCalcVelocityEnu_i(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_I))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_F))
+  {
+    SPEEDS_BFP_OF_REAL(ti_acs[ac_nr].enu_vel_i, ti_acs[ac_nr].enu_vel_f);
+  } else {
+    ti_acs[ac_nr].enu_vel_f.x = ti_acs[ac_nr].gspeed * sinf(ti_acs[ac_nr].course);
+    ti_acs[ac_nr].enu_vel_f.y = ti_acs[ac_nr].gspeed * cosf(ti_acs[ac_nr].course);
+    ti_acs[ac_nr].enu_vel_f.z = ti_acs[ac_nr].climb;
+    SetBit(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_F);
+    SPEEDS_BFP_OF_REAL(ti_acs[ac_nr].enu_vel_i, ti_acs[ac_nr].enu_vel_f);
+  }
+  SetBit(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_I);
+}
+
+void acInfoCalcVelocityEnu_f(uint8_t ac_id)
+{
+  uint8_t ac_nr = ti_acs_id[ac_id];
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_F))
+  {
+    return;
+  }
+
+  if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_I))
+  {
+    SPEEDS_FLOAT_OF_BFP(ti_acs[ac_nr].enu_vel_f, ti_acs[ac_nr].enu_vel_i);
+  } else if (bit_is_set(ti_acs[ac_nr].status, AC_INFO_VEL_LOCAL_F)) {
+    ti_acs[ac_nr].enu_vel_f.x = ti_acs[ac_nr].gspeed * sinf(ti_acs[ac_nr].course);
+    ti_acs[ac_nr].enu_vel_f.y = ti_acs[ac_nr].gspeed * cosf(ti_acs[ac_nr].course);
+    ti_acs[ac_nr].enu_vel_f.z = ti_acs[ac_nr].climb;
+  }
+  SetBit(ti_acs[ac_nr].status, AC_INFO_VEL_ENU_F);
 }
