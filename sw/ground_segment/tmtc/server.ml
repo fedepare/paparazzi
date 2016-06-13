@@ -370,7 +370,7 @@ let send_aircraft_msg = fun ac ->
           let ac_info = ["ac_id", PprzLink.String ac;
                          "utm_east", cm_of_m_32 pos.utm_x;
                          "utm_north", cm_of_m_32 pos.utm_y;
-                         "utm_zone", PprzLink.Int64 pos.utm_zone;
+                         "utm_zone", PprzLink.Int pos.utm_zone;
                          "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
                          "alt", cm_of_m_32 a.alt;
                          "speed", cm_of_m a.gspeed;
@@ -378,16 +378,16 @@ let send_aircraft_msg = fun ac ->
                          "itow", PprzLink.Int64 a.itow] in
           Ground_Pprz.message_send dl_id "ACINFO" ac_info;
         else
-          let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (PprzLink.float_assoc f vs *. 1e7))) in
+          let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (f *. 1e7))) in
           let ac_info_lla = ["ac_id", PprzLink.String ac;
-                         "lat", deg7 a.pos.lat;
-                         "lon", deg7 a.pos.lon;
-                         "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
-                         "alt", cm_of_m_32 a.alt;
-                         "speed", cm_of_m a.gspeed;
-                         "climb", cm_of_m a.climb;
-                         "itow", PprzLink.Int64 a.itow] in
-          Dl_Pprz.message_send dl_id "ACINFO_LLA" ac_info;
+                             "lat", deg7_of_rad a.pos.posn_lat;
+                             "lon", deg7_of_rad a.pos.posn_long;
+                             "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
+                             "alt", cm_of_m_32 a.alt;
+                             "speed", cm_of_m a.gspeed;
+                             "climb", cm_of_m a.climb;
+                             "itow", PprzLink.Int64 a.itow] in
+          Dl_Pprz.message_send dl_id "ACINFO_LLA" ac_info_lla;
       end;
 
     if !Kml.enabled then
