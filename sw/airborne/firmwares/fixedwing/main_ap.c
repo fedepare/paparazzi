@@ -526,7 +526,7 @@ void navigation_task(void)
   }
 
 #ifdef TCAS
-  CallTCAS();
+  callTCAS();
 #endif
 
 #if DOWNLINK && !defined PERIOD_NAVIGATION_Ap_0 // If not sent periodically (in default 0 mode)

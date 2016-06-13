@@ -34,6 +34,13 @@
 #include "math/pprz_geodetic_int.h"
 #include "math/pprz_geodetic_float.h"
 
+#ifndef NB_ACS_ID
+#define NB_ACS_ID 256
+#endif
+#ifndef NB_ACS
+#define NB_ACS 24
+#endif
+
 /**
  * @defgroup ac_info Data availability representations
  * @{

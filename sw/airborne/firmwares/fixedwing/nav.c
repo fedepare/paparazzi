@@ -286,27 +286,25 @@ static inline bool compute_TOD(uint8_t _af, uint8_t _td, uint8_t _tod, float gli
 #ifdef TRAFFIC_INFO
 #include "modules/multi/traffic_info.h"
 
-
-void nav_follow(uint8_t _ac_id, float _distance, float _height)
+void nav_follow(uint8_t ac_id, float distance, float height)
 {
-  struct ac_info_ * ac = get_ac_info(_ac_id);
+  struct EnuCoor_f* ac = acInfoGetPositionEnu_f(ac_id);
   NavVerticalAutoThrottleMode(0.);
-  NavVerticalAltitudeMode(Max(ac->utm.alt + _height, ground_alt + SECURITY_HEIGHT), 0.);
-  float alpha = M_PI / 2 - ac->course;
+  NavVerticalAltitudeMode(Max(ac->z + height, ground_alt + SECURITY_HEIGHT), 0.);
+  float alpha = M_PI / 2 - *acInfoGetCourse(ac_id);
   float ca = cosf(alpha), sa = sinf(alpha);
-  float x = ac->utm.east/100. - _distance * ca;
-  float y = ac->utm.north/100. - _distance * sa;
+  float x = ac->x - distance * ca;
+  float y = ac->y - distance * sa;
   fly_to_xy(x, y);
 #ifdef NAV_FOLLOW_PGAIN
   float s = (stateGetPositionEnu_f()->x - x) * ca + (stateGetPositionEnu_f()->y - y) * sa;
-  nav_ground_speed_setpoint = ac->gspeed + NAV_FOLLOW_PGAIN * s;
+  nav_ground_speed_setpoint = *acInfoGetGspeed(ac_id) + NAV_FOLLOW_PGAIN * s;
   nav_ground_speed_loop();
 #endif
 }
 #else
 void nav_follow(uint8_t  __attribute__((unused)) _ac_id, float  __attribute__((unused)) distance, float  __attribute__((unused)) height){}
 #endif // TRAFFIC_INFO
-
 
 
 float nav_altitude = GROUND_ALT + MIN_HEIGHT_CARROT;
