@@ -197,10 +197,6 @@
     <module name="nav" type="vertical_raster"/>
     <module name="nav" type="bungee_takeoff"/>
 
-	<module name="traffic_info"/>
-    <module name="potential">
-	</module>
-
   </firmware>
 
   <section name="GCS">
