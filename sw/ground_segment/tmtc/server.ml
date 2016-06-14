@@ -365,8 +365,7 @@ let send_aircraft_msg = fun ac ->
       begin
         let cm_of_m_32 = fun f -> PprzLink.Int32 (Int32.of_int (truncate (100. *. f))) in
         let cm_of_m = fun f -> PprzLink.Int (truncate (100. *. f)) in
-        let ap_mode = get_indexed_value (modes_of_type a.vehicle_type) a.ap_mode in
-        if ap_mode = "0" then
+        if a.vehicle_type = FixedWing then
           let pos = LL.utm_of WGS84 a.pos in
           let ac_info = ["ac_id", PprzLink.String ac;
                          "utm_east", cm_of_m_32 pos.utm_x;
@@ -381,8 +380,8 @@ let send_aircraft_msg = fun ac ->
         else
           let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (f *. 1e7))) in
           let ac_info_lla = ["ac_id", PprzLink.String ac;
-                             "lat", deg7_of_rad a.pos.posn_lat;
-                             "lon", deg7_of_rad a.pos.posn_long;
+                             "lla_lat", deg7_of_rad a.pos.posn_lat;
+                             "lla_lon", deg7_of_rad a.pos.posn_long;
                              "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
                              "alt", cm_of_m_32 a.alt;
                              "speed", cm_of_m a.gspeed;
