@@ -377,7 +377,7 @@ let send_aircraft_msg = fun ac ->
                          "speed", cm_of_m a.gspeed;
                          "climb", cm_of_m a.climb;
                          "itow", PprzLink.Int64 a.itow] in
-          Ground_Pprz.message_send dl_id "ACINFO" ac_info;
+          Dl_Pprz.message_send dl_id "ACINFO" ac_info;
         else
           let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (f *. 1e7))) in
           let ac_info_lla = ["ac_id", PprzLink.String ac;

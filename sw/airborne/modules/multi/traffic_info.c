@@ -49,10 +49,13 @@ void traffic_info_init(void)
   ti_acs_id[AC_ID] = 1;
   ti_acs[ti_acs_id[AC_ID]].ac_id = AC_ID;
   ti_acs_idx = 2;
+
+  printf("HERE\n");
 }
 
 int parse_acinfo_dl(void)
 {
+  printf("dl\n");
   uint8_t sender_id = SenderIdOfPprzMsg(dl_buffer);
   uint8_t msg_id = IdOfPprzMsg(dl_buffer);
 
@@ -88,7 +91,7 @@ int parse_acinfo_dl(void)
       break;
 
       case DL_GPS: {
-        set_ac_info(sender_id,
+        set_ac_info_utm(sender_id,
                     DL_GPS_utm_east(dl_buffer),
                     DL_GPS_utm_north(dl_buffer),
                     DL_GPS_alt(dl_buffer),
@@ -117,15 +120,28 @@ int parse_acinfo_dl(void)
   } else {
     switch (msg_id) {
       case DL_ACINFO: {
-        set_ac_info(DL_ACINFO_ac_id(dl_buffer),
-                    DL_ACINFO_utm_east(dl_buffer),
-                    DL_ACINFO_utm_north(dl_buffer),
-                    DL_ACINFO_alt(dl_buffer) * 10,
-                    DL_ACINFO_utm_zone(dl_buffer),
-                    DL_ACINFO_course(dl_buffer),
-                    DL_ACINFO_speed(dl_buffer),
-                    DL_ACINFO_climb(dl_buffer),
-                    DL_ACINFO_itow(dl_buffer));
+        printf("HERE_utm\n");
+        set_ac_info_utm(DL_ACINFO_ac_id(dl_buffer),
+                        DL_ACINFO_utm_east(dl_buffer),
+                        DL_ACINFO_utm_north(dl_buffer),
+                        DL_ACINFO_alt(dl_buffer) * 10,
+                        DL_ACINFO_utm_zone(dl_buffer),
+                        DL_ACINFO_course(dl_buffer),
+                        DL_ACINFO_speed(dl_buffer),
+                        DL_ACINFO_climb(dl_buffer),
+                        DL_ACINFO_itow(dl_buffer));
+      }
+      break;
+      case DL_ACINFO_LLA: {
+        printf("HERE_lla\n");
+        set_ac_info_lla(DL_ACINFO_LLA_ac_id(dl_buffer),
+                  DL_ACINFO_LLA_lla_lat(dl_buffer),
+                  DL_ACINFO_LLA_lla_lon(dl_buffer),
+                  DL_ACINFO_LLA_alt(dl_buffer) * 10,
+                  DL_ACINFO_LLA_course(dl_buffer),
+                  DL_ACINFO_LLA_speed(dl_buffer),
+                  DL_ACINFO_LLA_climb(dl_buffer),
+                  DL_ACINFO_LLA_itow(dl_buffer));
       }
       break;
       default:
@@ -137,7 +153,7 @@ int parse_acinfo_dl(void)
 }
 
 
-void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
+void set_ac_info_utm(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
                  uint16_t gspeed, uint16_t climb, uint32_t itow)
 {
   if (ti_acs_idx < NB_ACS) {
@@ -182,7 +198,6 @@ void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt
 void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
                      int16_t course, uint16_t gspeed, int16_t climb, uint32_t itow)
 {
-
   if (ti_acs_idx < NB_ACS) {
     if (id > 0 && ti_acs_id[id] == 0) {
       ti_acs_id[id] = ti_acs_idx++;
@@ -201,6 +216,8 @@ void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
     SetBit(ti_acs[ti_acs_id[id]].status, AC_INFO_VEL_LOCAL_F);
 
     ti_acs[ti_acs_id[id]].itow = itow;
+
+    printf("lla %d %d %d, %d %d %d %d\n", lat, lon, alt, course, gspeed, climb, itow);
   }
 }
 
