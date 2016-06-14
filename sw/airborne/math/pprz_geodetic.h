@@ -106,6 +106,18 @@ extern "C" {
     (_res).z = (_pos1).z - (_pos2).z;   \
   }
 
+#define ENU_SUM(_res, _pos1, _pos2) {  \
+    (_res).x = (_pos1).x + (_pos2).x;  \
+    (_res).y = (_pos1).y + (_pos2).y;  \
+    (_res).z = (_pos1).z + (_pos2).z;  \
+  }
+
+#define ENU_DIFF(_res, _pos1, _pos2) {  \
+    (_res).x = (_pos1).x - (_pos2).x;   \
+    (_res).y = (_pos1).y - (_pos2).y;   \
+    (_res).z = (_pos1).z - (_pos2).z;   \
+  }
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

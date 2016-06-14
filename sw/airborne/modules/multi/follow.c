@@ -33,6 +33,7 @@
 
 #include "state.h"
 
+/* FOLLOW_OFFSET_ X Y and Z are all in ENU frame */
 #ifndef FOLLOW_OFFSET_X
 #define FOLLOW_OFFSET_X 0.0
 #endif
@@ -53,7 +54,7 @@
 #error "Please define FOLLOW_WAYPOINT_ID"
 #endif
 
-void follow_init(void){}
+void follow_init(void) {}
 
 /*
  * follow_wp(void)
@@ -62,24 +63,12 @@ void follow_init(void){}
  */
 void follow_wp(void)
 {
-  struct ac_info_ * ac = get_ac_info(FOLLOW_AC_ID);
+  struct EnuCoor_i *ac = acInfoGetPositionEnu_i(FOLLOW_AC_ID);
 
-  struct UtmCoor_f my_pos = utm_float_from_gps(&gps, 0);
-  my_pos.alt = gps.hmsl / 1000.;
-
-  struct EnuCoor_i enu = stateGetPositionEnu_i();
-  enu.x += POS_BFP_OF_REAL(my_pos.east - ac->utm.east);
-  enu.y += POS_BFP_OF_REAL(my_pos.north - ac->utm.north);
-  enu.z += POS_BFP_OF_REAL(my_pos.alt - ac->utm.alt);
-
-  // TODO: Add the angle to the north
-
-  // Update the offsets
-  enu.x += POS_BFP_OF_REAL(FOLLOW_OFFSET_X);
-  enu.y += POS_BFP_OF_REAL(FOLLOW_OFFSET_Y);
-  enu.z += POS_BFP_OF_REAL(FOLLOW_OFFSET_Z);
-
-  // TODO: Remove the angle to the north
+  struct EnuCoor_i enu = *stateGetPositionEnu_i();
+  enu.x += ac->x + POS_BFP_OF_REAL(FOLLOW_OFFSET_X);
+  enu.y += ac->y + POS_BFP_OF_REAL(FOLLOW_OFFSET_Y);
+  enu.z += ac->z + POS_BFP_OF_REAL(FOLLOW_OFFSET_Z);
 
   // Move the waypoint
   waypoint_set_enu_i(FOLLOW_WAYPOINT_ID, &enu);

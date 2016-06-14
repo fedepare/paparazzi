@@ -27,6 +27,7 @@ let gps_mode_3D = 3
 let no_md5_check = ref false
 let replay_old_log = ref false
 
+
 open Printf
 open Latlong
 open Server_globals
@@ -61,12 +62,12 @@ let modes_of_type = fun vt ->
 let aircrafts = Hashtbl.create 3
 
 (** Broadcast of the received aircrafts *)
-let aircraft_msg_period = 200 (* ms *)
+let aircraft_msg_period = 500 (* ms *)
 let wind_msg_period = 5000 (* ms *)
 let aircraft_alerts_period = 1000 (* ms *)
 let send_aircrafts_msg = fun _asker _values ->
   assert(_values = []);
-  let names = String.concat "," (Hashtbl.fold (fun k _v r -> k::r) aircrafts []) ^ "," in
+  let names = Compat.bytes_concat "," (Hashtbl.fold (fun k _v r -> k::r) aircrafts []) ^ "," in
   ["ac_list", PprzLink.String names]
 
 
@@ -364,17 +365,30 @@ let send_aircraft_msg = fun ac ->
       begin
         let cm_of_m_32 = fun f -> PprzLink.Int32 (Int32.of_int (truncate (100. *. f))) in
         let cm_of_m = fun f -> PprzLink.Int (truncate (100. *. f)) in
-        let pos = LL.utm_of WGS84 a.pos in
-        let ac_info = ["ac_id", PprzLink.String ac;
-                       "utm_east", cm_of_m_32 pos.utm_x;
-                       "utm_north", cm_of_m_32 pos.utm_y;
-                       "alt", cm_of_m_32 a.alt;
-                       "utm_zone", PprzLink.Int pos.utm_zone;
-                       "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
-                       "speed", cm_of_m a.gspeed;
-                       "climb", cm_of_m a.climb;
-                       "itow", PprzLink.Int64 a.itow] in
-        Dl_Pprz.message_send dl_id "ACINFO" ac_info;
+        let ap_mode = get_indexed_value (modes_of_type a.vehicle_type) a.ap_mode in
+        if ap_mode = "0" then
+          let pos = LL.utm_of WGS84 a.pos in
+          let ac_info = ["ac_id", PprzLink.String ac;
+                         "utm_east", cm_of_m_32 pos.utm_x;
+                         "utm_north", cm_of_m_32 pos.utm_y;
+                         "utm_zone", PprzLink.Int pos.utm_zone;
+                         "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
+                         "alt", cm_of_m_32 a.alt;
+                         "speed", cm_of_m a.gspeed;
+                         "climb", cm_of_m a.climb;
+                         "itow", PprzLink.Int64 a.itow] in
+          Dl_Pprz.message_send dl_id "ACINFO" ac_info;
+        else
+          let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (f *. 1e7))) in
+          let ac_info_lla = ["ac_id", PprzLink.String ac;
+                             "lat", deg7_of_rad a.pos.posn_lat;
+                             "lon", deg7_of_rad a.pos.posn_long;
+                             "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
+                             "alt", cm_of_m_32 a.alt;
+                             "speed", cm_of_m a.gspeed;
+                             "climb", cm_of_m a.climb;
+                             "itow", PprzLink.Int64 a.itow] in
+          Dl_Pprz.message_send dl_id "ACINFO_LLA" ac_info_lla;
       end;
 
     if !Kml.enabled then
@@ -450,9 +464,9 @@ let send_aircraft_msg = fun ac ->
 
 (** Check if it is a replayed A/C (c.f. sw/logalizer/play.ml) *)
 let replayed = fun ac_id ->
-  let n = String.length ac_id in
-  if n > 6 && String.sub ac_id 0 6 = "replay" then
-    (true, String.sub ac_id 6 (n - 6), "/var/replay/", ExtXml.parse_file (Env.paparazzi_home // "var/replay/conf/conf.xml"))
+  let n = Compat.bytes_length ac_id in
+  if n > 6 && Compat.bytes_sub ac_id 0 6 = "replay" then
+    (true, Compat.bytes_sub ac_id 6 (n - 6), "/var/replay/", ExtXml.parse_file (Env.paparazzi_home // "var/replay/conf/conf.xml"))
   else
     (false, ac_id, "", conf_xml)
 
@@ -480,7 +494,7 @@ let check_md5sum = fun ac_name alive_md5sum aircraft_conf_dir ->
     match alive_md5sum with
         PprzLink.Array array ->
           let n = Array.length array in
-          assert(n = String.length md5sum / 2);
+          assert(n = Compat.bytes_length md5sum / 2);
           for i = 0 to n - 1 do
             let x = int_of_string (sprintf "0x%c%c" md5sum.[2*i] md5sum.[2*i+1]) in
             assert (x = PprzLink.int_of_value array.(i))
@@ -491,7 +505,7 @@ let check_md5sum = fun ac_name alive_md5sum aircraft_conf_dir ->
       match alive_md5sum with
           PprzLink.Array array ->
             let n = Array.length array in
-            assert(n = String.length md5sum / 2);
+            assert(n = Compat.bytes_length md5sum / 2);
             for i = 0 to n - 1 do
               let x = 0 in
               assert (x = PprzLink.int_of_value array.(i))
@@ -789,8 +803,8 @@ let jump_block = fun logging _sender vs ->
 let raw_datalink = fun logging _sender vs ->
   let ac_id = PprzLink.string_assoc "ac_id" vs
   and m = PprzLink.string_assoc "message" vs in
-  for i = 0 to String.length m - 1 do
-    if m.[i] = ';' then m.[i] <- ' '
+  for i = 0 to Compat.bytes_length m - 1 do
+    if m.[i] = ';' then Compat.bytes_set m i ' '
   done;
   let msg_id, vs = Dl_Pprz.values_of_string m in
   let msg = Dl_Pprz.message_of_id msg_id in

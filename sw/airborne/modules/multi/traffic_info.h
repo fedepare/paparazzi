@@ -34,6 +34,13 @@
 #include "math/pprz_geodetic_int.h"
 #include "math/pprz_geodetic_float.h"
 
+#ifndef NB_ACS_ID
+#define NB_ACS_ID 256
+#endif
+#ifndef NB_ACS
+#define NB_ACS 24
+#endif
+
 /**
  * @defgroup ac_info Data availability representations
  * @{
@@ -136,7 +143,7 @@ extern int parse_acinfo_dl(void);
  * @param[in] climb Climb rate in m/s
  * @param[in] itow GPS time of week in ms
  */
-extern void set_ac_info(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone,
+extern void set_ac_info_utm(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone,
                         uint16_t course,
                         uint16_t gspeed, uint16_t climb, uint32_t itow);
 

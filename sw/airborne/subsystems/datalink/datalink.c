@@ -63,14 +63,6 @@ void dl_parse_msg(void)
   /* parse telemetry messages coming from other AC */
   if (sender_id != 0) {
     switch (msg_id) {
-#ifdef TCAS
-      case DL_TCAS_RA: {
-        if (DL_TCAS_RESOLVE_ac_id(dl_buffer) == AC_ID && SenderIdOfMsg(dl_buffer) != AC_ID) {
-          uint8_t ac_id_conflict = SenderIdOfMsg(dl_buffer);
-          tcas_acs_status[the_acs_id[ac_id_conflict]].resolve = DL_TCAS_RA_resolve(dl_buffer);
-        }
-      }
-#endif /* TCAS */
       default: {
         break;
       }
