@@ -37,13 +37,6 @@
 #include "state.h"
 #include "math/pprz_geodetic_utm.h"
 
-#ifndef NB_ACS_ID
-#define NB_ACS_ID 256
-#endif
-#ifndef NB_ACS
-#define NB_ACS 24
-#endif
-
 uint8_t ti_acs_idx;
 uint8_t ti_acs_id[NB_ACS_ID];
 struct acInfo ti_acs[NB_ACS];
@@ -261,8 +254,6 @@ void acInfoCalcPositionLla_i(uint8_t ac_id)
     SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_F);
     LLA_BFP_OF_REAL(ti_acs[ac_nr].lla_pos_i, ti_acs[ac_nr].lla_pos_f);
   }
-
-  printf("get lla: ac %d, lat: %d, lon: %d, alt: %d\n", ac_id, ti_acs[ac_nr].lla_pos_i.lat, ti_acs[ac_nr].lla_pos_i.lon, ti_acs[ac_nr].lla_pos_i.alt);
 
   SetBit(ti_acs[ac_nr].status, AC_INFO_POS_LLA_I);
 }

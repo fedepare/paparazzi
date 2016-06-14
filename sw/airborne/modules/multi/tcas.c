@@ -26,13 +26,10 @@
  */
 
 #include "multi/tcas.h"
-#include "generated/airframe.h"
 #include "state.h"
 #include "firmwares/fixedwing/nav.h"
-#include "subsystems/gps.h"
-#include "generated/flight_plan.h"
+#include "generated/flight_plan.h"  // SECURITY_ALT
 
-#include "pprzlink/messages.h"
 #include "subsystems/datalink/downlink.h"
 
 float tcas_alt_setpoint;
@@ -65,12 +62,14 @@ struct tcas_ac_status tcas_acs_status[NB_ACS];
 
 #define TCAS_HUGE_TAU 100*TCAS_TAU_TA
 
+void callTCAS(void) { if (tcas_status == TCAS_RA) { v_ctl_altitude_setpoint = tcas_alt_setpoint; } }
+
 /* AC is inside the horizontol dmod area and twice the vertical alim separation */
 #define TCAS_IsInside() ( (ddh < Square(tcas_dmod) && ddv < Square(2*tcas_alim)) ? 1 : 0 )
 
 void tcas_init(void)
 {
-  tcas_alt_setpoint = GROUND_ALT + SECURITY_HEIGHT;
+  tcas_alt_setpoint = SECURITY_ALT;
   tcas_tau_ta = TCAS_TAU_TA;
   tcas_tau_ra = TCAS_TAU_RA;
   tcas_dmod = TCAS_DMOD;
@@ -87,8 +86,8 @@ void tcas_init(void)
 
 static inline enum tcas_resolve tcas_test_direction(uint8_t id)
 {
-  struct ac_info_ * ac = get_ac_info(id);
-  float dz = ac->utm.alt/1000. - stateGetPositionUtm_f()->alt;
+  struct EnuCoor_f *ac = acInfoGetPositionEnu_f(id);
+  float dz = ac->z - stateGetPositionEnu_f()->z;
   if (dz > tcas_alim / 2) { return RA_DESCEND; }
   else if (dz < -tcas_alim / 2) { return RA_CLIMB; }
   else { // AC with the smallest ID descend
@@ -102,7 +101,7 @@ static inline enum tcas_resolve tcas_test_direction(uint8_t id)
 void tcas_periodic_task_1Hz(void)
 {
   // no TCAS under security_height
-  if (stateGetPositionUtm_f()->alt < GROUND_ALT + SECURITY_HEIGHT) {
+  if (stateGetPositionEnu_f()->z < SECURITY_ALT) {
     uint8_t i;
     for (i = 0; i < NB_ACS; i++) { tcas_acs_status[i].status = TCAS_NO_ALARM; }
     return;
@@ -121,12 +120,12 @@ void tcas_periodic_task_1Hz(void)
       continue;
     }
     if (dt > TCAS_DT_MAX) { continue; } // lost com but keep current status
-    float dx = ti_acs[i]->utm.east/100. - stateGetPositionEnu_f()->x;
-    float dy = ti_acs[i]->utm.north/100. - stateGetPositionEnu_f()->y;
-    float dz = ti_acs[i]->utm.alt/1000 - stateGetPositionUtm_f()->alt;
-    float dvx = vx - ti_acs[i].gspeed * sinf(ti_acs[i].course);
-    float dvy = vy - ti_acs[i].gspeed * cosf(ti_acs[i].course);
-    float dvz = stateGetSpeedEnu_f()->z - ti_acs[i].climb;
+    float dx = acInfoGetPositionEnu_f(ti_acs[i].ac_id)->x - stateGetPositionEnu_f()->x;
+    float dy = acInfoGetPositionEnu_f(ti_acs[i].ac_id)->y - stateGetPositionEnu_f()->y;
+    float dz = acInfoGetPositionEnu_f(ti_acs[i].ac_id)->z - stateGetPositionEnu_f()->z;
+    float dvx = vx - acInfoGetVelocityEnu_f(ti_acs[i].ac_id)->x;
+    float dvy = vy - acInfoGetVelocityEnu_f(ti_acs[i].ac_id)->y;
+    float dvz = stateGetSpeedEnu_f()->z - acInfoGetVelocityEnu_f(ti_acs[i].ac_id)->z;
     float scal = dvx * dx + dvy * dy + dvz * dz;
     float ddh = dx * dx + dy * dy;
     float ddv = dz * dz;
@@ -169,6 +168,8 @@ void tcas_periodic_task_1Hz(void)
           //test_dir = tcas_test_direction(ti_acs[i].ac_id);
           //DOWNLINK_SEND_TCAS_RA(DefaultChannel, DefaultDevice,&(ti_acs[i].ac_id),&test_dir);
         }
+        break;
+      default:
         break;
     }
     // store closest AC
@@ -219,22 +220,24 @@ void tcas_periodic_task_1Hz(void)
 void tcas_periodic_task_4Hz(void)
 {
   // set alt setpoint
-  if (stateGetPositionUtm_f()->alt > GROUND_ALT + SECURITY_HEIGHT && tcas_status == TCAS_RA) {
-    struct ac_info_ * ac = get_ac_info(tcas_ac_RA);
+  if (stateGetPositionEnu_f()->z > SECURITY_ALT && tcas_status == TCAS_RA) {
+    struct EnuCoor_f *ac = acInfoGetPositionEnu_f(tcas_ac_RA);
     switch (tcas_resolve) {
       case RA_CLIMB :
-        tcas_alt_setpoint = Max(nav_altitude, ac->utm.alt/1000. + tcas_alim);
+        tcas_alt_setpoint = Max(nav_altitude, ac->z + tcas_alim);
         break;
       case RA_DESCEND :
-        tcas_alt_setpoint = Min(nav_altitude, ac->utm.alt/1000. - tcas_alim);
+        tcas_alt_setpoint = Min(nav_altitude, ac->z - tcas_alim);
         break;
       case RA_LEVEL :
       case RA_NONE :
         tcas_alt_setpoint = nav_altitude;
         break;
+      default:
+        break;
     }
     // Bound alt
-    tcas_alt_setpoint = Max(GROUND_ALT + SECURITY_HEIGHT, tcas_alt_setpoint);
+    tcas_alt_setpoint = Max(SECURITY_ALT, tcas_alt_setpoint);
   } else {
     tcas_alt_setpoint = nav_altitude;
     tcas_resolve = RA_NONE;
