@@ -403,7 +403,8 @@ void ahrs_fc_update_gps(struct GpsState *gps_s __attribute__((unused)))
 
 #if AHRS_USE_GPS_HEADING && USE_GPS
   //got a 3d fix, ground speed > 0.5 m/s and course accuracy is better than 10deg
-  if (gps_s->fix >= GPS_FIX_3D && gps_s->gspeed >= 500 &&
+  if (gps_s->fix >= GPS_FIX_3D && 
+      gps_s->gspeed >= AHRS_HEADING_UPDATE_GPS_MIN_SPEED * 100 &&
       gps_s->cacc <= RadOfDeg(10 * 1e7)) {
 
     // gps_s->course is in rad * 1e7, we need it in rad
