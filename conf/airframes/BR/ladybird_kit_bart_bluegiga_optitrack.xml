@@ -77,9 +77,9 @@
 
  <section name="AUTOPILOT">
    <define name="MODE_STARTUP" value="AP_MODE_NAV"/>
-   <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
-   <define name="MODE_AUTO1" value="AP_MODE_ATTITUDE_Z_HOLD"/>
-   <define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/>
+   <define name="MODE_MANUAL" value="AP_MODE_HOVER_DIRECT"/>
+   <define name="MODE_AUTO1" value="AP_MODE_NAV"/>
+   <define name="MODE_AUTO2" value="AP_MODE_GUIDED"/>
 
     <define name="USE_THROTTLE_FOR_MOTOR_ARMING" value="TRUE"/>
     <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
@@ -147,11 +147,14 @@
   <section name="INS" prefix="INS_">
     <define name="USE_GPS_ALT" value="1"/>
     <define name="USE_GPS_ALT_SPEED" value="1"/>
+    <define name="VFF_R_GPS" value="0.001"/>
+    <define name="VFF_VZ_R_GPS" value="0.001"/>
+    <!--define name="USE_INS_NAV_INIT"/-->
   </section>
 
  <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
    <define name="HOVER_KP" value="276"/>
-   <define name="HOVER_KD" value="455"/>
+   <define name="HOVER_KD" value="285"/>
    <define name="HOVER_KI" value="100"/>
    <define name="NOMINAL_HOVER_THROTTLE" value="0.65"/>
    <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
@@ -163,17 +166,21 @@
     <define name="H_Y" value="0.00278894"/>
     <define name="H_Z" value="0.92060036"/>
     <define name="USE_GPS_HEADING" value="1"/>
+    <define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
   </section>
 
  <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
    <define name="PGAIN" value="290"/>
    <define name="DGAIN" value="134"/>
    <define name="IGAIN" value="0"/>
-   <define name="REF_MAX_SPEED" value="0.8"/>
+   <define name="VGAIN" value="25"/>
+   <define name="AGAIN" value="50"/>
+   <define name="REF_TAU" value="0.3"/>
+   <define name="REF_MAX_SPEED" value="1.5"/>
  </section>
 
   <section name="NAVIGATION" prefix="NAV_">
-    <define name="CLIMB_VSPEED" value="1.0"/>
+    <define name="CLIMB_VSPEED" value="0.8"/>
     <define name="DESCEND_VSPEED" value="-0.5"/>
   </section>
 
@@ -188,11 +195,14 @@
  </section>
 
  <modules main_freq="512">
-   <module name="send_imu_mag_current"/>
- <module name="stereocam">
-	<configure name="STEREO_UART" value="UART1"/>
-	<configure name="STEREO_BAUD" value="B115200"/>
-</module>
+   <!--module name="send_imu_mag_current.xml"/-->
+   <!--module name="swarm_potential.xml"/-->
+   <!--module name="swarm_nn.xml"/-->
+   <module name="stereocam.xml">
+     <configure name="STEREO_UART" value="UART1"/>
+     <configure name="STEREO_BAUD" value="B115200"/>
+     <define name="SEND_STEREO" value="TRUE"/>
+   </module>
  </modules>
 
   <firmware name="rotorcraft">
@@ -202,6 +212,7 @@
       <configure name="USE_MAGNETOMETER" value="0"/>
       <configure name="AHRS_PROPAGATE_FREQUENCY" value="500"/>
       <define name="USE_PERSISTENT_SETTINGS" value="TRUE"/>
+      <configure name="USE_BARO_BOARD" value="FALSE"/>
     </target>
 
     <module name="motor_mixing"/>

@@ -1,0 +1,23 @@
+<!DOCTYPE module SYSTEM "module.dtd">
+
+<module name="rssi" dir="multi">
+  <doc>
+<<<<<<< HEAD
+    <description>stores received rssi values for communication protocols that support it</description>
+=======
+    <description>
+      RSSI info from other aircrafts.
+      Stores info received from RSSI message from other aircrafts for communication protocols that support it.
+    </description>
+>>>>>>> 6b61e8737eeeb7a15bbe3fa9ef400a8837f3595f
+  </doc>
+  <header>
+    <file name="rssi.h"/>
+  </header>
+  <init fun="rssi_init()"/>
+  <datalink message="RSSI" fun="parse_rssi_dl()"/>
+  <makefile>
+    <file name="rssi.c"/>
+  </makefile>
+</module>
+

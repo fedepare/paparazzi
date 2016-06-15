@@ -573,7 +573,7 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
 	uint8 i = 0;
     	while(i++ < MAX_DEVICES)
     	{
-    	  if (!cmp_addr(msg->sender.addr, connected_addr[i].addr))
+    	  if (!cmp_addr(msg->sender.addr, connected_addr[i].addr))// || (msg->sender.addr[0] != 0xdf && msg->sender.addr[0] != 0x43 && msg->sender.addr[0] != 0x54))
     	    return;
     	}
     

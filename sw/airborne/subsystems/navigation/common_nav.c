@@ -39,9 +39,12 @@ struct point waypoints[NB_WAYPOINT] = WAYPOINTS_UTM;
 
 float ground_alt;
 
-int32_t nav_utm_east0 = NAV_UTM_EAST0;
-int32_t nav_utm_north0 = NAV_UTM_NORTH0;
+float nav_utm_east0 = NAV_UTM_EAST0;
+float nav_utm_north0 = NAV_UTM_NORTH0;
 uint8_t nav_utm_zone0 = NAV_UTM_ZONE0;
+
+//struct UtmCoor_i nav_utm0 = {.east=NAV_UTM_EAST0, .north=NAV_UTM_NORTH0, .alt=NAV_MSL0, .zone=NAV_UTM_ZONE0};
+
 float max_dist_from_home = MAX_DIST_FROM_HOME;
 
 /** Computes squared distance to the HOME waypoint.
