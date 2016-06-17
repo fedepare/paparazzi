@@ -71,7 +71,7 @@ void ins_xsens700_init(void)
   ins_pitch_neutral = INS_PITCH_NEUTRAL_DEFAULT;
   ins_roll_neutral = INS_ROLL_NEUTRAL_DEFAULT;
 
-  struct UtmCoor_f utm0 = { nav_utm_north0, nav_utm_east0, 0., nav_utm_zone0 };
+  struct UtmCoor_f utm0 = { nav_utm_north0, nav_utm_east0, ground_alt, nav_utm_zone0 };
   stateSetLocalUtmOrigin_f(&utm0);
   stateSetPositionUtm_f(&utm0);
 

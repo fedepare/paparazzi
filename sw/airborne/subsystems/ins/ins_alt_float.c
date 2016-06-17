@@ -154,7 +154,11 @@ void ins_reset_altitude_ref(void)
 {
   struct UtmCoor_f utm = state.utm_origin_f;
   // ground_alt
-  utm.alt = gps.hmsl / 1000.0f;
+  if (bit_is_set(gps.valid_fields, GPS_VALID_HMSL_BIT)) {
+    utm.alt = gps.hmsl/1000.;
+  } else if (bit_is_set(gps.valid_fields, GPS_VALID_POS_LLA_BIT)) {
+    utm.alt = wgs84_ellipsoid_to_geoid_i(gps.lla_pos.lat, gps.lla_pos.lon)/1000.;
+  }
   // reset state UTM ref
   stateSetLocalUtmOrigin_f(&utm);
   // reset filter flag

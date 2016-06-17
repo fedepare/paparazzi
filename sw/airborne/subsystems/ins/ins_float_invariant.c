@@ -287,7 +287,12 @@ void ins_reset_altitude_ref(void)
 {
 #if INS_FINV_USE_UTM
   struct UtmCoor_f utm = state.utm_origin_f;
-  utm.alt = gps.hmsl / 1000.0f;
+  // TODO update for multiple gps
+  if (bit_is_set(gps.->valid_fields, GPS_VALID_HMSL_BIT)) {
+    utm.alt = gps.hmsl/1000.;
+  } else if (bit_is_set(gps.valid_fields, GPS_VALID_POS_LLA_BIT)) {
+    utm.alt = wgs84_ellipsoid_to_geoid_i(gps.lla_pos.lat, gps.lla_pos.lon)/1000.;
+  }
   stateSetLocalUtmOrigin_f(&utm);
 #else
   struct LlaCoor_i lla = {
