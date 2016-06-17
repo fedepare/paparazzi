@@ -37,10 +37,10 @@ bool too_far_from_home;
 const uint8_t nb_waypoint = NB_WAYPOINT;
 struct point waypoints[NB_WAYPOINT] = WAYPOINTS_UTM;
 
-float ground_alt;
+float ground_alt = NAV_MSL0;
 
-int32_t nav_utm_east0 = NAV_UTM_EAST0;
-int32_t nav_utm_north0 = NAV_UTM_NORTH0;
+float nav_utm_east0 = NAV_UTM_EAST0;
+float nav_utm_north0 = NAV_UTM_NORTH0;
 uint8_t nav_utm_zone0 = NAV_UTM_ZONE0;
 float max_dist_from_home = MAX_DIST_FROM_HOME;
 
