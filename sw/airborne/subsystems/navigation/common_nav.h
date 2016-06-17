@@ -57,8 +57,8 @@ extern struct point waypoints[];
 /** altitude of the ground in m above MSL */
 extern float ground_alt;
 
-extern int32_t nav_utm_east0;  /* m */
-extern int32_t nav_utm_north0; /* m */
+extern float nav_utm_east0;  /* m */
+extern float nav_utm_north0; /* m */
 extern uint8_t nav_utm_zone0;
 
 
