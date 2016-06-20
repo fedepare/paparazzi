@@ -92,7 +92,7 @@ struct Int32Vect3 {
 };
 
 /* Rotation quaternions                         */
-#define INT32_QUAT_FRAC 14
+#define INT32_QUAT_FRAC 15
 /**
  * @brief Rotation quaternion
  * @details Units: BFP with #INT32_QUAT_FRAC */
