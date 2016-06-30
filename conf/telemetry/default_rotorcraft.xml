@@ -30,6 +30,7 @@
       <message name="POTENTIAL"              period="0.11"/>
       <message name="SWARMNN"                period="0.11"/>
       <!--message name="ROTORCRAFT_CMD"           period=".051"/-->
+      <message name="STAB_ATTITUDE_INDI"     period=".1"/>
     </mode>
 
     <mode name="ppm">

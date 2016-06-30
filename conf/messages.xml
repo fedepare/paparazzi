@@ -1911,6 +1911,9 @@
   </message>
 
   <message name="STAB_ATTITUDE_INDI" id="216">
+    <field name="angular_rate_p" type="float" unit="rad/s"/>
+    <field name="angular_rate_q" type="float" unit="rad/s"/>
+    <field name="angular_rate_r" type="float" unit="rad/s"/>
     <field name="angular_accel_p" type="float"/>
     <field name="angular_accel_q" type="float"/>
     <field name="angular_accel_r" type="float"/>
