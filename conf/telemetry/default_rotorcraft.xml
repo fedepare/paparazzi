@@ -25,11 +25,12 @@
       <message name="STATE_FILTER_STATUS"    period="3.2"/>
       <message name="AIR_DATA"               period="1.3"/>
       <message name="SURVEY"                 period="2.5"/>
-      <message name="OPTIC_FLOW_EST"         period="0.25"/>
+      <message name="OPTIC_FLOW_EST"         period="0.05"/>
       <message name="VECTORNAV_INFO"         period="0.5"/>
       <message name="POTENTIAL"              period="0.11"/>
       <message name="SWARMNN"                period="0.11"/>
       <!--message name="ROTORCRAFT_CMD"           period=".051"/-->
+      <message name="STAB_ATTITUDE_INDI"     period=".1"/>
     </mode>
 
     <mode name="ppm">
@@ -130,7 +131,6 @@
       <message name="HFF"                   period=".05"/>
       <message name="HFF_GPS"               period=".03"/>
       <message name="HFF_DBG"               period=".2"/>
-      <message name="ROTORCRAFT_CMD"           period=".01"/>
     </mode>
 
     <mode name="aligner">
