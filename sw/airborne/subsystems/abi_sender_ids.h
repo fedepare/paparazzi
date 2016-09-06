@@ -254,7 +254,11 @@
 
 #ifndef RSSI_MODLUE_ID
 #define RSSI_MODULE_ID 2
+/*
+ * IDs of RPM sensors (message 15)
+ */
+#ifndef RPM_SENSOR_ID
+#define RPM_SENSOR_ID 1
 #endif
-
 
 #endif /* ABI_SENDER_IDS_H */
