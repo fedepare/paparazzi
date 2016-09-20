@@ -23,6 +23,8 @@
  * 
  */
 
+#include "inttypes.h"
+
 #ifndef DIV_CTRL_H
 #define DIV_CTRL_H
 
@@ -31,6 +33,7 @@ extern void div_ctrl_run(void);
 
 extern float gain;
 extern float foe_cmd;
+extern uint8_t window_mode;
 
 #endif
 
