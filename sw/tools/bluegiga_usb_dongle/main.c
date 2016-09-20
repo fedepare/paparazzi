@@ -134,7 +134,7 @@ FUNCTION ANALYSIS:
 
 // uncomment the following line to show outgoing/incoming BGAPI packet data
 //#define DEBUG
-#define DEBUG_BROADCAST
+//#define DEBUG_BROADCAST
 
 // timeout for serial port read operations
 #define UART_TIMEOUT 1000
