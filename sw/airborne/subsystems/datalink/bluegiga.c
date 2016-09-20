@@ -61,7 +61,7 @@ enum BlueGigaStatus coms_status;
 struct bluegiga_periph bluegiga_p;
 struct spi_transaction bluegiga_spi;
 
-uint8_t broadcast_msg[20];
+uint8_t broadcast_msg[BLUEGIGA_SPI_BUF_SIZE];
 
 void bluegiga_load_tx(struct bluegiga_periph *p, struct spi_transaction *trans);
 void bluegiga_transmit(struct bluegiga_periph *p, uint8_t data);
@@ -183,7 +183,7 @@ void bluegiga_init(struct bluegiga_periph *p)
   memset(p->work_rx, 0, bluegiga_spi.input_length);
   memset(p->work_tx, 0, bluegiga_spi.output_length);
 
-  memset(broadcast_msg, 0, 19);
+  memset(broadcast_msg, 0, sizeof(broadcast_msg));
 
   p->bytes_recvd_since_last = 0;
   p->end_of_msg = p->tx_insert_idx;
