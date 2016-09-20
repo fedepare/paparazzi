@@ -83,6 +83,7 @@ static void opticflow_telem_send(struct transport_tx *trans, struct link_device 
                                &opticflow_result.flow_der_y, &x,
                                &y, &opticflow_result.div_size,
                                &opticflow_result.surface_roughness, &opticflow_result.divergence); // TODO: no noise measurement here...
+  }
   pthread_mutex_unlock(&opticflow_mutex);
 }
 #endif

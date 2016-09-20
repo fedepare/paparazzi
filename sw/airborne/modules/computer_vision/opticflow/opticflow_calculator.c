@@ -143,12 +143,20 @@ PRINT_CONFIG_VAR(OPTICFLOW_METHOD)
 #endif
 
 #ifndef OPTICFLOW_DEROTATION
-#define OPTICFLOW_DEROTATION 1
+#define OPTICFLOW_DEROTATION TRUE
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_DEROTATION)
 
+#ifndef OPTICFLOW_MEDIAN_FILTER
+#define OPTICFLOW_MEDIAN_FILTER TRUE
+PRINT_CONFIG_VAR(OPTICFLOW_MEDIAN_FILTER)
+
+//Include median filter
+#include "filters/median_filter.h"
+struct MedianFilterInt vel_x_filt, vel_y_filt;
+
 #ifndef CAMERA_ROTATED_180
-#define CAMERA_ROTATED_180 0
+#define CAMERA_ROTATED 0
 #endif
 PRINT_CONFIG_VAR(CAMERA_ROTATED_180)
 
@@ -164,6 +172,9 @@ static int cmp_flow(const void *a, const void *b);
  */
 void opticflow_calc_init(struct opticflow_t *opticflow, uint16_t w, uint16_t h)
 {
+  //init_median_filter(&vel_x_filt);
+  //init_median_filter(&vel_y_filt);
+
   /* Create the image buffers */
   image_create(&opticflow->img_gray, w, h, IMAGE_GRAYSCALE);
   image_create(&opticflow->prev_img_gray, w, h, IMAGE_GRAYSCALE);
@@ -183,11 +194,16 @@ void opticflow_calc_init(struct opticflow_t *opticflow, uint16_t w, uint16_t h)
   opticflow->max_iterations = OPTICFLOW_MAX_ITERATIONS;
   opticflow->threshold_vec = OPTICFLOW_THRESHOLD_VEC;
   opticflow->pyramid_level = OPTICFLOW_PYRAMID_LEVEL;
+  opticflow->median_filter = OPTICFLOW_MEDIAN_FILTER;
+
 
   opticflow->fast9_adaptive = OPTICFLOW_FAST9_ADAPTIVE;
   opticflow->fast9_threshold = OPTICFLOW_FAST9_THRESHOLD;
   opticflow->fast9_min_distance = OPTICFLOW_FAST9_MIN_DISTANCE;
   opticflow->fast9_padding = OPTICFLOW_FAST9_PADDING;
+  opticflow->fast9_rsize = 512;
+  opticflow->fast9_ret_corners = malloc(sizeof(struct point_t) * opticflow->fast9_rsize);
+
 }
 /**
  * Run the optical flow with fast9 and lukaskanade on a new image frame
@@ -273,7 +289,6 @@ void calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct opticflow_sta
   } else {
     result->div_size = 0.0f;
   }
-
   if (LINEAR_FIT) {
     // Linear flow fit (normally derotation should be performed before):
     error_threshold = 10.0f;
@@ -349,6 +364,15 @@ void calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct opticflow_sta
   // TODO Calculate the velocity more sophisticated, taking into account the drone's angle and the slope of the ground plane.
   result->vel.x = result->flow_der_x * result->fps * state->agl / opticflow->subpixel_factor  / OPTICFLOW_FX;
   result->vel.y = result->flow_der_y * result->fps * state->agl / opticflow->subpixel_factor  / OPTICFLOW_FY;
+
+  /*//Apply a  median filter to the velocity if wanted
+  if (opticflow->median_filter == true) {
+    result->vel_x = (float)update_median_filter(&vel_x_filt, (int32_t)(vel_x * 1000)) / 1000;
+    result->vel_y = (float)update_median_filter(&vel_y_filt, (int32_t)(vel_y * 1000)) / 1000;
+  } else {
+    result->vel_x = vel_x;
+    result->vel_y = vel_y;
+  }*/
 
   // Velocity calculation: uncomment if focal length of the camera is not known or incorrect.
   // result->vel.x =  - result->flow_der_x * result->fps * state->agl / opticflow->subpixel_factor * OPTICFLOW_FOV_W / img->w
@@ -442,9 +466,9 @@ void calc_edgeflow_tot(struct opticflow_t *opticflow, struct opticflow_state_t *
   // TODO change the rotation axis to the axis of the camera i.e. reverse phi and theta here
   if (opticflow->derotation) {
     der_shift_x = -(int16_t)((edge_hist[previous_frame_nr[0]].rates.p + edge_hist[current_frame_nr].rates.p) / 2.0f *
-                             (float)img->w / (OPTICFLOW_FOV_W));
+                             result->fps * (float)img->w / (OPTICFLOW_FOV_W));
     der_shift_y = -(int16_t)((edge_hist[previous_frame_nr[1]].rates.q + edge_hist[current_frame_nr].rates.q) / 2.0f *
-                             (float)img->h / (OPTICFLOW_FOV_H));
+                             result->fps * (float)img->h / (OPTICFLOW_FOV_H));
   }
 
   // Estimate pixel wise displacement of the edge histograms for x and y direction
