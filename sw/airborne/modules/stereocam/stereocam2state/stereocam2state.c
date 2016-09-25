@@ -10,7 +10,7 @@
  * This module sends the data retrieved from an external stereocamera modules, to the state filter of the drone. This is done so that the guidance modules can use that information for couadcopter
  */
 
-#include "modules/stereocam/stereocam2state/stereocam2state.h"
+#include "stereocam2state.h"
 #include "modules/stereocam/stereocam.h"
 
 #include "subsystems/abi.h"
@@ -76,7 +76,7 @@ void stereo_to_state_periodic(void)
     tracked_x = stereocam_data.data[0];
     tracked_y = stereocam_data.data[1];
     stereocam_data.fresh = 0;
-  } else if (stereocam_data.fresh && stereocam_data.len == 9) {  // length of WINDOW message
+  } else if (stereocam_data.fresh && stereocam_data.len == 8) {  // length of WINDOW message
     win_x = stereocam_data.data[0];
     win_y = stereocam_data.data[1];
     win_cert = stereocam_data.data[2];
@@ -135,10 +135,10 @@ void stereocam_to_state(void)
 
   float_rmat_transp_vmult(&vel_body_f, &body_to_stereocam, &vel_f);
 
-  stereo_motion.ventral_flow.x = flow_x;
-  stereo_motion.ventral_flow.y = flow_y;
-  stereo_motion.div.x = div_x;
-  stereo_motion.div.y = div_y;
+  stereo_motion.ventral_flow.x = (float)flow_x / RES;
+  stereo_motion.ventral_flow.y = (float)flow_y / RES;
+  stereo_motion.div.x = (float)div_x / RES;
+  stereo_motion.div.y = (float)div_y / RES;
 
   //Send velocity estimate to state
   //TODO:: Make variance dependable on line fit error, after new horizontal filter is made

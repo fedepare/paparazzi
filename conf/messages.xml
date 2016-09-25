@@ -2051,11 +2051,11 @@
   <message name="STEREOCAM_OPTIC_FLOW" id="230">
     <field name="fps"       type="uint8"/>
     <field name="agl"       type="uint8" alt_unit="m" alt_unit_coef="0.1"/>
-    <field name="vel_x_pixelwise"       type="int16" alt_unit="m/s" alt_unit_coef="0.00390625"/>
-    <field name="vel_z_pixelwise"       type="int16" alt_unit="m/s" alt_unit_coef="0.00390625"/>
-    <field name="vel_x_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.00390625"/>
-    <field name="vel_y_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.00390625"/>
-    <field name="vel_z_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.00390625"/>
+    <field name="vel_x_pixelwise"       type="int16" alt_unit="m/s" alt_unit_coef="0.01"/>
+    <field name="vel_z_pixelwise"       type="int16" alt_unit="m/s" alt_unit_coef="0.01"/>
+    <field name="vel_x_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.01"/>
+    <field name="vel_y_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.01"/>
+    <field name="vel_z_global"       type="int16" alt_unit="m/s" alt_unit_coef="0.01"/>
     <field name="x"          type="uint8"/>
     <field name="y"          type="uint8"/>
     <field name="winX"       type="uint8"/>

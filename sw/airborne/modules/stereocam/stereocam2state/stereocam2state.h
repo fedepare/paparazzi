@@ -14,12 +14,12 @@
 #define STEREOCAM2STATE_H
 
 #include <std.h>
-#include "math/pprz_algebra_int.h"
+#include "math/pprz_algebra_float.h"
 
 struct Egomotion {
-  struct Int32Vect2 div; // estimated divergence
-  struct Int32Vect2 ventral_flow; // estimated ventral flow
-  struct Int32Vect2 foe;  // estimated focus of expansion
+  struct FloatVect2 div; // estimated divergence
+  struct FloatVect2 ventral_flow; // estimated ventral flow
+  struct FloatVect2 foe;  // estimated focus of expansion
 };
 
 extern uint8_t tracked_x, tracked_y;
