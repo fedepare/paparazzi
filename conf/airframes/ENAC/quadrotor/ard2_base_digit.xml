@@ -6,7 +6,6 @@
     <define name="DEBUG_VFF_EXTENDED"/>
     <configure name="HOST" value="192.168.1.$(AC_ID)"/>
     <target name="ap" board="ardrone2">
-      <define name="USE_SONAR"/>
       <define name="USE_BARO_MEDIAN_FILTER"/>
       <define name="AUTOPILOT_DISABLE_AHRS_KILL"/>
       <module name="radio_control" type="datalink"/>
@@ -31,9 +30,7 @@
     <!-- INS for outdoor only -->
     <module name="ins" type="float_invariant"/>
 
-    <module name="agl_dist">
-      <define name="USE_SONAR"/>
-    </module>
+    <module name="agl_dist"/>
    <module name="video_thread"/>
     <module name="video_rtp_stream">
       <define name="VIEWVIDEO_CAMERA" value="front_camera"/>

@@ -8,8 +8,7 @@
     </target>
 
     <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
-    <define name="USE_SONAR" value="FALSE"/>
- <define name="USE_GPS_ALT" value="1"/>
+    <define name="USE_GPS_ALT" value="1"/>
 
     <configure name="USE_MAGNETOMETER" value="TRUE"/>
 
@@ -19,10 +18,10 @@
     <module name="motor_mixing"/>
     <module name="actuators" type="ardrone2"/>
     <module name="imu" type="ardrone2"/>
- <module name="gps" type="datalink"/>
+    <module name="gps" type="datalink"/>
     <module name="stabilization" type="int_quat"/>
     <module name="ahrs" type="int_cmpl_quat"/>
-    <module name="ins" type="extended"/>
+    <module name="ins"/><!--use extended if you want sonar-->
   </firmware>
 
   <modules main_freq="512">

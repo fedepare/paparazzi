@@ -9,8 +9,6 @@
       <module name="fdm" type="jsbsim"/>
     </target-->
 
-    <define name="USE_SONAR" value="TRUE"/>
-
 	<!-- Subsystem section -->
     <module name="telemetry" type="transparent_udp"/>
     <module name="radio_control" type="datalink"/>
@@ -122,8 +120,6 @@
   </section>
 
   <section name="INS" prefix="INS_">
-    <define name="SONAR_MAX_RANGE" value="2.2"/>
-    <define name="SONAR_UPDATE_ON_AGL" value="TRUE"/>
   </section>
 
 

@@ -53,6 +53,13 @@ struct mt9f002_t mt9f002;
 #define USE_BARO_BOARD 1
 #endif
 
+/** Time constant for baro low pass filter
+ * Default should provide cut-off freq of 1/(2*pi*tau) ~= 4Hz
+ */
+#ifndef BB_MS5611_FILTER_CONST
+#define BB_MS5611_FILTER_CONST 0.04
+#endif
+
 /* The ADC from the sonar */
 #if USE_ADC0
 #define ADC0_ID             0

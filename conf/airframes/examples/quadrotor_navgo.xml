@@ -132,7 +132,6 @@
     <!-- calibration SENS = 1.156 :( -->
     <define name="SONAR_SENS" value="0.0128633" integer="16"/>
     <define name="SONAR_OFFSET" value="7"/>
-    <define name="SONAR_MAX_RANGE" value="4.0"/>
   </section>
 
 

@@ -384,13 +384,11 @@ void navdata_update()
     baro_update_logic();
     mag_freeze_check();
 
-#ifdef USE_SONAR
     /* Check if there is a new sonar measurement and update the sonar */
     if (navdata.measure.ultrasound >> 15) {
       float sonar_meas = (float)((navdata.measure.ultrasound & 0x7FFF) - SONAR_OFFSET) * SONAR_SCALE;
       AbiSendMsgAGL(AGL_SONAR_ARDRONE2_ID, sonar_meas);
     }
-#endif
 
     navdata_publish_imu();
 

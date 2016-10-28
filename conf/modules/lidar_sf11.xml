@@ -43,9 +43,6 @@
     <define name="LIDAR_SF11_COMPENSATE_ROTATION" value="$(LIDAR_SF11_COMPENSATE_ROTATION)"/>
     <file name="lidar_sf11.c"/>
   </makefile>
-  <makefile target="nps">
-    <define name="USE_SONAR" value="1"/><!-- in NPS use a virtual sonar to simulate lidar measurements -->
-  </makefile>
 </module>
 
 

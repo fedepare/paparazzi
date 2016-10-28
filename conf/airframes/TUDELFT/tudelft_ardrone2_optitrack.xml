@@ -12,7 +12,6 @@
     </target>
 
     <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
-    <define name="USE_SONAR" value="0"/>
     <configure name="USE_MAGNETOMETER" value="0"/>
 
 	<!-- Subsystem section -->
@@ -24,7 +23,6 @@
     <module name="gps" type="datalink"/>
     <module name="stabilization" type="indi_simple"/>
     <module name="ahrs" type="int_cmpl_quat"/>
-    <module name="ins" type="extended"/>
   </firmware>
 
   <modules main_freq="512">

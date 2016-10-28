@@ -89,7 +89,7 @@
 #endif
 
 /*
- * IDs of AGL measurment modules that can be loaded (sonars,...)
+ * IDs of AGL measurement modules that can be loaded (sonars,...)
  */
 #ifndef AGL_SONAR_ADC_ID
 #define AGL_SONAR_ADC_ID 1

@@ -35,7 +35,6 @@
     <module name="rotorcraft_cam"/>
     <module name="sonar_adc">
       <configure name="ADC_SONAR" value="ADC_0"/>
-      <define name="USE_SONAR"/>
       <!--define name="SENSOR_SYNC_SEND_SONAR"/-->
     </module>
     <!--module name="baro_mpl3115">
@@ -167,8 +166,6 @@
   </section>
 
   <section name="INS" prefix="INS_">
-    <define name="SONAR_MAX_RANGE" value="5.0"/>
-    <define name="SONAR_MIN_RANGE" value="0.25"/>
   </section>
 
   <section name="SONAR">

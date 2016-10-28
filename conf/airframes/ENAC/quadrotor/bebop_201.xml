@@ -13,8 +13,6 @@
       <module name="radio_control" type="ppm"/>
     </target>
 
-    <!--define name="USE_SONAR" value="TRUE"/-->
-
     <module name="telemetry" type="transparent_udp"/>
     <!-- Subsystem section -->
     <module name="motor_mixing"/>
@@ -26,9 +24,7 @@
     <module name="ins" type="extended"/-->
     <module name="ins" type="float_invariant"/>
 
-    <module name="sonar" type="bebop">
-      <define name="SENSOR_SYNC_SEND_SONAR"/>
-    </module>
+    <define name="SENSOR_SYNC_SEND_SONAR"/>
     <!--module name="send_imu_mag_current"/>
     <module name="file_logger">
       <define name="FILE_LOGGER_PATH" value="\\/data/ftp/internal_000/\\" type="string"/>
@@ -125,8 +121,6 @@
   </section>
 
   <section name="INS" prefix="INS_">
-    <define name="SONAR_MAX_RANGE" value="2.2"/>
-    <define name="SONAR_UPDATE_ON_AGL" value="TRUE"/>
     <!-- Toulouse -->
     <!--define name="H_X" value="0.513081"/>
     <define name="H_Y" value="-0.00242783"/>

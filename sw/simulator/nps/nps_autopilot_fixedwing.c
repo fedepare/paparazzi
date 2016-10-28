@@ -55,10 +55,8 @@
 // for datalink_time hack
 #include "subsystems/datalink/datalink.h"
 
-#if USE_SONAR
 // for sonar/lidar agl
 #include "subsystems/datalink/downlink.h"
-#endif
 
 struct NpsAutopilot nps_autopilot;
 bool nps_bypass_ahrs;
@@ -152,18 +150,18 @@ void nps_autopilot_run_step(double time)
     Ap(event_task);
   }
 
-#if USE_SONAR
   if (nps_sensors_sonar_available()) {
     float dist = (float) sensors.sonar.value;
     AbiSendMsgAGL(AGL_SONAR_NPS_ID, dist);
 
     uint16_t foo = 0;
+#ifdef SENSOR_SYNC_SEND_SONAR
     DOWNLINK_SEND_SONAR(DefaultChannel, DefaultDevice, &foo, &dist);
+#endif
 
     Fbw(event_task);
     Ap(event_task);
   }
-#endif
 
 #if USE_NPS_AOA
   if (nps_sensors_aoa_available()) {

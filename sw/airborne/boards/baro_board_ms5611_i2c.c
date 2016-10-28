@@ -40,10 +40,10 @@
 #include "pprzlink/messages.h"
 #include "subsystems/datalink/downlink.h"
 
-#ifdef BARO_PERIODIC_FREQUENCY
+#include "filters/low_pass_filter.h"
+
 #if BARO_PERIODIC_FREQUENCY > 100
-#error "For MS5611 BARO_PERIODIC_FREQUENCY has to be < 100"
-#endif
+#error "For MS5611 BARO_PERIODIC_FREQUENCY has to be <= 100"
 #endif
 
 
@@ -64,7 +64,15 @@
 PRINT_CONFIG_VAR(BB_MS5611_TYPE_MS5607)
 
 struct Ms5611_I2c bb_ms5611;
+Butterworth2LowPass lowpass_pressure;
 
+/** Time constant for baro low pass filter
+ * Default should provide a cut-off freq of 1/(2*pi*tau) ~= BARO_PERIODIC_FREQUENCY / 2
+ */
+#ifndef BB_MS5611_FILTER_CONST
+#define BB_MS5611_FILTER_CONST (1. / (M_PI * BARO_PERIODIC_FREQUENCY))
+#endif
+PRINT_CONFIG_VAR(BB_MS5611_FILTER_CONST)
 
 void baro_init(void)
 {
@@ -73,6 +81,8 @@ void baro_init(void)
 #ifdef BARO_LED
   LED_OFF(BARO_LED);
 #endif
+
+  init_butterworth_2_low_pass(&lowpass_pressure, BB_MS5611_FILTER_CONST, 1. / BARO_PERIODIC_FREQUENCY, 0);
 }
 
 void baro_periodic(void)
@@ -103,7 +113,7 @@ void baro_event(void)
     ms5611_i2c_event(&bb_ms5611);
 
     if (bb_ms5611.data_available) {
-      float pressure = (float)bb_ms5611.data.pressure;
+      float pressure = update_butterworth_2_low_pass(&lowpass_pressure, (float)bb_ms5611.data.pressure);
       AbiSendMsgBARO_ABS(BARO_BOARD_SENDER_ID, pressure);
       float temp = bb_ms5611.data.temperature / 100.0f;
       AbiSendMsgTEMPERATURE(BARO_BOARD_SENDER_ID, temp);

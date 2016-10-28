@@ -54,40 +54,24 @@
 #include "math/pprz_geodetic_int.h"
 #include "math/pprz_isa.h"
 
-
-#if USE_SONAR
-#if !USE_VFF_EXTENDED
-#error USE_SONAR needs USE_VFF_EXTENDED
+/* INS_BARO_AGL_OFFSET is the static offset that should be added to the baro when
+ * the vehicle is on the ground, i.e. the initial height of the baro from ground */
+#ifndef INS_BARO_AGL_OFFSET
+#define INS_BARO_AGL_OFFSET 0.
 #endif
 
-/** default sonar to use in INS */
-#ifndef INS_INT_SONAR_ID
-#define INS_INT_SONAR_ID ABI_BROADCAST
+#ifndef VFF_R_AGL
+#define VFF_R_AGL 0.2
 #endif
-abi_event sonar_ev;
-static void sonar_cb(uint8_t sender_id, float distance);
 
 #ifdef INS_SONAR_THROTTLE_THRESHOLD
 #include "firmwares/rotorcraft/stabilization.h"
 #endif
 
-#ifndef INS_SONAR_MIN_RANGE
-#define INS_SONAR_MIN_RANGE 0.001
-#endif
-#ifndef INS_SONAR_MAX_RANGE
-#define INS_SONAR_MAX_RANGE 4.0
-#endif
-#define VFF_R_SONAR_0 0.1
+#define VFF_R_SONAR_0 0.2
 #ifndef VFF_R_SONAR_OF_M
 #define VFF_R_SONAR_OF_M 0.2
 #endif
-
-#ifndef INS_SONAR_UPDATE_ON_AGL
-#define INS_SONAR_UPDATE_ON_AGL FALSE
-PRINT_CONFIG_MSG("INS_SONAR_UPDATE_ON_AGL defaulting to FALSE")
-#endif
-
-#endif // USE_SONAR
 
 #if USE_GPS
 #ifndef INS_VFF_R_GPS
@@ -145,6 +129,15 @@ static void gps_cb(uint8_t sender_id, uint32_t stamp, struct GpsState *gps_s);
 static abi_event vel_est_ev;
 static void vel_est_cb(uint8_t sender_id, uint32_t stamp, float x, float y, float z, float noise);
 
+/** ABI binding for AGL.
+ * Usually this is comes from sonar or gps.
+ */
+#ifndef INS_INT_AGL_ID
+#define INS_INT_AGL_ID ABI_BROADCAST
+#endif
+static abi_event agl_ev;                 ///< The agl ABI event
+static void agl_cb(uint8_t sender_id, float distance);
+
 struct InsInt ins_int;
 
 #if PERIODIC_TELEMETRY
@@ -199,12 +192,6 @@ void ins_int_init(void)
   AbiBindMsgBARO_ABS(INS_INT_BARO_ID, &baro_ev, baro_cb);
   ins_int.baro_initialized = false;
 
-#if USE_SONAR
-  ins_int.update_on_agl = INS_SONAR_UPDATE_ON_AGL;
-  // Bind to AGL message
-  AbiBindMsgAGL(INS_INT_SONAR_ID, &sonar_ev, sonar_cb);
-#endif
-
   ins_int.vf_reset = false;
   ins_int.hf_realign = false;
 
@@ -230,6 +217,7 @@ void ins_int_init(void)
   AbiBindMsgIMU_ACCEL_INT32(INS_INT_IMU_ID, &accel_ev, accel_cb);
   AbiBindMsgGPS(INS_INT_GPS_ID, &gps_ev, gps_cb);
   AbiBindMsgVELOCITY_ESTIMATE(INS_INT_VEL_ID, &vel_est_ev, vel_est_cb);
+  AbiBindMsgAGL(INS_INT_AGL_ID, &agl_ev, agl_cb); // ABI to the altitude above ground level
 }
 
 void ins_reset_local_origin(void)
@@ -316,42 +304,63 @@ void ins_int_propagate(struct Int32Vect3 *accel, float dt)
 
 static void baro_cb(uint8_t __attribute__((unused)) sender_id, float pressure)
 {
-  if (!ins_int.baro_initialized && pressure > 1e-7) {
-    // wait for a first positive value
-    ins_int.qfe = pressure;
-    ins_int.baro_initialized = true;
-  }
+  static uint8_t num_points = 0;
 
-  if (ins_int.baro_initialized) {
-    if (ins_int.vf_reset) {
-      ins_int.vf_reset = false;
+  if (pressure > 1e-7){
+    if(!ins_int.baro_initialized)
+    {
+      // wait for a first positive value
       ins_int.qfe = pressure;
-      vff_realign(0.);
+      vff_realign(INS_BARO_AGL_OFFSET);
       ins_update_from_vff();
+      ins_int.baro_initialized = true;
+      ins_int.vf_reset = false;
     } else {
-      float baro_up = pprz_isa_height_of_pressure(pressure, ins_int.qfe);
+      // wait 1s to estimate accel bias
+      if (num_points < BARO_PERIODIC_FREQUENCY){
+#if USE_VFF_EXTENDED
+        vff_update_baro(INS_BARO_AGL_OFFSET);
+#else
+        vff_update(INS_BARO_AGL_OFFSET);
+#endif
+        num_points++;
+        return;
+      } else if (num_points == BARO_PERIODIC_FREQUENCY){
+        ins_int.vf_reset = true;
+        num_points++;
+      }
 
-      // Calculate the distance to the origin
-      struct EnuCoor_f *enu = stateGetPositionEnu_f();
-      double dist2_to_origin = enu->x*enu->x + enu->y*enu->y;
+      if (ins_int.vf_reset) {
+        ins_int.vf_reset = false;
+        ins_int.qfe = pressure;
+        ins_int.baro_z = -pprz_isa_height_of_pressure(pressure, ins_int.qfe) - INS_BARO_AGL_OFFSET;
+        vff_realign(ins_int.baro_z);
+        ins_update_from_vff();
+      } else {
+        float baro_up = pprz_isa_height_of_pressure(pressure, ins_int.qfe);
 
-      // correction for the earth's curvature
-      const double earth_radius = 6378137.0;
-      float height_correction = (float) (sqrt(earth_radius*earth_radius + dist2_to_origin) - earth_radius);
+        // Calculate the distance to the origin
+        struct EnuCoor_f *enu = stateGetPositionEnu_f();
+        double dist2_to_origin = enu->x*enu->x + enu->y*enu->y;
 
-      // The VFF will update in the NED frame
-      ins_int.baro_z = -(baro_up - height_correction);
+        // correction for the earth's curvature
+        const double earth_radius = 6378137.0;
+        float height_correction = (float) (sqrt(earth_radius*earth_radius + dist2_to_origin) - earth_radius);
+
+        // The VFF will update in the NED frame
+        ins_int.baro_z = -(baro_up - height_correction);
 
 #if USE_VFF_EXTENDED
-      vff_update_baro(ins_int.baro_z);
+        vff_update_baro(ins_int.baro_z);
 #else
-      vff_update(ins_int.baro_z);
+        vff_update(ins_int.baro_z);
 #endif
-    }
-    ins_ned_to_state();
+      }
+      ins_ned_to_state();
 
-    /* reset the counter to indicate we just had a measurement update */
-    ins_int.propagation_cnt = 0;
+      /* reset the counter to indicate we just had a measurement update */
+      ins_int.propagation_cnt = 0;
+    }
   }
 }
 
@@ -435,33 +444,39 @@ void ins_int_update_gps(struct GpsState *gps_s)
 void ins_int_update_gps(struct GpsState *gps_s __attribute__((unused))) {}
 #endif /* USE_GPS */
 
-
-#if USE_SONAR
-static void sonar_cb(uint8_t __attribute__((unused)) sender_id, float distance)
-{
-  static float last_offset = 0.;
-
-  /* update filter assuming a flat ground */
-  if (distance < INS_SONAR_MAX_RANGE && distance > INS_SONAR_MIN_RANGE
-#ifdef INS_SONAR_THROTTLE_THRESHOLD
-      && stabilization_cmd[COMMAND_THRUST] < INS_SONAR_THROTTLE_THRESHOLD
-#endif
-#ifdef INS_SONAR_BARO_THRESHOLD
-      && ins_int.baro_z > -INS_SONAR_BARO_THRESHOLD /* z down */
-#endif
-      && ins_int.update_on_agl
-      && ins_int.baro_initialized) {
-    vff_update_z_conf(-(distance), VFF_R_SONAR_0 + VFF_R_SONAR_OF_M * fabsf(distance));
-    last_offset = vff.offset;
-  } else {
-    /* update offset with last value to avoid divergence */
-    vff_update_offset(last_offset);
+/** agl_cb
+ * This callback handles all estimates of the height of the vehicle above the ground under it
+ * This is only used with the extended version of the vertical float filter
+ */
+#if USE_VFF_EXTENDED
+static void agl_cb(uint8_t sender_id, float distance) {
+  if (distance <= 0 || !(ins_int.baro_initialized)) {
+    return;
   }
 
-  /* reset the counter to indicate we just had a measurement update */
-  ins_int.propagation_cnt = 0;
+  if (sender_id == AGL_SONAR_ADC_ID ||
+      sender_id == AGL_SONAR_ARDRONE2_ID ||
+      sender_id == AGL_SONAR_NPS_ID ||
+      sender_id == AGL_SONAR_PX4FLOW_ID)
+  {
+#ifdef INS_SONAR_THROTTLE_THRESHOLD
+      if (stabilization_cmd[COMMAND_THRUST] > INS_SONAR_THROTTLE_THRESHOLD){
+        return;
+      }
+#endif
+    vff_update_agl(-distance, VFF_R_SONAR_0 + VFF_R_SONAR_OF_M * fabsf(distance));
+    /* reset the counter to indicate we just had a measurement update */
+    ins_int.propagation_cnt = 0;
+  } else {
+    vff_update_agl(-distance, VFF_R_AGL);
+    /* reset the counter to indicate we just had a measurement update */
+    ins_int.propagation_cnt = 0;
+  }
+
 }
-#endif // USE_SONAR
+#else
+static void agl_cb(uint8_t __attribute__((unused)) sender_id, __attribute__((unused)) float distance) {}
+#endif
 
 /** copy position and speed to state interface */
 static void ins_ned_to_state(void)
@@ -527,20 +542,15 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
 {
 
   struct FloatVect3 vel_body = {x, y, z};
-  static uint32_t last_stamp = 0;
-  float dt = 0;
+  static uint32_t last_stamp = 0, last_pos_stamp = 0;
+  static float sum_x = 0., sum_y = 0.;
+  struct FloatVect3 prev_vel = {0};
 
   /* rotate velocity estimate to nav/ltp frame */
   struct FloatQuat q_b2n = *stateGetNedToBodyQuat_f();
   QUAT_INVERT(q_b2n, q_b2n);
   struct FloatVect3 vel_ned;
   float_quat_vmult(&vel_ned, &q_b2n, &vel_body);
-
-  if (last_stamp > 0) {
-    dt = (float)(stamp - last_stamp) * 1e-6;
-  }
-
-  last_stamp = stamp;
 
 #if USE_HFF
   (void)dt; //dt is unused variable in this define
@@ -553,9 +563,25 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
 #else
   ins_int.ltp_speed.x = SPEED_BFP_OF_REAL(vel_ned.x);
   ins_int.ltp_speed.y = SPEED_BFP_OF_REAL(vel_ned.y);
+
+  // due to time step resolution, we average velocity over longer time window for int position resolution
   if (last_stamp > 0) {
-    ins_int.ltp_pos.x = ins_int.ltp_pos.x + POS_BFP_OF_REAL(dt * vel_ned.x);
-    ins_int.ltp_pos.y = ins_int.ltp_pos.y + POS_BFP_OF_REAL(dt * vel_ned.y);
+    // integrate area under speed curve assuming constant gradient between speed measurements (ie trapezoid)
+    sum_x += (prev_vel.x + vel_ned.x) * (stamp - last_stamp) / 2.;
+    sum_y += (prev_vel.y + vel_ned.y) * (stamp - last_stamp) / 2.;
+  } else {
+    last_pos_stamp = stamp;
+  }
+
+  last_stamp = stamp;
+  prev_vel.x = vel_ned.x;
+  prev_vel.y = vel_ned.y;
+
+  if (stamp - last_pos_stamp >= 0.05) {
+    ins_int.ltp_pos.x += POS_BFP_OF_REAL(sum_x * 1e-6);
+    ins_int.ltp_pos.y += POS_BFP_OF_REAL(sum_y * 1e-6);
+    sum_x = 0.; sum_y = 0.;
+    last_pos_stamp = stamp;
   }
 #endif
 

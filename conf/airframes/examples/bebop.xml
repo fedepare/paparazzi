@@ -9,7 +9,7 @@
       <module name="fdm" type="jsbsim"/>
       <module name="udp"/>
     </target>
-
+    
     <define name="MT9F002_OUTPUT_HEIGHT" value="640" />
     <define name="MT9F002_OUTPUT_WIDTH" value="640" />
     <define name="MT9F002_TARGET_EXPOSURE" value="30" />
@@ -21,9 +21,7 @@
     <define name="MT9F002_X_ODD_INC_VAL" value="1"/>
     <define name="MT9F002_Y_ODD_INC_VAL" value="1"/>
 
-    <define name="USE_SONAR" value="true"/>
-
-	<!-- Subsystem section -->
+    <!-- Subsystem section -->
     <module name="telemetry" type="transparent_udp"/>
     <module name="radio_control" type="datalink"/>
     <module name="motor_mixing"/>
@@ -33,9 +31,8 @@
     <module name="stabilization" type="int_quat"/>
     <module name="ahrs"          type="float_mlkf"/>
     <module name="ins" type="extended"/>
-  </firmware>
 
-  <modules main_freq="512">
+    <!-- Modules -->
     <module name="geo_mag"/>
     <module name="air_data"/>
     <module name="send_imu_mag_current"/>
@@ -53,8 +50,9 @@
     </module>
 
     <module name="bebop_ae_awb"/>
+  </firmware>
 
-  </modules>
+  <modules main_freq="512"/>
 
   <commands>
     <axis name="PITCH" failsafe_value="0"/>
@@ -119,8 +117,6 @@
   </section>
 
   <section name="INS" prefix="INS_">
-    <define name="SONAR_MAX_RANGE" value="2.2"/>
-    <define name="SONAR_UPDATE_ON_AGL" value="TRUE"/>
   </section>
 
 
