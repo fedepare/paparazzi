@@ -27,6 +27,10 @@
 
 #include "generated/airframe.h"
 
+#include "subsystems/radio_control.h"
+//#include "modules/stereocam/stereocam.h"
+#include "filters/low_pass_filter.h"
+
 #include "firmwares/rotorcraft/stabilization/stabilization_attitude.h"
 #include "firmwares/rotorcraft/stabilization/stabilization_attitude_rc_setpoint.h"
 
@@ -61,7 +65,10 @@ int32_t stabilization_att_fb_cmd[COMMANDS_NB];
 int32_t stabilization_att_ff_cmd[COMMANDS_NB];
 
 struct Int32Eulers stab_att_sp_euler;
+struct Int32Rates stab_rate_sp_euler;
 struct AttRefEulerInt att_ref_euler_i;
+
+struct SecondOrderLowPass_int filter_yaw;
 
 static inline void reset_psi_ref_from_body(void)
 {
@@ -80,7 +87,7 @@ static void send_att(struct transport_tx *trans, struct link_device *dev)
   struct Int32Eulers *att = stateGetNedToBodyEulers_i();
   pprz_msg_send_STAB_ATTITUDE_INT(trans, dev, AC_ID,
                                   &(body_rate->p), &(body_rate->q), &(body_rate->r),
-                                  &(att->phi), &(att->theta), &(att->psi),
+                                  &(att->phi), &(att->theta), &(att->psi)/*,
                                   &stab_att_sp_euler.phi,
                                   &stab_att_sp_euler.theta,
                                   &stab_att_sp_euler.psi,
@@ -95,24 +102,25 @@ static void send_att(struct transport_tx *trans, struct link_device *dev)
                                   &stabilization_att_ff_cmd[COMMAND_YAW],
                                   &stabilization_cmd[COMMAND_ROLL],
                                   &stabilization_cmd[COMMAND_PITCH],
-                                  &stabilization_cmd[COMMAND_YAW]);
+                                  &stabilization_cmd[COMMAND_YAW]*/);
 }
 
 static void send_att_ref(struct transport_tx *trans, struct link_device *dev)
 {
   pprz_msg_send_STAB_ATTITUDE_REF_INT(trans, dev, AC_ID,
-                                      &stab_att_sp_euler.phi,
-                                      &stab_att_sp_euler.theta,
-                                      &stab_att_sp_euler.psi,
-                                      &att_ref_euler_i.euler.phi,
+//                                      &stab_att_sp_euler.phi,
+//                                      &stab_att_sp_euler.theta,
+//                                      &stab_att_sp_euler.psi,
+//                                      &att_ref_euler_i.euler.phi,
                                       &att_ref_euler_i.euler.theta,
                                       &att_ref_euler_i.euler.psi,
-                                      &att_ref_euler_i.rate.p,
-                                      &att_ref_euler_i.rate.q,
-                                      &att_ref_euler_i.rate.r,
-                                      &att_ref_euler_i.accel.p,
-                                      &att_ref_euler_i.accel.q,
-                                      &att_ref_euler_i.accel.r);
+                                      &radio_control.values[RADIO_YAW]);
+//                                      &att_ref_euler_i.rate.p,
+//                                      &att_ref_euler_i.rate.q,
+//                                      &att_ref_euler_i.rate.r,
+//                                      &att_ref_euler_i.accel.p,
+//                                      &att_ref_euler_i.accel.q,
+//                                      &att_ref_euler_i.accel.r);
 }
 #endif
 
@@ -151,15 +159,20 @@ void stabilization_attitude_init(void)
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_STAB_ATTITUDE_INT, send_att);
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_STAB_ATTITUDE_REF_INT, send_att_ref);
 #endif
+
+  // Initialize low pass filters
+  // void init_second_order_low_pass_int(struct SecondOrderLowPass_int *filter, float cut_off, float Q, float sample_time, int32_t value)
+  init_second_order_low_pass_int(&filter_yaw, 10.0, 0.7071, 1.0/PERIODIC_FREQUENCY, 0.0);
 }
 
 void stabilization_attitude_read_rc(bool in_flight, bool in_carefree, bool coordinated_turn)
 {
-  stabilization_attitude_read_rc_setpoint_eulers(&stab_att_sp_euler, in_flight, in_carefree, coordinated_turn);
+  stabilization_attitude_read_rc_setpoint_eulers(&stab_att_sp_euler, &stab_rate_sp_euler, in_flight, in_carefree, coordinated_turn);
 }
 
 void stabilization_attitude_enter(void)
 {
+  INT_RATES_ZERO(stab_rate_sp_euler);
   stab_att_sp_euler.psi = stateGetNedToBodyEulers_i()->psi;
   reset_psi_ref_from_body();
   INT_EULERS_ZERO(stabilization_att_sum_err);
@@ -167,6 +180,7 @@ void stabilization_attitude_enter(void)
 
 void stabilization_attitude_set_failsafe_setpoint(void)
 {
+  INT_RATES_ZERO(stab_rate_sp_euler);
   stab_att_sp_euler.phi = 0;
   stab_att_sp_euler.theta = 0;
   stab_att_sp_euler.psi = stateGetNedToBodyEulers_i()->psi;
@@ -202,7 +216,8 @@ void stabilization_attitude_run(bool  in_flight)
   attitude_ref_euler_int_update(&att_ref_euler_i, &stab_att_sp_euler);
 #else
   INT32_EULERS_LSHIFT(att_ref_euler_i.euler, stab_att_sp_euler, (REF_ANGLE_FRAC - INT32_ANGLE_FRAC));
-  INT_RATES_ZERO(att_ref_euler_i.rate);
+  INT_RATES_LSHIFT(att_ref_euler_i.rate, stab_rate_sp_euler, (REF_RATE_FRAC - INT32_RATE_FRAC));
+  //INT_RATES_ZERO(att_ref_euler_i.rate);
   INT_RATES_ZERO(att_ref_euler_i.accel);
 #endif
 
@@ -213,6 +228,7 @@ void stabilization_attitude_run(bool  in_flight)
     OFFSET_AND_ROUND(stabilization_gains.dd.y * att_ref_euler_i.accel.q, 5);
   stabilization_att_ff_cmd[COMMAND_YAW] =
     OFFSET_AND_ROUND(stabilization_gains.dd.z * att_ref_euler_i.accel.r, 5);
+//  stabilization_att_ff_cmd[COMMAND_YAW] = radio_control.values[RADIO_YAW]/2;
 
   /* compute feedback command */
   /* attitude error            */
@@ -226,8 +242,16 @@ void stabilization_attitude_run(bool  in_flight)
   EULERS_DIFF(att_err, att_ref_scaled, (*ltp_to_body_euler));
   INT32_ANGLE_NORMALIZE(att_err.psi);
 
+  /*int32_t rate_cmd = (stab_att_sp_euler.psi - ltp_to_body_euler->psi);
+  FLOAT_ANGLE_NORMALIZE(rate_cmd);
+  rate_cmd = 3 * att_err.psi;  // results in max rate of 1.5rad/s at 30deg (0.5rad)
+  BoundAbs(rate_cmd, ANGLE_BFP_OF_REAL(3));
+
+  int32_t rate_error = rate_cmd - stateGetBodyRates_i()->r;*/
+
   if (in_flight) {
     /* update integrator */
+    //att_err.psi = rate_error; // replace att error with rate error
     EULERS_ADD(stabilization_att_sum_err, att_err);
     EULERS_BOUND_CUBE(stabilization_att_sum_err, -MAX_SUM_ERR, MAX_SUM_ERR);
   } else {
@@ -248,17 +272,17 @@ void stabilization_attitude_run(bool  in_flight)
   stabilization_att_fb_cmd[COMMAND_ROLL] =
     stabilization_gains.p.x    * att_err.phi +
     stabilization_gains.d.x    * rate_err.p +
-    OFFSET_AND_ROUND2((stabilization_gains.i.x  * stabilization_att_sum_err.phi), 10);
+    OFFSET_AND_ROUND2((stabilization_gains.i.x  * stabilization_att_sum_err.phi), 8);
 
   stabilization_att_fb_cmd[COMMAND_PITCH] =
     stabilization_gains.p.y    * att_err.theta +
     stabilization_gains.d.y    * rate_err.q +
-    OFFSET_AND_ROUND2((stabilization_gains.i.y  * stabilization_att_sum_err.theta), 10);
+    OFFSET_AND_ROUND2((stabilization_gains.i.y  * stabilization_att_sum_err.theta), 8);
 
   stabilization_att_fb_cmd[COMMAND_YAW] =
     stabilization_gains.p.z    * att_err.psi +
     stabilization_gains.d.z    * rate_err.r +
-    OFFSET_AND_ROUND2((stabilization_gains.i.z  * stabilization_att_sum_err.psi), 10);
+    OFFSET_AND_ROUND2((stabilization_gains.i.z  * stabilization_att_sum_err.psi), 8);
 
 
   /* with P gain of 100, att_err of 180deg (3.14 rad)
@@ -272,14 +296,18 @@ void stabilization_attitude_run(bool  in_flight)
     OFFSET_AND_ROUND((stabilization_att_fb_cmd[COMMAND_ROLL] + stabilization_att_ff_cmd[COMMAND_ROLL]), CMD_SHIFT);
 
   stabilization_cmd[COMMAND_PITCH] =
-    OFFSET_AND_ROUND((stabilization_att_fb_cmd[COMMAND_PITCH] + stabilization_att_ff_cmd[COMMAND_PITCH]), CMD_SHIFT);
+    OFFSET_AND_ROUND((stabilization_att_fb_cmd[COMMAND_PITCH] + stabilization_att_ff_cmd[COMMAND_PITCH]), 8); // was 11 --> gains need to be 8 times smaller to have the same effect
 
   stabilization_cmd[COMMAND_YAW] =
-    OFFSET_AND_ROUND((stabilization_att_fb_cmd[COMMAND_YAW] + stabilization_att_ff_cmd[COMMAND_YAW]), CMD_SHIFT);
+    OFFSET_AND_ROUND((stabilization_att_fb_cmd[COMMAND_YAW] + stabilization_att_ff_cmd[COMMAND_YAW]), 8); // was 11 --> gains need to be 8 times smaller to have the same effect
 
   /* bound the result */
   BoundAbs(stabilization_cmd[COMMAND_ROLL], MAX_PPRZ);
   BoundAbs(stabilization_cmd[COMMAND_PITCH], MAX_PPRZ);
   BoundAbs(stabilization_cmd[COMMAND_YAW], MAX_PPRZ);
+
+  /* Filtering the commands */
+  // int32_t update_second_order_low_pass_int(struct SecondOrderLowPass_int *filter, int32_t value)
+  stabilization_cmd[COMMAND_YAW] = update_second_order_low_pass_int(&filter_yaw, stabilization_cmd[COMMAND_YAW]);
 
 }

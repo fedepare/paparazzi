@@ -61,6 +61,9 @@
 #ifdef USE_DAC
 #include "mcu_periph/dac.h"
 #endif
+#ifdef USE_RPM
+#include "subsystems/sensors/rpm_sensor.h"
+#endif
 #endif /* PERIPHERALS_AUTO_INIT */
 
 void WEAK board_init(void)
@@ -217,6 +220,10 @@ void mcu_init(void)
 
 #if USE_UDP0 || USE_UDP1 || USE_UDP2
   udp_arch_init();
+#endif
+
+#ifdef USE_RPM
+  rpm_sensor_init();
 #endif
 
 #else

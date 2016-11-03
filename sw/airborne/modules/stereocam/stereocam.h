@@ -34,12 +34,35 @@
 struct stereocam_t {
   struct link_device *device;           ///< The device which is uses for communication
   struct pprz_transport transport;      ///< The transport layer (PPRZ)
-  struct FloatRMat body_to_cam;         ///< IMU to stereocam rotation
+  struct FloatRMat body_to_cam;         ///< IMU to stereocam translation
   bool msg_available;                   ///< If we received a message
 };
+
+struct gate_t {
+  uint8_t quality;
+  float width;  // rad
+  float height; // rad
+  struct FloatEulers bearing;  // rad
+  bool valid;
+};
+
+extern struct gate_t gate;
+extern void nus_state_machine(void);
 
 extern void stereocam_init(void);
 extern void stereocam_event(void);
 extern void state2stereocam(void);
+
+extern void stereocam_parse_vel(struct FloatVect3 camera_vel, float R2);
+
+extern float redroplet_wait;
+extern uint8_t gate_count_thresh;
+
+extern float nus_gate_heading;
+extern int8_t nus_switch;
+extern int16_t nus_turn_cmd, nus_climb_cmd;
+extern uint8_t fit_thresh, climb_cmd_max, turn_cmd_max;
+extern float nus_filter_factor;
+extern bool nus_gate_detected;
 
 #endif /* STEREOCAM_H_ */
