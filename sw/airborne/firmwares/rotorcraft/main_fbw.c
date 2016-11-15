@@ -47,12 +47,15 @@
 #include "generated/modules.h"
 
 /* So one can use these in command_laws section */
+#define And(x, y) ((x) && (y))
+#define Or(x, y) ((x) || (y))
+#define Min(x,y) (x < y ? x : y)
+#define Max(x,y) (x > y ? x : y)
 #define LessThan(_x, _y) ((_x) < (_y))
 #define MoreThan(_x, _y) ((_x) > (_y))
 
 
 /** Fly by wire modes */
-typedef enum {FBW_MODE_MANUAL = 0, FBW_MODE_AUTO = 1, FBW_MODE_FAILSAFE = 2} fbw_mode_enum;
 fbw_mode_enum fbw_mode;
 bool fbw_motors_on = false;
 

@@ -51,6 +51,9 @@ void stateInit(void)
   state.ned_initialized_i = false;
   state.ned_initialized_f = false;
   state.utm_initialized_f = false;
+
+  /* setting to zero forces recomputation of zone using lla when utm uninitialised*/
+  state.utm_origin_f.zone = 0;
 }
 
 
@@ -124,7 +127,7 @@ void stateCalcPositionNed_i(void)
       SetBit(state.pos_status, POS_NED_F);
       NED_BFP_OF_REAL(state.ned_pos_i, state.ned_pos_f);
     } else if (bit_is_set(state.pos_status, POS_LLA_I)) {
-      ned_of_lla_point_i(&state.ned_pos_i, &state.ned_origin_i, &state.lla_pos_i);
+      ned_of_lla_pos_i(&state.ned_pos_i, &state.ned_origin_i, &state.lla_pos_i);
     } else { /* could not get this representation,  set errno */
       errno = 1;
     }
@@ -203,7 +206,7 @@ void stateCalcPositionEnu_i(void)
       SetBit(state.pos_status, POS_ENU_F);
       ENU_BFP_OF_REAL(state.enu_pos_i, state.enu_pos_f);
     } else if (bit_is_set(state.pos_status, POS_LLA_I)) {
-      enu_of_lla_point_i(&state.enu_pos_i, &state.ned_origin_i, &state.lla_pos_i);
+      enu_of_lla_pos_i(&state.enu_pos_i, &state.ned_origin_i, &state.lla_pos_i);
     } else { /* could not get this representation,  set errno */
       errno = 1;
     }
@@ -701,7 +704,7 @@ void stateCalcHorizontalSpeedNorm_i(void)
   } else if (bit_is_set(state.speed_status, SPEED_NED_I)) {
     uint32_t n2 = (state.ned_speed_i.x * state.ned_speed_i.x +
                    state.ned_speed_i.y * state.ned_speed_i.y) >> INT32_SPEED_FRAC;
-    INT32_SQRT(state.h_speed_norm_i, n2);
+    state.h_speed_norm_i = int32_sqrt(n2);
   } else if (bit_is_set(state.speed_status, SPEED_NED_F)) {
     state.h_speed_norm_f = FLOAT_VECT2_NORM(state.ned_speed_f);
     SetBit(state.speed_status, SPEED_HNORM_F);
@@ -709,7 +712,7 @@ void stateCalcHorizontalSpeedNorm_i(void)
   } else if (bit_is_set(state.speed_status, SPEED_ENU_I)) {
     uint32_t n2 = (state.enu_speed_i.x * state.enu_speed_i.x +
                    state.enu_speed_i.y * state.enu_speed_i.y) >> INT32_SPEED_FRAC;
-    INT32_SQRT(state.h_speed_norm_i, n2);
+    state.h_speed_norm_i = int32_sqrt(n2);
   } else if (bit_is_set(state.speed_status, SPEED_ENU_F)) {
     state.h_speed_norm_f = FLOAT_VECT2_NORM(state.enu_speed_f);
     SetBit(state.speed_status, SPEED_HNORM_F);
@@ -720,7 +723,7 @@ void stateCalcHorizontalSpeedNorm_i(void)
     SetBit(state.speed_status, SPEED_NED_I);
     uint32_t n2 = (state.ned_speed_i.x * state.ned_speed_i.x +
                    state.ned_speed_i.y * state.ned_speed_i.y) >> INT32_SPEED_FRAC;
-    INT32_SQRT(state.h_speed_norm_i, n2);
+    state.h_speed_norm_i = int32_sqrt(n2);
   } else if (bit_is_set(state.speed_status, SPEED_ECEF_F)) {
     ned_of_ecef_vect_f(&state.ned_speed_f, &state.ned_origin_f, &state.ecef_speed_f);
     SetBit(state.speed_status, SPEED_NED_F);
@@ -1165,7 +1168,7 @@ void stateCalcHorizontalWindspeed_f(void)
 
   if (bit_is_set(state.wind_air_status, WINDSPEED_I)) {
     state.windspeed_f.vect2.x = SPEED_FLOAT_OF_BFP(state.windspeed_i.vect2.x);
-    state.windspeed_f.vect2.x = SPEED_FLOAT_OF_BFP(state.windspeed_i.vect2.y);
+    state.windspeed_f.vect2.y = SPEED_FLOAT_OF_BFP(state.windspeed_i.vect2.y);
   }
   /* set bit to indicate this representation is computed */
   SetBit(state.wind_air_status, WINDSPEED_F);

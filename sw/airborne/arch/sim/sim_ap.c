@@ -13,7 +13,6 @@
 #include "inter_mcu.h"
 #include "autopilot.h"
 #include "subsystems/gps.h"
-#include "subsystems/navigation/traffic_info.h"
 #include "generated/settings.h"
 #include "firmwares/fixedwing/nav.h"
 #include "firmwares/fixedwing/stabilization/stabilization_attitude.h"
@@ -139,7 +138,7 @@ value set_datalink_message(value s)
   }
 
   dl_msg_available = true;
-  DlCheckAndParse();
+  DlCheckAndParse(&(DOWNLINK_DEVICE).device, &ivy_tp.trans_tx, dl_buffer);
 
   return Val_unit;
 }

@@ -365,16 +365,29 @@ let send_aircraft_msg = fun ac ->
       begin
         let cm_of_m_32 = fun f -> PprzLink.Int32 (Int32.of_int (truncate (100. *. f))) in
         let cm_of_m = fun f -> PprzLink.Int (truncate (100. *. f)) in
-        let pos = LL.utm_of WGS84 a.pos in
-        let ac_info = ["ac_id", PprzLink.String ac;
-                       "utm_east", cm_of_m_32 pos.utm_x;
-                       "utm_north", cm_of_m_32 pos.utm_y;
-                       "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
-                       "alt", cm_of_m_32 a.alt;
-                       "speed", cm_of_m a.gspeed;
-                       "climb", cm_of_m a.climb;
-                       "itow", PprzLink.Int64 a.itow] in
-        Dl_Pprz.message_send dl_id "ACINFO" ac_info;
+        if a.vehicle_type = FixedWing then
+          let pos = LL.utm_of WGS84 a.pos in
+          let ac_info = ["ac_id", PprzLink.String ac;
+                         "utm_east", cm_of_m_32 pos.utm_x;
+                         "utm_north", cm_of_m_32 pos.utm_y;
+                         "utm_zone", PprzLink.Int pos.utm_zone;
+                         "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
+                         "alt", cm_of_m_32 a.alt;
+                         "speed", cm_of_m a.gspeed;
+                         "climb", cm_of_m a.climb;
+                         "itow", PprzLink.Int64 a.itow] in
+          Dl_Pprz.message_send dl_id "ACINFO" ac_info;
+        else
+          let deg7_of_rad = fun f -> PprzLink.Int32 (Int32.of_float (Geometry_2d.rad2deg (f *. 1e7))) in
+          let ac_info_lla = ["ac_id", PprzLink.String ac;
+                             "lat", deg7_of_rad a.pos.posn_lat;
+                             "lon", deg7_of_rad a.pos.posn_long;
+                             "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
+                             "alt", cm_of_m_32 a.alt;
+                             "speed", cm_of_m a.gspeed;
+                             "climb", cm_of_m a.climb;
+                             "itow", PprzLink.Int64 a.itow] in
+          Dl_Pprz.message_send dl_id "ACINFO_LLA" ac_info_lla;
       end;
 
     if !Kml.enabled then
@@ -751,6 +764,14 @@ let move_wp = fun logging _sender vs ->
   Dl_Pprz.message_send dl_id "MOVE_WP" vs;
   log logging ac_id "MOVE_WP" vs
 
+(** Got a DL_EMERGENCY_CMD, and send an EMERGENCY_CMD *)
+let emergency_cmd = fun logging _sender vs ->
+  let ac_id = PprzLink.string_assoc "ac_id" vs in
+  let vs = [ "ac_id", PprzLink.String ac_id;
+             "cmd", List.assoc "cmd" vs] in
+  Dl_Pprz.message_send dl_id "EMERGENCY_CMD" vs;
+  log logging ac_id "EMERGENCY_CMD" vs
+
 (** Got a DL_SETTING, and send an SETTING *)
 let setting = fun logging _sender vs ->
   let ac_id = PprzLink.string_assoc "ac_id" vs in
@@ -821,6 +842,7 @@ let ground_to_uplink = fun logging ->
   let bind_log_and_send = fun name handler ->
     ignore (Ground_Pprz.message_bind name (handler logging)) in
   bind_log_and_send "MOVE_WAYPOINT" move_wp;
+  bind_log_and_send "DL_EMERGENCY_CMD" emergency_cmd;
   bind_log_and_send "DL_SETTING" setting;
   bind_log_and_send "GET_DL_SETTING" get_setting;
   bind_log_and_send "JUMP_TO_BLOCK" jump_block;

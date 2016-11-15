@@ -123,7 +123,7 @@ let get_targets_of_module = fun xml ->
 
 let module_name = fun xml ->
   let name = ExtXml.attrib xml "name" in
-  try Filename.chop_extension name with _ -> name
+  try if Filename.check_suffix name ".xml" then Filename.chop_extension name else name with _ -> name
 
 exception Subsystem of string
 let get_module = fun m global_targets ->
@@ -161,11 +161,15 @@ let get_module = fun m global_targets ->
   | _ -> Xml2h.xml_error "module, autoload or load"
 
 (** [get_autoloaded_modules module]
- * Return a list of modules to be automaticaly added *)
-let get_autoloaded_modules = fun m ->
+ * Return a list of modules to be automaticaly added
+ * Only works with actual modules (no subsystems) *)
+let rec get_autoloaded_modules = fun m ->
   let m = get_module m (Var "") in
   List.fold_left (fun l t ->
-    if ExtXml.tag_is t "autoload" then (get_module t (Var "") :: l) else l
+    if ExtXml.tag_is t "autoload" then
+      let am = get_module t (Var "") in
+      (am :: ((try get_autoloaded_modules am.xml with _ -> []) @ l))
+    else l
   ) [] (Xml.children m.xml)
 
 (** [test_targets target targets]
@@ -174,7 +178,27 @@ let get_autoloaded_modules = fun m ->
 let test_targets = fun target targets ->
   eval_bool target targets
 
-exception Firmware_Found of string
+(** [expand_includes ac_id xml]
+ * Expand xml airframe file if it contains 'include' nodes
+ *)
+let expand_includes = fun ac_id xml ->
+  match xml with
+  | Xml.PCData d -> Xml.PCData d
+  | Xml.Element (tag, attrs, children) ->
+      Xml.Element (tag, attrs,
+      List.fold_left (fun x c ->
+        if Xml.tag c = "include" then begin
+          let filename = Str.global_replace (Str.regexp "\\$AC_ID") ac_id (ExtXml.attrib c "href") in
+          let filename =
+            if Filename.is_relative filename then Env.paparazzi_home // filename
+            else filename in
+          let subxml = ExtXml.parse_file filename in
+          x @ (Xml.children subxml)
+        end
+        else x @ [c]
+      ) [] children)
+
+exception Firmware_Found of Xml.xml
 (** [get_modules_of_airframe xml]
  * Returns a list of module configuration from airframe file *)
 let rec get_modules_of_airframe = fun ?target xml ->
@@ -186,10 +210,9 @@ let rec get_modules_of_airframe = fun ?target xml ->
     | Some t -> begin try
         Xml.iter (fun x ->
           if Xml.tag x = "firmware" then begin
-            let name = ExtXml.attrib x "name" in
-            Xml.iter (fun x ->
-              if Xml.tag x = "target" then begin
-                if Xml.attrib x "name" = t then raise (Firmware_Found name)
+            Xml.iter (fun xt ->
+              if Xml.tag xt = "target" then begin
+                if Xml.attrib xt "name" = t then raise (Firmware_Found x)
               end) x
           end) xml;
           None
@@ -212,9 +235,8 @@ let rec get_modules_of_airframe = fun ?target xml ->
           else failwith ("Unkown module " ^ file)
         end
     | Xml.Element (tag, _attrs, children) when tag = "firmware" ->
-        let name = Xml.attrib xml "name" in
         begin match firmware with
-        | Some f when f = name ->
+        | Some f when String.compare (Xml.to_string f) (Xml.to_string xml) = 0 ->
             List.fold_left (fun acc xml ->
               iter_modules targets acc xml) modules children
         | None ->
@@ -231,6 +253,10 @@ let rec get_modules_of_airframe = fun ?target xml ->
             List.fold_left
               (fun acc xml -> iter_modules targets acc xml) modules children
         | _ -> modules end
+    | Xml.Element (tag, _attrs, _children) when tag = "include" ->
+        let filename = ExtXml.attrib xml "href" in
+        let subxml = ExtXml.parse_file filename in
+        iter_modules targets modules subxml
     | Xml.Element (tag, _attrs, children) ->
         let (targets, use_fallback) =
           if tag = "modules" then (targets_of_field xml "", false) else (targets, true) in
@@ -303,18 +329,18 @@ let singletonize_modules = fun ?(verbose=false) ?target xml ->
 (** [get_modules_of_config ?target flight_plan airframe]
  * Returns a list of pair (modules ("load" node), targets) from airframe file and flight plan.
  * The modules are singletonized and options are merged *)
-let get_modules_of_config = fun ?target ?verbose af_xml fp_xml ->
-  let af_modules = get_modules_of_airframe ?target af_xml
+let get_modules_of_config = fun ?target ?verbose ac_id af_xml fp_xml ->
+  let af_modules = get_modules_of_airframe ?target (expand_includes ac_id af_xml)
   and fp_modules = get_modules_of_flight_plan fp_xml in
   (* singletonize modules list *)
   singletonize_modules ?verbose ?target (af_modules @ fp_modules)
 
 (** [get_modules_name xml]
  * Returns a list of loaded modules' name *)
-let get_modules_name = fun xml ->
+let get_modules_name = fun ac_id xml ->
   let target = try Sys.getenv "TARGET" with _ -> "" in
   (* extract all modules sections for a given target *)
-  let modules = get_modules_of_airframe ~target xml in
+  let modules = get_modules_of_airframe ~target (expand_includes ac_id xml) in
   (* return a list of modules name *)
   List.map (fun m -> ExtXml.attrib m.xml "name") modules
 

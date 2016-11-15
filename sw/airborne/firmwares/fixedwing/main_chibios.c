@@ -24,6 +24,7 @@
  */
 
 #include "mcu_periph/sys_time.h"
+#include "mcu.h"
 #include <ch.h>
 
 #ifndef  SYS_TIME_FREQUENCY
@@ -48,13 +49,23 @@
 #define Ap(f)
 #endif
 
+#if USE_HARD_FAULT_RECOVERY
+#include "subsystems/datalink/downlink.h"
+#endif
 
 /*
- * PPRZ thread
+ * PPRZ/AP thread
  */
-static void thd_pprz(void *arg);
-static THD_WORKING_AREA(wa_thd_pprz, 8192);
-thread_t *pprzThdPtr = NULL;
+static void thd_ap(void *arg);
+static THD_WORKING_AREA(wa_thd_ap, 8192);
+static thread_t *apThdPtr = NULL;
+
+/*
+ * PPRZ/FBW thread
+ */
+static void thd_fbw(void *arg);
+static THD_WORKING_AREA(wa_thd_fbw, 1024);
+static thread_t *fbwThdPtr = NULL;
 
 /**
  * Main function
@@ -63,13 +74,31 @@ int main(void)
 {
   // Init
   Fbw(init);
-  Ap(init);
+#if USE_HARD_FAULT_RECOVERY
+  // if recovering from hard fault, don't call AP init, only FBW
+  if (!recovering_from_hard_fault) {
+#endif
+    Ap(init);
+#if USE_HARD_FAULT_RECOVERY
+  } else {
+    // but we still need downlink to be initialized
+    downlink_init();
+    modules_datalink_init();
+  }
+#endif
 
   chThdSleepMilliseconds(100);
 
   // Create threads
-  pprzThdPtr = chThdCreateStatic(wa_thd_pprz, sizeof(wa_thd_pprz),
-      NORMALPRIO, thd_pprz, NULL);
+  fbwThdPtr = chThdCreateStatic(wa_thd_fbw, sizeof(wa_thd_fbw), NORMALPRIO, thd_fbw, NULL);
+#if USE_HARD_FAULT_RECOVERY
+  // if recovering from hard fault, don't start AP thread, only FBW
+  if (!recovering_from_hard_fault) {
+#endif
+    apThdPtr = chThdCreateStatic(wa_thd_ap, sizeof(wa_thd_ap), NORMALPRIO, thd_ap, NULL);
+#if USE_HARD_FAULT_RECOVERY
+  }
+#endif
 
   // Main loop, do nothing
   while (TRUE) {
@@ -79,28 +108,58 @@ int main(void)
 }
 
 /*
- * PPRZ thread
+ * PPRZ/AP thread
  *
- * Call PPRZ periodic and event functions
+ * Call PPRZ AP periodic and event functions
  */
-static void thd_pprz(void *arg)
+static void thd_ap(void *arg)
 {
-  /*
-     To be compatible with rtos architecture, each of this 4 workers should
-     be implemented in differents threads, each of them waiting for job to be done:
-     periodic task should sleep, and event task should wait for event
-     */
   (void) arg;
-  chRegSetThreadName("pprz big loop");
+  chRegSetThreadName("AP");
 
   while (!chThdShouldTerminateX()) {
-    Fbw(handle_periodic_tasks);
     Ap(handle_periodic_tasks);
-    Fbw(event_task);
     Ap(event_task);
     chThdSleepMicroseconds(500);
   }
 
   chThdExit(0);
-
 }
+
+/*
+ * PPRZ/FBW thread
+ *
+ * Call PPRZ FBW periodic and event functions
+ */
+static void thd_fbw(void *arg)
+{
+  (void) arg;
+  chRegSetThreadName("FBW");
+
+  while (!chThdShouldTerminateX()) {
+    Fbw(handle_periodic_tasks);
+    Fbw(event_task);
+    chThdSleepMicroseconds(500);
+  }
+
+  chThdExit(0);
+}
+
+/*
+ * Terminate autopilot threads
+ * Wait until proper stop
+ */
+void pprz_terminate_autopilot_threads(void)
+{
+  if (apThdPtr != NULL) {
+    chThdTerminate(apThdPtr);
+    chThdWait(apThdPtr);
+    apThdPtr = NULL;
+  }
+  if (fbwThdPtr != NULL) {
+    chThdTerminate(fbwThdPtr);
+    chThdWait(fbwThdPtr);
+    fbwThdPtr = NULL;
+  }
+}
+

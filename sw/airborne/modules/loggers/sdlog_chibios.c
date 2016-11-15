@@ -27,10 +27,10 @@
 
 #include <ch.h>
 #include <hal.h>
-#include "main_chibios.h"
 #include "modules/loggers/sdlog_chibios/sdLog.h"
 #include "modules/loggers/sdlog_chibios/usbStorage.h"
 #include "modules/loggers/sdlog_chibios.h"
+#include "modules/tlsf/tlsf_malloc.h"
 #include "mcu_periph/adc.h"
 #include "led.h"
 
@@ -85,22 +85,38 @@ FileDes flightRecorderLogFile = -1;
 
 
 // Functions for the generic device API
-static int sdlog_check_free_space(struct chibios_sdlog* p __attribute__((unused)), long *fd __attribute__((unused)), uint16_t len __attribute__((unused)))
+static int sdlog_check_free_space(struct chibios_sdlog* p __attribute__((unused)), long *fd, uint16_t len)
 {
-  return 1;
+  SdLogBuffer *sdb;
+  SdioError status = sdLogAllocSDB(&sdb, len);
+  if (status != SDLOG_OK) {
+    return 0;
+  } else {
+    *fd = (long) sdb;
+    return 1;
+  }
 }
 
-static void sdlog_transmit(struct chibios_sdlog* p, long fd __attribute__((unused)), uint8_t byte)
+static void sdlog_transmit(struct chibios_sdlog* p __attribute__((unused)), long fd, uint8_t byte)
 {
-  sdLogWriteByte(*p->file, byte);
+  SdLogBuffer *sdb = (SdLogBuffer *) fd;
+  uint8_t *data = (uint8_t *) sdLogGetBufferFromSDB(sdb);
+  *data = byte;
+  sdLogSeekBufferFromSDB(sdb, 1);
 }
 
-static void sdlog_transmit_buffer(struct chibios_sdlog* p, long fd __attribute__((unused)), uint8_t *data, uint16_t len)
+static void sdlog_transmit_buffer(struct chibios_sdlog* p __attribute__((unused)), long fd, uint8_t *data, uint16_t len)
 {
-  sdLogWriteRaw(*p->file, data, len);
+  SdLogBuffer *sdb = (SdLogBuffer *) fd;
+  memcpy(sdLogGetBufferFromSDB(sdb), data, len);
+  sdLogSeekBufferFromSDB(sdb, len);
 }
 
-static void sdlog_send(struct chibios_sdlog* p __attribute__((unused)), long fd __attribute__((unused))) { }
+static void sdlog_send(struct chibios_sdlog* p, long fd)
+{
+  SdLogBuffer *sdb = (SdLogBuffer *) fd;
+  sdLogWriteSDB(*(p->file), sdb);
+}
 
 static int null_function(struct chibios_sdlog *p __attribute__((unused))) { return 0; }
 
@@ -122,10 +138,10 @@ void chibios_sdlog_init(struct chibios_sdlog *sdlog, FileDes *file)
 void sdlog_chibios_init(void)
 {
   // Start polling on USB
-  usbStorageStartPolling (&pprzThdPtr);
+  usbStorageStartPolling();
 
   // Start log thread
-  chThdCreateStatic (wa_thd_startlog, sizeof(wa_thd_startlog),
+  chThdCreateStatic(wa_thd_startlog, sizeof(wa_thd_startlog),
       NORMALPRIO+2, thd_startlog, NULL);
 }
 
@@ -159,23 +175,27 @@ static void thd_startlog(void *arg)
   // Check for init errors
   sdOk = true;
 
-  if (sdLogInit (NULL) != SDLOG_OK)
+  if (sdLogInit (NULL) != SDLOG_OK) {
     sdOk = false;
-
-  removeEmptyLogs (PPRZ_LOG_DIR, PPRZ_LOG_NAME, 50);
-  if (sdLogOpenLog (&pprzLogFile, PPRZ_LOG_DIR, PPRZ_LOG_NAME, true) != SDLOG_OK)
-    sdOk = false;
+  }
+  else {
+    removeEmptyLogs (PPRZ_LOG_DIR, PPRZ_LOG_NAME, 50);
+    if (sdLogOpenLog (&pprzLogFile, PPRZ_LOG_DIR, PPRZ_LOG_NAME, true) != SDLOG_OK)
+      sdOk = false;
 
 #if FLIGHTRECORDER_SDLOG
-  removeEmptyLogs (FR_LOG_DIR, FLIGHTRECORDER_LOG_NAME, 50);
-  if (sdLogOpenLog (&flightRecorderLogFile, FR_LOG_DIR, FLIGHTRECORDER_LOG_NAME, false) != SDLOG_OK)
-    sdOk = false;
+    removeEmptyLogs (FR_LOG_DIR, FLIGHTRECORDER_LOG_NAME, 50);
+    if (sdLogOpenLog (&flightRecorderLogFile, FR_LOG_DIR, FLIGHTRECORDER_LOG_NAME, false) != SDLOG_OK)
+      sdOk = false;
 #endif
+  }
 
-  // Create Battery Survey Thread with event
-  chEvtObjectInit (&powerOutageSource);
-  chThdCreateStatic (wa_thd_bat_survey, sizeof(wa_thd_bat_survey),
-      NORMALPRIO+2, thd_bat_survey, NULL);
+  if (sdOk) {
+    // Create Battery Survey Thread with event
+    chEvtObjectInit (&powerOutageSource);
+    chThdCreateStatic (wa_thd_bat_survey, sizeof(wa_thd_bat_survey),
+        NORMALPRIO+2, thd_bat_survey, NULL);
+  }
 
   while (true) {
 #ifdef LED_SDLOG
@@ -184,12 +204,6 @@ static void thd_startlog(void *arg)
     // Blink faster if init has errors
     chThdSleepMilliseconds (sdOk == true ? 1000 : 200);
     static uint32_t timestamp = 0;
-
-    // FIXME what is this doing ? -> ask Alex
-    thread_t *tp = chRegFirstThread();
-    do {
-      tp = chRegNextThread(tp);
-    } while (tp != NULL);
 
 #if HAL_USE_RTC
     // FIXME this could be done somewhere else, like in sys_time
@@ -204,8 +218,8 @@ static void thd_startlog(void *arg)
         gmtime_r(&univTime, &time_tm);
         // Chibios date struct
         RTCDateTime date;
-        rtcConvertDateTimeToStructTm(&date, &time_tm, NULL);
-        rtcSetTime (&RTCD1, &date);
+        rtcConvertStructTmToDateTime(&time_tm, 0, &date);
+        rtcSetTime(&RTCD1, &date);
       }
     }
 #endif

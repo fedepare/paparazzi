@@ -6,7 +6,7 @@
 
 BOARD=apogee
 BOARD_VERSION=1.0
-BOARD_DIR=$(BOARD)/v$(BOARD_VERSION)
+BOARD_DIR=$(BOARD)/chibios/v$(BOARD_VERSION)
 BOARD_CFG=\"boards/$(BOARD_DIR)/board.h\"
 
 ARCH=chibios
@@ -18,7 +18,7 @@ RTOS=chibios
 USE_FPU=yes
 HARD_FLOAT=yes
 
-$(TARGET).CFLAGS += -DSTM32F4 -DPPRZLINK_ENABLE_FD
+$(TARGET).CFLAGS += -DSTM32F4 -DPPRZLINK_ENABLE_FD -DUSE_HARD_FAULT_RECOVERY
 
 ##############################################################################
 # Architecture or project specific options

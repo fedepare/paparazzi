@@ -1,23 +1,23 @@
- /*
- * Copyright (C) 2008-2011  The Paparazzi Team
- *
- * This file is part of paparazzi.
- *
- * paparazzi is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * paparazzi is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with paparazzi; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
- */
+/*
+* Copyright (C) 2008-2011  The Paparazzi Team
+*
+* This file is part of paparazzi.
+*
+* paparazzi is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2, or (at your option)
+* any later version.
+*
+* paparazzi is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with paparazzi; see the file COPYING.  If not, write to
+* the Free Software Foundation, 59 Temple Place - Suite 330,
+* Boston, MA 02111-1307, USA.
+*/
 
 /**
  * @file firmwares/rotorcraft/navigation.h
@@ -55,6 +55,7 @@ extern int32_t nav_circle_radius, nav_circle_qdr, nav_circle_radians;
 #define HORIZONTAL_MODE_MANUAL    4
 extern int32_t nav_roll, nav_pitch;     ///< with #INT32_ANGLE_FRAC
 extern int32_t nav_heading; ///< with #INT32_ANGLE_FRAC
+extern int32_t nav_cmd_roll, nav_cmd_pitch, nav_cmd_yaw;
 extern float nav_radius;
 extern float nav_climb_vspeed, nav_descend_vspeed;
 
@@ -81,7 +82,7 @@ extern float get_dist2_to_waypoint(uint8_t wp_id);
 extern float get_dist2_to_point(struct EnuCoor_i *p);
 extern void compute_dist2_to_home(void);
 extern void nav_home(void);
-extern void nav_set_manual(float roll, float pitch, float yaw);
+extern void nav_set_manual(int32_t roll, int32_t pitch, int32_t yaw);
 
 unit_t nav_reset_reference(void) __attribute__((unused));
 unit_t nav_reset_alt(void) __attribute__((unused));
@@ -241,5 +242,9 @@ bool nav_check_wp_time(struct EnuCoor_i *wp, uint16_t stay_time);
 
 
 extern void navigation_update_wp_from_speed(uint8_t wp, struct Int16Vect3 speed_sp, int16_t heading_rate_sp);
+
+#define NavFollow(_ac_id, _distance, _height)   \
+  nav_follow(_ac_id, _distance, _height);
+extern void nav_follow(uint8_t _ac_id, uint32_t distance, uint32_t height);
 
 #endif /* NAVIGATION_H */
