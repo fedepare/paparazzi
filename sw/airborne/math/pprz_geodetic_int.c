@@ -311,6 +311,30 @@ void ned_of_lla_point_i(struct NedCoor_i *ned, struct LtpDef_i *def, struct LlaC
   ned_of_ecef_point_i(ned, def, &ecef);
 }
 
+/** Convert a point from LLA to local ENU.
+ * @param[out] enu  ENU point in meter << #INT32_POS_FRAC
+ * @param[in]  def  local coordinate system definition
+ * @param[in]  lla  LLA point in 1e7deg and mm
+ */
+void enu_of_lla_pos_i(struct EnuCoor_i *enu, struct LtpDef_i *def, struct LlaCoor_i *lla)
+{
+  struct EcefCoor_i ecef;
+  ecef_of_lla_i(&ecef, lla);
+  enu_of_ecef_pos_i(enu, def, &ecef);
+}
+
+/** Convert a point from LLA to local NED.
+ * @param[out] ned  NED point in meter << #INT32_POS_FRAC
+ * @param[in]  def  local coordinate system definition
+ * @param[in]  lla  LLA point in 1e7deg and mm
+ */
+void ned_of_lla_pos_i(struct NedCoor_i *ned, struct LtpDef_i *def, struct LlaCoor_i *lla)
+{
+  struct EcefCoor_i ecef;
+  ecef_of_lla_i(&ecef, lla);
+  ned_of_ecef_pos_i(ned, def, &ecef);
+}
+
 void enu_of_lla_vect_i(struct EnuCoor_i *enu, struct LtpDef_i *def, struct LlaCoor_i *lla)
 {
   struct EcefCoor_i ecef;
@@ -393,8 +417,8 @@ void ecef_of_lla_i(struct EcefCoor_i *out, struct LlaCoor_i *in)
 #include "math/pprz_geodetic_utm.h"
 
 /** Convert a LLA to UTM.
- * @param[out] out  UTM in cm and mm hmsl alt
- * @param[in]  in   LLA in degrees*1e7 and mm above ellipsoid
+ * @param[out] utm in cm, alt is directly copied from lla
+ * @param[in]  lla in degrees*1e7, alt in mm
  */
 void utm_of_lla_i(struct UtmCoor_i *utm, struct LlaCoor_i *lla)
 {
@@ -421,10 +445,9 @@ void utm_of_lla_i(struct UtmCoor_i *utm, struct LlaCoor_i *lla)
 #endif
 }
 
-/** Convert a local NED position to ECEF.
- * @param[out] ecef ECEF position in cm
- * @param[in]  def  local coordinate system definition
- * @param[in]  ned  NED position in meter << #INT32_POS_FRAC
+/** Convert a UTM to LLA.
+ * @param[out] lla in degrees*1e7, alt is directly copied from utm
+ * @param[in]  utm in cm, alt in mm
  */
 void lla_of_utm_i(struct LlaCoor_i *lla, struct UtmCoor_i *utm)
 {

@@ -53,8 +53,7 @@
 #endif
 
 #if LOG_INVARIANT_FILTER
-#include "sdLog.h"
-#include "subsystems/chibios-libopencm3/chibios_sdlog.h"
+#include "modules/loggers/sdlog_chibios.h"
 bool log_started = false;
 #endif
 
@@ -190,7 +189,7 @@ static inline void init_invariant_state(void)
 static void send_inv_filter(struct transport_tx *trans, struct link_device *dev)
 {
   struct FloatEulers eulers;
-  FLOAT_EULERS_OF_QUAT(eulers, ins_float_inv.state.quat);
+  float_eulers_of_quat(&eulers, &ins_float_inv.state.quat);
   pprz_msg_send_INV_FILTER(trans, dev,
       AC_ID,
       &ins_float_inv.state.quat.qi,
@@ -274,8 +273,6 @@ void ins_reset_local_origin(void)
 {
 #if INS_FINV_USE_UTM
   struct UtmCoor_f utm = utm_float_from_gps(&gps, 0);
-  // ground_alt
-  utm.alt = gps.hmsl  / 1000.0f;
   // reset state UTM ref
   stateSetLocalUtmOrigin_f(&utm);
 #else
@@ -351,7 +348,7 @@ void ins_float_invariant_propagate(struct FloatRates* gyro, struct FloatVect3* a
   ins_float_inv.state = new_state;
 
   // normalize quaternion
-  FLOAT_QUAT_NORMALIZE(ins_float_inv.state.quat);
+  float_quat_normalize(&ins_float_inv.state.quat);
 
   // set global state
   stateSetNedToBodyQuat_f(&ins_float_inv.state.quat);
@@ -432,7 +429,7 @@ void ins_float_invariant_update_gps(struct GpsState *gps_s)
       // position (local ned)
       ins_float_inv.meas.pos_gps.x = utm.north - state.utm_origin_f.north;
       ins_float_inv.meas.pos_gps.y = utm.east - state.utm_origin_f.east;
-      ins_float_inv.meas.pos_gps.z = state.utm_origin_f.alt - (gps_s->hmsl / 1000.0f);
+      ins_float_inv.meas.pos_gps.z = state.utm_origin_f.alt - utm.alt;
       // speed
       ins_float_inv.meas.speed_gps.x = gps_s->ned_vel.x / 100.0f;
       ins_float_inv.meas.speed_gps.y = gps_s->ned_vel.y / 100.0f;
@@ -440,9 +437,11 @@ void ins_float_invariant_update_gps(struct GpsState *gps_s)
     }
 #else
     if (state.ned_initialized_f) {
-      struct EcefCoor_f ecef_pos, ecef_vel;
-      ECEF_FLOAT_OF_BFP(ecef_pos, gps_s->ecef_pos);
-      ned_of_ecef_point_f(&ins_float_inv.meas.pos_gps, &state.ned_origin_f, &ecef_pos);
+      struct NedCoor_i gps_pos_cm_ned, ned_pos;
+      ned_of_ecef_point_i(&gps_pos_cm_ned, &state.ned_origin_i, &gps_s->ecef_pos);
+      INT32_VECT3_SCALE_2(ned_pos, gps_pos_cm_ned, INT32_POS_OF_CM_NUM, INT32_POS_OF_CM_DEN);
+      NED_FLOAT_OF_BFP(ins_float_inv.meas.pos_gps, ned_pos);
+      struct EcefCoor_f ecef_vel;
       ECEF_FLOAT_OF_BFP(ecef_vel, gps_s->ecef_vel);
       ned_of_ecef_vect_f(&ins_float_inv.meas.speed_gps, &state.ned_origin_f, &ecef_vel);
     }

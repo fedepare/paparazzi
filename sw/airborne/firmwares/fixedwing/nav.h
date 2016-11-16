@@ -46,7 +46,7 @@
 #define DistanceSquare(p1_x, p1_y, p2_x, p2_y) (Square(p1_x-p2_x)+Square(p1_y-p2_y))
 
 #define PowerVoltage() (vsupply/10.)
-#define RcRoll(travel) (fbw_state->channels[RADIO_ROLL]* (float)travel /(float)MAX_PPRZ)
+#define RcRoll(travel) (imcu_get_radio(RADIO_ROLL) * (float)travel /(float)MAX_PPRZ)
 
 
 enum oval_status { OR12, OC2, OR21, OC1 };
@@ -126,7 +126,7 @@ extern float baseleg_out_qdr;
 extern bool nav_compute_baseleg(uint8_t wp_af, uint8_t wp_td, uint8_t wp_baseleg, float radius);
 extern bool nav_compute_final_from_glide(uint8_t wp_af, uint8_t wp_td, float glide);
 
-#define RCLost() bit_is_set(fbw_state->status, STATUS_RADIO_REALLY_LOST)
+#define RCLost() bit_is_set(imcu_get_status(), STATUS_RADIO_REALLY_LOST)
 
 extern void nav_follow(uint8_t _ac_id, float _distance, float _height);
 #define NavFollow(_ac_id, _distance, _height) nav_follow(_ac_id, _distance, _height)
@@ -210,15 +210,27 @@ bool nav_approaching_xy(float x, float y, float from_x, float from_y, float appr
     {h_ctl_roll_setpoint = _roll;} \
   }
 
+#define NavSetManual(_roll, _pitch, _yaw) _Pragma("GCC error \"Manual mode in flight plan for fixedwing is not available\"")
+
+
 #define nav_IncreaseShift(x) { if (x==0) nav_shift = 0; else nav_shift += x; }
 
 #define nav_SetNavRadius(x) { if (x==1) nav_radius = DEFAULT_CIRCLE_RADIUS; else if (x==-1) nav_radius = -DEFAULT_CIRCLE_RADIUS; else nav_radius = x; }
 
 #define NavKillThrottle() { kill_throttle = 1; }
 
+/// Get current x (east) position in local coordinates
 #define GetPosX() (stateGetPositionEnu_f()->x)
+/// Get current y (north) position in local coordinates
 #define GetPosY() (stateGetPositionEnu_f()->y)
+/// Get current altitude above MSL
 #define GetPosAlt() (stateGetPositionUtm_f()->alt)
+/**
+ * Get current altitude reference for local coordinates.
+ * This is the ground_alt from the flight plan at first,
+ * but might be updated later through a call to NavSetGroundReferenceHere() or
+ * NavSetAltitudeReferenceHere(), e.g. in the GeoInit flight plan block.
+ */
 #define GetAltRef() (ground_alt)
 
 #if DOWNLINK

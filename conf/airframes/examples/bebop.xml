@@ -31,15 +31,16 @@
     <!--module name="logger_file">
       <define name="FILE_LOGGER_PATH" value="/data/ftp/internal_000"/>
     </module-->
+
     <module name="video_thread">
-      <define name="VIDEO_THREAD_FPS" value="4"/>
-      <define name="VIDEO_THREAD_CAMERA" value="bottom_camera"/>
-      <define name="VIDEO_THREAD_SHOT_PATH" value="/data/ftp/internal_000/images"/>
     </module>
+
     <module name="video_rtp_stream">
-      <define name="VIEWVIDEO_QUALITY_FACTOR" value="80"/>
+      <define name="VIEWVIDEO_CAMERA" value="front_camera"/>
       <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="1"/>
+      <define name="VIEWVIDEO_QUALITY_FACTOR" value="20"/>
     </module>
+
   </modules>
 
   <commands>
@@ -50,10 +51,10 @@
   </commands>
 
   <servos driver="Default">
-    <servo name="TOP_RIGHT" no="0" min="3000" neutral="3000" max="12000"/>
-    <servo name="TOP_LEFT" no="1" min="3000" neutral="3000" max="12000"/>
-    <servo name="BOTTOM_LEFT" no="2" min="3000" neutral="3000" max="12000"/>
-    <servo name="BOTTOM_RIGHT" no="3" min="3000" neutral="3000" max="12000"/>
+    <servo name="TOP_LEFT" no="0" min="3000" neutral="3000" max="12000"/>
+    <servo name="TOP_RIGHT" no="1" min="3000" neutral="3000" max="12000"/>
+    <servo name="BOTTOM_RIGHT" no="2" min="3000" neutral="3000" max="12000"/>
+    <servo name="BOTTOM_LEFT" no="3" min="3000" neutral="3000" max="12000"/>
   </servos>
 
   <section name="MIXING" prefix="MOTOR_MIXING_">

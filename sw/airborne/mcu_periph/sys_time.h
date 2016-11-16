@@ -46,15 +46,18 @@
  * sys_time.resolution is set from this define.
  */
 #ifndef SYS_TIME_FREQUENCY
+#if USE_CHIBIOS_RTOS
+#define SYS_TIME_FREQUENCY CH_CFG_ST_FREQUENCY
+#else /* NO RTOS */
 #if defined PERIODIC_FREQUENCY
 #define SYS_TIME_FREQUENCY (2 * PERIODIC_FREQUENCY)
-#else
+#else /* !defined PERIODIC_FREQUENCY */
 #define SYS_TIME_FREQUENCY 1000
 #endif
+#endif /* USE_CHIBIOS_RTOS */
 #endif
 
-
-typedef uint8_t tid_t; ///< sys_time timer id type
+typedef int8_t tid_t; ///< sys_time timer id type
 typedef void (*sys_time_cb)(uint8_t id);
 
 struct sys_time_timer {
@@ -88,7 +91,7 @@ extern void sys_time_init(void);
  * @param cb Callback function that is called from the ISR when timer elapses, or NULL
  * @return -1 if it failed, the timer id otherwise
  */
-extern int sys_time_register_timer(float duration, sys_time_cb cb);
+extern tid_t sys_time_register_timer(float duration, sys_time_cb cb);
 
 /**
  * Cancel a system timer by id.
@@ -110,9 +113,11 @@ extern void sys_time_update_timer(tid_t id, float duration);
  */
 static inline bool sys_time_check_and_ack_timer(tid_t id)
 {
-  if (sys_time.timer[id].elapsed) {
-    sys_time.timer[id].elapsed = false;
-    return true;
+  if ((id < SYS_TIME_NB_TIMER) && (id >= 0)) {
+    if (sys_time.timer[id].elapsed) {
+        sys_time.timer[id].elapsed = false;
+        return true;
+    }
   }
   return false;
 }

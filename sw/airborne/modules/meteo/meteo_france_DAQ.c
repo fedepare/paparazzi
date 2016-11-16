@@ -37,8 +37,8 @@
 #include "autopilot.h"
 #include "subsystems/datalink/datalink.h"
 #include "subsystems/datalink/downlink.h"
-#include "subsystems/chibios-libopencm3/sdLog.h"
-#include "subsystems/chibios-libopencm3/chibios_sdlog.h"
+#include "modules/loggers/sdlog_chibios.h"
+#include "modules/loggers/pprzlog_tp.h"
 
 #include "subsystems/gps.h"
 #include "modules/datalink/extra_pprz_dl.h"
@@ -106,7 +106,7 @@ void mf_daq_send_report(void)
     uint8_t foo = 0;
     int16_t climb = -gps.ned_vel.z;
     int16_t course = (DegOfRad(gps.course) / ((int32_t)1e6));
-    struct UtmCoor_f utm = stateGetPositionEnu_f();
+    struct UtmCoor_f utm = *stateGetPositionUtm_f();
     int32_t east = utm.east * 100;
     int32_t north = utm.north * 100;
     DOWNLINK_SEND_GPS(pprzlog_tp, chibios_sdlog, &gps.fix,

@@ -31,32 +31,62 @@
 #include <unistd.h>
 #include "mcu.h"
 
+#include "modules/computer_vision/lib/v4l/v4l2.h"
+#include "peripherals/video_device.h"
+
 /* Check if the bat_voltage_ardrone2 module is loaded */
 #include "generated/modules.h"
 #ifndef BAT_VOLTAGE_ARDRONE2_PERIODIC_FREQ
 #warning No battery voltage measurement available! Please add <load name="bat_voltage_ardrone2.xml"/> to your modules section in aircraft file.
 #endif
 
-#include "peripherals/video_device.h"
-
 struct video_config_t front_camera = {
-  .w = 1280,
-  .h = 720,
+  .output_size = {
+    .w = 1280,
+    .h = 720
+  },
+  .sensor_size = {
+    .w = 1280,
+    .h = 720
+  },
+  .crop = {
+    .x = 0,
+    .y = 0,
+    .w = 1280,
+    .h = 720
+  },
   .dev_name = "/dev/video1",
   .subdev_name = NULL,
   .format = V4L2_PIX_FMT_UYVY,
   .buf_cnt = 10,
-  .filters = 0
+  .filters = 0,
+  .cv_listener=NULL,
+  .fps = 0
 };
 
+
 struct video_config_t bottom_camera = {
-  .w = 320,
-  .h = 240,
+  .output_size = {
+    .w = 320,
+    .h = 240
+  },
+  .sensor_size = {
+    .w = 320,
+    .h = 240
+  },
+  .crop = {
+    .x = 0,
+    .y = 0,
+    .w = 320,
+    .h = 240
+  },
   .dev_name = "/dev/video2",
   .subdev_name = NULL,
   .format = V4L2_PIX_FMT_UYVY,
   .buf_cnt = 10,
-  .filters = 0
+  .filters = 0,
+  .cv_listener=NULL,
+  .fps = 0
 };
 
 int KillGracefully(char *process_name);

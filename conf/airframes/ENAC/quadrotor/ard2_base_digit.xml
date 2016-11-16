@@ -9,7 +9,6 @@
       <define name="USE_SONAR"/>
       <define name="USE_BARO_MEDIAN_FILTER"/>
       <define name="AUTOPILOT_DISABLE_AHRS_KILL"/>
-      <module name="telemetry" type="transparent_udp"/>
       <module name="radio_control" type="datalink"/>
     </target>
 
@@ -18,6 +17,7 @@
       <module name="radio_control" type="ppm"/>
     </target>
 
+    <module name="telemetry" type="transparent_udp"/>
     <!-- Subsystem section -->
     <module name="motor_mixing"/>
     <module name="actuators" type="ardrone2"/>
@@ -34,10 +34,9 @@
     <module name="agl_dist">
       <define name="USE_SONAR"/>
     </module>
-    <module name="video_thread">
-      <define name="VIDEO_THREAD_CAMERA" value="front_camera"/>
-    </module>
+   <module name="video_thread"/>
     <module name="video_rtp_stream">
+      <define name="VIEWVIDEO_CAMERA" value="front_camera"/>
       <configure name="VIEWVIDEO_USE_NETCAT" value="FALSE"/>
     </module>
     <module name="rotorcraft_cam"/>

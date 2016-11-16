@@ -5,7 +5,6 @@
     <variable name="FLASH_MODE" value="ISP"/>
     <boards>
       <board name="booz_.*"/>
-      <board name="classix"/>
       <board name="hb_.*"/>
       <board name="logom_.*"/>
       <board name="navgo_.*"/>
@@ -30,7 +29,6 @@
     <variable name="FLASH_MODE" value="IAP"/>
     <boards>
       <board name="booz_.*"/>
-      <board name="classix"/>
       <board name="hb_.*"/>
       <board name="logom_.*"/>
       <board name="navgo_.*"/>
@@ -59,6 +57,7 @@
       <board name="li[s]?a_mx_.*"/>
       <board name="navstik_.*"/>
       <board name="elle*"/>
+      <board name="openpilot_revo.*"/>
     </boards>
   </mode>
   <mode name="STLink (SWD)">
@@ -70,6 +69,7 @@
       <board name="cc3d"/>
       <board name="elle*"/>
       <board name="naze32*"/>
+      <board name="openpilot_revo.*"/>
     </boards>
   </mode>
   <mode name="BlackMagic Probe (SWD)">
@@ -84,6 +84,7 @@
       <board name="elle*"/>
       <board name="naze32*"/>
       <board name="cjmcu*"/>
+      <board name="openpilot_revo.*"/>
     </boards>
   </mode>
   <mode name="BlackMagic Probe (JTAG)">

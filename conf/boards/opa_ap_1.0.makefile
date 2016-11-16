@@ -42,7 +42,7 @@ GPS_PORT ?= UART1
 GPS_BAUD ?= B57600
 
 INTERMCU_PORT ?= UART3
-INTERMCU_BAUD ?= B230400
+INTERMCU_BAUD ?= B460800
 
 #
 # default IMU configuration
@@ -55,6 +55,14 @@ IMU_MPU_SPI_SLAVE_IDX ?= SPI_SLAVE1
 #
 
 # See baro_board.makefile
+
+
+#
+# Remote Magneto
+#
+
+MAG_PITOT_PORT ?= UART5
+MAG_PITOT_BAUD ?= 250000
 
 #
 # default SPI logger configuration

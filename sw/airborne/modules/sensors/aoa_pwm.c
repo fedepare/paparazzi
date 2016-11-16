@@ -34,8 +34,7 @@
 #include "generated/airframe.h"
 
 #if LOG_AOA
-#include "sdLog.h"
-#include "subsystems/chibios-libopencm3/chibios_sdlog.h"
+#include "modules/loggers/sdlog_chibios.h"
 bool log_started;
 #endif
 
@@ -125,7 +124,7 @@ void aoa_pwm_update(void) {
   prev_aoa = aoa_pwm.angle;
 
 #if USE_AOA
-  stateSetAngleOfAttack_f(aoa_adc.angle);
+  stateSetAngleOfAttack_f(aoa_pwm.angle);
 #endif
 
 #if SEND_SYNC_AOA

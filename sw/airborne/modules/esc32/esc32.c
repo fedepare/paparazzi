@@ -96,8 +96,10 @@ static float esc32_get_float(struct esc32_private *esc, int idx) {
 }
 
 static void esc32_put_char(struct esc32_private *esc, unsigned char c) {
-  esc->buf_out[esc->out_idx++] = c;
-  esc32_compute_ck(&(esc->ck_out), c);
+  if (esc->out_idx < ESC32_BUF_OUT_LEN) {
+    esc->buf_out[esc->out_idx++] = c;
+    esc32_compute_ck(&(esc->ck_out), c);
+  }
 }
 
 static void esc32_put_short(struct esc32_private *esc, unsigned short i) {
@@ -129,9 +131,12 @@ static uint16_t esc32_send_command(struct esc32_private *esc, enum binaryCommand
     esc32_put_float(esc, param1);
   if (n > 1)
     esc32_put_float(esc, param2);
-  esc->buf_out[esc->out_idx++] = esc->ck_out.ck_a;
-  esc->buf_out[esc->out_idx++] = esc->ck_out.ck_b;
-  esc32_send(esc);
+
+  if (esc->out_idx < ESC32_BUF_OUT_LEN - 1) {
+    esc->buf_out[esc->out_idx++] = esc->ck_out.ck_a;
+    esc->buf_out[esc->out_idx++] = esc->ck_out.ck_b;
+    esc32_send(esc);
+  }
 
 	return (esc->cmd_seq_id - 1);
 }
@@ -179,13 +184,21 @@ static void parse_esc32(struct esc32_private *esc, uint8_t c) {
     case GET_CMD_COLS:
       esc32_compute_ck(&(esc->ck_in), c);
       esc->in_cols = c;
-      esc->state = GET_COMMAND;
+      if ((esc->in_rows * esc->in_cols * sizeof(float)) > ESC32_BUF_IN_LEN) {
+	esc->state = UINIT;
+      } else {
+        esc->state = GET_COMMAND;
+      }
       break;
     case GET_COMMAND:
-      esc32_compute_ck(&(esc->ck_in), c);
-      esc->buf_in[esc->in_idx++] = c;
-      if (esc->in_idx >= esc->in_rows * esc->in_cols * sizeof(float)) {
-        esc->state = CHECK_CK_A;
+      if (esc->in_idx >= ESC32_BUF_IN_LEN) {
+	esc->state = UINIT;
+      } else {
+        esc32_compute_ck(&(esc->ck_in), c);
+        esc->buf_in[esc->in_idx++] = c;
+        if (esc->in_idx >= esc->in_rows * esc->in_cols * sizeof(float)) {
+          esc->state = CHECK_CK_A;
+        }
       }
       break;
     case CHECK_CK_A:
@@ -209,9 +222,7 @@ static void parse_esc32(struct esc32_private *esc, uint8_t c) {
 }
 
 static void esc32_msg_send(struct transport_tx *trans, struct link_device *dev) {
-
-  if (esc32.data_available == true){
-    pprz_msg_send_ESC(trans, dev, AC_ID,
+  pprz_msg_send_ESC(trans, dev, AC_ID,
       &esc32.params.amps,
       &esc32.params.volts_bat,
       &esc32.power,
@@ -219,9 +230,6 @@ static void esc32_msg_send(struct transport_tx *trans, struct link_device *dev) 
       &esc32.params.volts_motor,
       &esc32.energy,
       0); // only one motor handled for now
-
-    esc32.data_available = false;
-  };
 }
 
 void esc32_init(void) {

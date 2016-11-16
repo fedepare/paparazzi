@@ -28,10 +28,14 @@
   </firmware>
 
   <modules main_freq="512">
-    <load name="bat_voltage_ardrone2.xml"/>
-    <load name="stereocam_droplet.xml" />
-    <load name="cv_opticflow.xml"/>
-    <load name="optical_flow_landing.xml"/>
+    <module name="bat_voltage_ardrone2"/>
+    <module name="stereocam_droplet" />
+    <module name="video_thread"/>
+    <module name="pose_history"/>
+    <module name="cv_opticflow">
+      <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
+    </module>
+    <module name="optical_flow_landing"/>
   </modules>
 
   <commands>

@@ -103,7 +103,7 @@ static void send_gx3(struct transport_tx *trans, struct link_device *dev)
  * GX3 can be set up during the startup, or it can be configured to
  * start sending data automatically after power up.
  */
-void imu_impl_init(void)
+void imu_gx3_init(void)
 {
   // Initialize variables
   ahrs_gx3.is_aligned = false;
@@ -215,7 +215,7 @@ void imu_impl_init(void)
 }
 
 
-void imu_periodic(void)
+void imu_gx3_periodic(void)
 {
   /* IF IN NON-CONTINUOUS MODE, REQUEST DATA NOW
      uart_put_byte(&GX3_PORT, 0, 0xc8); // accel,gyro, R
@@ -266,7 +266,7 @@ void gx3_packet_read_message(void)
 
   // Attitude
   struct FloatRMat ltp_to_body_rmat;
-  FLOAT_RMAT_COMP(ltp_to_body_rmat, ahrs_gx3.rmat, *body_to_imu_rmat);
+  float_rmat_comp(ltp_to_body_rmat, ahrs_gx3.rmat, *body_to_imu_rmat);
 
 #if AHRS_USE_GPS_HEADING && USE_GPS
   struct FloatEulers ltp_to_body_eulers;
@@ -356,4 +356,23 @@ void ahrs_gx3_publish_imu(void)
   AbiSendMsgIMU_GYRO_INT32(IMU_GX3_ID, now_ts, &imu.gyro);
   AbiSendMsgIMU_ACCEL_INT32(IMU_GX3_ID, now_ts, &imu.accel);
   AbiSendMsgIMU_MAG_INT32(IMU_GX3_ID, now_ts, &imu.mag);
+}
+
+static inline void ReadGX3Buffer(void)
+{
+  while (uart_char_available(&GX3_PORT) && !ahrs_gx3.packet.msg_available) {
+    gx3_packet_parse(uart_getch(&GX3_PORT));
+  }
+}
+
+void imu_gx3_event(void)
+{
+  if (uart_char_available(&GX3_PORT)) {
+    ReadGX3Buffer();
+  }
+  if (ahrs_gx3.packet.msg_available) {
+    gx3_packet_read_message();
+    ahrs_gx3_publish_imu();
+    ahrs_gx3.packet.msg_available = false;
+  }
 }

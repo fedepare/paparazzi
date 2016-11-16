@@ -2,7 +2,10 @@
 
 <module name="rssi" dir="multi">
   <doc>
-    <description>stores received rssi values for communication protocols that support it</description>
+    <description>
+      RSSI info from other aircrafts.
+      Stores info received from RSSI message from other aircrafts for communication protocols that support it.
+    </description>
   </doc>
   <header>
     <file name="rssi.h"/>

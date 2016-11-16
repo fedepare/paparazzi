@@ -28,7 +28,14 @@
     <module name="gps" type="ubx_ucenter"/>
     <module name="send_imu_mag_current"/>
     <module name="logger_file"/>
-    <module name="cv_opticflow"/>
+
+    <module name="video_thread"/>
+
+    <module name="pose_history"/>
+    <module name="cv_opticflow">
+      <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
+    </module>
+
     <module name="opticflow_hover"/>
   </modules>
 

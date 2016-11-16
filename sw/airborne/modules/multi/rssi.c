@@ -44,8 +44,7 @@ uint8_t rssi_acs_id[NB_ACS_ID];
 
 abi_event ev;
 
-void rssi_cb(uint8_t sender_id __attribute__((unused)), uint8_t _ac_id, int8_t _tx_strength, int8_t _rssi);
-void rssi_cb(uint8_t sender_id __attribute__((unused)), uint8_t _ac_id, int8_t _tx_strength, int8_t _rssi)
+static void rssi_cb(uint8_t sender_id __attribute__((unused)), uint8_t _ac_id, int8_t _tx_strength, int8_t _rssi)
 {
   set_rssi(_ac_id, _tx_strength, _rssi);
 }

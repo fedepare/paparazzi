@@ -168,7 +168,7 @@ else ifeq ($(BOARD), krooz)
 
 # PX4FMU
 else ifeq ($(BOARD),$(filter $(BOARD),px4fmu))
-
+  include $(CFG_SHARED)/spi_master.makefile
   BARO_BOARD_CFLAGS += -DUSE_SPI1 -DUSE_SPI_SLAVE3
   BARO_BOARD_CFLAGS += -DBB_MS5611_SPI_DEV=spi1
   BARO_BOARD_CFLAGS += -DBB_MS5611_SLAVE_IDX=SPI_SLAVE3
@@ -210,6 +210,16 @@ else ifeq ($(BOARD), opa_ap)
   BARO_BOARD_SRCS += peripherals/ms5611.c
   BARO_BOARD_SRCS += peripherals/ms5611_spi.c
   BARO_BOARD_SRCS += boards/baro_board_ms5611_spi.c
+
+# OpenPilot Revo
+else ifeq ($(BOARD), openpilot_revo)
+  BARO_BOARD_CFLAGS += -DBARO_BOARD=BARO_MS5611_I2C
+  BARO_BOARD_CFLAGS += -DUSE_I2C1
+  BARO_BOARD_CFLAGS += -DBB_MS5611_I2C_DEV=i2c1
+  BARO_BOARD_SRCS += peripherals/ms5611.c
+  BARO_BOARD_SRCS += peripherals/ms5611_i2c.c
+  BARO_BOARD_SRCS += boards/baro_board_ms5611_i2c.c
+
 endif # check board
 
 BARO_LED ?= none

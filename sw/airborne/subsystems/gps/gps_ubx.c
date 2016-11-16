@@ -130,10 +130,6 @@ void gps_ubx_read_message(void)
 
       gps_ubx.state.hmsl = gps_ubx.state.utm_pos.alt;
       SetBit(gps_ubx.state.valid_fields, GPS_VALID_HMSL_BIT);
-      /* with UTM only you do not receive ellipsoid altitude, so set only if no valid lla */
-      if (!bit_is_set(gps_ubx.state.valid_fields, GPS_VALID_HMSL_BIT)) {
-        gps_ubx.state.lla_pos.alt = gps_ubx.state.utm_pos.alt;
-      }
     } else if (gps_ubx.msg_id == UBX_NAV_VELNED_ID) {
       gps_ubx.state.speed_3d = UBX_NAV_VELNED_Speed(gps_ubx.msg_buf);
       gps_ubx.state.gspeed = UBX_NAV_VELNED_GSpeed(gps_ubx.msg_buf);
@@ -189,8 +185,7 @@ void gps_ubx_read_message(void)
 }
 
 #if LOG_RAW_GPS
-#include "sdLog.h"
-#include "subsystems/chibios-libopencm3/chibios_sdlog.h"
+#include "modules/loggers/sdlog_chibios.h"
 #endif
 
 /* UBX parsing */
@@ -347,7 +342,3 @@ void gps_ubx_msg(void)
   gps_ubx.msg_available = false;
 }
 
-void gps_ubx_register(void)
-{
-  gps_register_impl(gps_ubx_init, gps_ubx_event, GPS_UBX_ID);
-}

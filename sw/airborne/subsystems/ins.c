@@ -33,37 +33,20 @@
 #include "state.h"
 #endif
 
-#ifndef DefaultInsImpl
-#warning "DefaultInsImpl not set!"
-#else
-PRINT_CONFIG_VAR(DefaultInsImpl)
-#endif
+#include "generated/flight_plan.h"
 
-#define __DefaultInsRegister(_x) _x ## _register()
-#define _DefaultInsRegister(_x) __DefaultInsRegister(_x)
-#define DefaultInsRegister() _DefaultInsRegister(DefaultInsImpl)
 
-/** Inertial Navigation System state */
-struct Ins {
-  InsInit init;
-};
-
-struct Ins ins;
-
-void ins_register_impl(InsInit init)
+void ins_init_origin_i_from_flightplan(struct LtpDef_i *ltp_def)
 {
-  ins.init = init;
+  struct LlaCoor_i llh_nav0; /* Height above the ellipsoid */
+  llh_nav0.lat = NAV_LAT0;
+  llh_nav0.lon = NAV_LON0;
+  /* NAV_ALT0 = ground alt above msl, NAV_MSL0 = geoid-height (msl) over ellipsoid */
+  llh_nav0.alt = NAV_ALT0 + NAV_MSL0;
 
-  ins.init();
-}
-
-void ins_init(void)
-{
-  ins.init = NULL;
-
-#ifdef DefaultInsImpl
-  DefaultInsRegister();
-#endif
+  ltp_def_from_lla_i(ltp_def, &llh_nav0);
+  ltp_def->hmsl = NAV_ALT0;
+  stateSetLocalOrigin_i(ltp_def);
 }
 
 
@@ -73,9 +56,6 @@ void WEAK ins_reset_local_origin(void)
 {
 #if USE_GPS
   struct UtmCoor_f utm = utm_float_from_gps(&gps, 0);
-
-  // ground_alt
-  utm.alt = gps.hmsl  / 1000.0f;
 
   // reset state UTM ref
   stateSetLocalUtmOrigin_f(&utm);
@@ -93,7 +73,7 @@ void WEAK ins_reset_utm_zone(struct UtmCoor_f *utm)
     utm->zone = gps.utm_pos.zone;
   }
   else {
-    utm->zone = (gps.lla_pos.lon / 1e7 + 180) / 6 + 1;
+    utm->zone = 0;  // recompute zone from lla
   }
   utm_of_lla_f(utm, &lla0);
 
@@ -102,4 +82,3 @@ void WEAK ins_reset_utm_zone(struct UtmCoor_f *utm)
 #else
 void WEAK ins_reset_utm_zone(struct UtmCoor_f *utm __attribute__((unused))) {}
 #endif
-
