@@ -1,19 +1,19 @@
-<!DOCTYPE airframe SYSTEM "../../airframe.dtd">
+<!DOCTYPE airframe SYSTEM "../airframe.dtd">
 
 <airframe name="ardrone2_optitrack">
 
   <firmware name="rotorcraft">
     <target name="ap" board="ardrone2">
       <!-- HOST is the Name or IP of your AC -->
-      <configure name="HOST" value="192.168.0.202"/>
+      <configure name="HOST" value="192.168.40.201"/>
       <!-- MODEM_HOST is where the data should go to, for short normally your laptop IP address -->
-      <configure name="MODEM_HOST" value="192.168.0.22"/>
+      <configure name="MODEM_HOST" value="192.168.40.143"/>
       <configure name="MODEM_BROADCAST" value="FALSE"/>
       <configure name="USE_BARO_BOARD" value="FALSE"/>
     </target>
 
     <target name="nps" board="pc">
-      <subsystem name="fdm" type="jsbsim"/>
+      <module name="fdm" type="jsbsim"/>
     </target>
 
     <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
@@ -21,30 +21,28 @@
     <configure name="USE_MAGNETOMETER" value="0"/>
 
 	<!-- Subsystem section -->
-    <subsystem name="telemetry" type="transparent_udp"/>
-    <!--subsystem name="telemetry" type="transparent_usb"/-->
-    <subsystem name="radio_control" type="datalink"/>
-    <subsystem name="motor_mixing"/>
-    <subsystem name="actuators" type="ardrone2"/>
-    <subsystem name="imu" type="ardrone2"/>
-    <subsystem name="gps" type="datalink"/>
-    <subsystem name="stabilization" type="indi"/>
-    <subsystem name="ahrs" type="int_cmpl_quat"/>
-    <subsystem name="ins" type="extended"/>
+    <module name="telemetry" type="transparent_udp"/>
+    <module name="radio_control" type="datalink"/>
+    <module name="motor_mixing"/>
+    <module name="actuators" type="ardrone2"/>
+    <module name="imu" type="ardrone2"/>
+    <module name="gps" type="datalink"/>
+    <module name="stabilization" type="indi"/>
+    <module name="ahrs" type="int_cmpl_quat"/>
+    <module name="ins" type="extended"/>
   </firmware>
 
   <modules main_freq="512">
-    <load name="bat_voltage_ardrone2.xml"/>
-    <!--load name="stereocam_droplet.xml" /-->
-	<load name="extra_dl.xml">
+    <module name="bat_voltage_ardrone2.xml"/>
+	<!--load name="extra_dl.xml">
       <configure name="EXTRA_DL_PORT" value="UDP1"/>
       <define name="UDP1_PORT_IN" value="5000"/>
       <define name="UDP1_PORT_OUT" value="5001"/>
       <define name="UDP1_HOST" value="127.0.0.1"/>
-	</load>
-	<load name="traffic_info.xml"/>
-    <load name="swarm_nn.xml"/>
-    <load name="rssi.xml"/>
+	</load-->
+	<module name="traffic_info.xml"/>
+    <module name="swarm_nn.xml"/>
+    <!--module name="rssi.xml"/-->
   </modules>
 
   <commands>
@@ -118,9 +116,9 @@
   <section name="INS" prefix="INS_">
     <!-- Use GPS altitude measurments and set the R gain -->
     <define name="USE_GPS_ALT" value="1"/>
-    <define name="VFF_R_GPS" value="0.001"/>
+    <define name="VFF_R_GPS" value="0.1"/>
     <define name="USE_GPS_ALT_SPEED" value="1"/>
-    <define name="VFF_VZ_R_GPS" value="0.001"/>
+    <define name="VFF_VZ_R_GPS" value="0.1"/>
   </section>
 
 

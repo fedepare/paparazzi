@@ -1,13 +1,13 @@
-<!DOCTYPE airframe SYSTEM "../../airframe.dtd">
+<!DOCTYPE airframe SYSTEM "../airframe.dtd">
 
 <airframe name="ardrone2_optitrack">
 
   <firmware name="rotorcraft">
     <target name="ap" board="ardrone2">
       <!-- HOST is the Name or IP of your AC -->
-      <configure name="HOST" value="192.168.0.200"/>
+      <configure name="HOST" value="192.168.40.200"/>
       <!-- MODEM_HOST is where the data should go to, for short normally your laptop IP address -->
-      <configure name="MODEM_HOST" value="192.168.0.22"/>
+      <configure name="MODEM_HOST" value="192.168.40.143"/>
       <configure name="MODEM_BROADCAST" value="FALSE"/>
       <configure name="USE_BARO_BOARD" value="FALSE"/>
     </target>
@@ -34,16 +34,15 @@
 
   <modules main_freq="512">
     <module name="bat_voltage_ardrone2.xml"/>
-    <!--module name="stereocam_droplet.xml" /-->
-	<module name="extra_dl.xml">
+	<!--load name="extra_dl.xml">
       <configure name="EXTRA_DL_PORT" value="UDP1"/>
       <define name="UDP1_PORT_IN" value="5000"/>
       <define name="UDP1_PORT_OUT" value="5001"/>
       <define name="UDP1_HOST" value="127.0.0.1"/>
-	</module>
+	</load-->
 	<module name="traffic_info.xml"/>
     <module name="swarm_nn.xml"/>
-    <module name="rssi.xml"/>
+    <!--module name="rssi.xml"/-->
   </modules>
 
   <commands>
@@ -111,15 +110,15 @@
 
     <!-- Use GPS heading instead of magneto -->
     <define name="USE_GPS_HEADING" value="1"/>
-    <!--define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/-->
+    <define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
   </section>
 
   <section name="INS" prefix="INS_">
     <!-- Use GPS altitude measurments and set the R gain -->
     <define name="USE_GPS_ALT" value="1"/>
-    <define name="VFF_R_GPS" value="0.001"/>
+    <define name="VFF_R_GPS" value="0.1"/>
     <define name="USE_GPS_ALT_SPEED" value="1"/>
-    <define name="VFF_VZ_R_GPS" value="0.001"/>
+    <define name="VFF_VZ_R_GPS" value="0.1"/>
   </section>
 
 
@@ -189,7 +188,7 @@
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <!-- Good weather -->
-    <define name="MAX_BANK" value="20" unit="deg"/>
+    <define name="MAX_BANK" value="30" unit="deg"/>
     <!-- Bad weather -->
     <!-- define name="MAX_BANK" value="32" unit="deg"/ -->
 

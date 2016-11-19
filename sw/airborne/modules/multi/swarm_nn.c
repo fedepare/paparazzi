@@ -162,22 +162,24 @@ void swarm_nn_periodic(void)
   float rz = 0.;
   float d  = 0.;
 
-  struct UtmCoor_i my_pos = utm_int_from_gps(&gps, 0);
-  my_pos.alt = gps.hmsl;
+  struct EnuCoor_f my_pos = *stateGetPositionEnu_f();
+  struct EnuCoor_f ac_pos;
+  float ac_course;
 
   // compute nn inputs
   for (i = 0; i < ti_acs_idx; i++) {
     if (ti_acs[i].ac_id == 0 || ti_acs[i].ac_id == AC_ID) { continue; }
-    struct ac_info_ * ac = get_ac_info(ti_acs[i].ac_id);
+    ac_pos = *acInfoGetPositionEnu_f(ti_acs[i].ac_id);
+    ac_course = acInfoGetCourse(ti_acs[i].ac_id);
 
     // if AC not responding for too long, continue, else compute force
-    uint32_t delta_t = ABS((int32_t)(gps.tow - ac->itow));
+    uint32_t delta_t = ABS((int32_t)(gps.tow - acInfoGetItow(ti_acs[i].ac_id)));
     if(delta_t > 5000) { continue; }
 
     // get distance to other with the assumption of constant velocity since last position message
-    float de = (ac->utm.east - my_pos.east) / 100. + sinf(ac->course) * delta_t / 1000.;
-    float dn = (ac->utm.north - my_pos.north) / 100. + cosf(ac->course) * delta_t / 1000.;
-    float da = (ac->utm.alt - my_pos.alt + ac->climb * delta_t) / 1000.;
+    float de = (ac_pos.x - my_pos.x) / 100. + sinf(ac_course) * delta_t / 1000.;
+    float dn = (ac_pos.y - my_pos.y) / 100. + cosf(ac_course) * delta_t / 1000.;
+    float da = (ac_pos.z - my_pos.z + acInfoGetClimb(ti_acs[i].ac_id) * delta_t) / 1000.;
 
     float dist2 = de * de + dn * dn;
     if (use_height) { dist2 += da * da; }
@@ -232,20 +234,15 @@ void swarm_nn_periodic(void)
   autopilot_guided_move_ned(speed_sp.y, speed_sp.x, speed_sp.z, 0);
 
   /* send log data to gs */
-  struct ac_info_ * ac1 = get_ac_info(ti_acs[2].ac_id);
-  struct ac_info_ * ac2 = get_ac_info(ti_acs[3].ac_id);
-
-  int32_t tempx1 = (ac1->utm.east  - my_pos.east);
-  int32_t tempy1 = (ac1->utm.north - my_pos.north);
-  int32_t tempx2 = (ac2->utm.east  - my_pos.east);
-  int32_t tempy2 = (ac2->utm.north - my_pos.north);
+  struct EnuCoor_f ac1 = *acInfoGetPositionEnu_f(ti_acs[2].ac_id);
+  struct EnuCoor_f ac2 = *acInfoGetPositionEnu_f(ti_acs[3].ac_id);
 
   struct EnuCoor_f my_enu_pos = *stateGetPositionEnu_f();
 
   DOWNLINK_SEND_SWARMNN(DefaultChannel, DefaultDevice, &speed_sp.x, &speed_sp.y, &speed_sp.z,
                         &rx, &ry, &rz, &d,
                         &my_enu_pos.x, &my_enu_pos.y, &my_enu_pos.z,
-                        &ac1->ac_id, &tempx1, &tempy1,
-                        &ac2->ac_id, &tempx2, &tempy2);
+                        &ti_acs[2].ac_id, &ac1.x, &ac1.y,
+                        &ti_acs[3].ac_id, &ac2.x, &ac2.y);
 
 }
