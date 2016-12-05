@@ -37,7 +37,8 @@
 #include "modules/multi/traffic_info.h"     // other aircraft info
 
 #include "stabilization.h"
-#include "firmwares/rotorcraft/stabilization/stabilization_indi.h"
+#include "firmwares/rotorcraft/stabilization/stabilization_attitude.h"
+#include "paparazzi.h"
 
 #include "mcu_periph/sys_time.h"
 
@@ -167,64 +168,74 @@ const double layer3_weights[9][2] = {
 #else
 
 #define NR_LAYERS 3
-static const uint8_t nr_neurons[NR_LAYERS] = {5, 8, 2};
+static const uint8_t nr_neurons[NR_LAYERS] = {3, 8, 2};
 
 #define MAX_NEURONS 8
 double layer_out[MAX_NEURONS+1];
 double layer_in[MAX_NEURONS+1];
 
-const double weights[NR_LAYERS-1][MAX_NEURONS][MAX_NEURONS] = {{
-  { -0.249, 0.6456, 0.2576, -0.0324,  -0.1644,  0.7892, -0.313, -0.5042,},
-  { 0.0736, 0.9582, 0.6542, 0.5952, -0.7244,  -0.367, -0.2034,  -0.3356,},
-  { 0.1306, -0.6844,  0.8562, 0.1484, -0.4876,  -0.345, -0.611, -0.7448,},
-  { 0.039,  0.5906, 0.822,  0.8968, 0.2194, -0.8234,  -0.0694,  -0.3796,},
-  { -0.044, -0.2248,  0.645,  -0.5442,  -0.5442,  -0.8088,  -0.67,  -0.9184,},
-  { -0.142, -0.363, 2.412,  -1.586, 0.041,  -1.86,  0.443,  1.194,}},
-  {{ -0.3672,  -0.3484,},
-  { 0.3754, -0.537,},
-  { 0.886,  0.1956,},
-  { -0.1652,  0.684,},
-  { -0.1538,  -0.1288,},
-  { 0.4614, -0.0138,},
-  { 0.2718, 0.1088,},
-  { 0.1112, 0.0138,},
-  { -0.161, -0.072,}},
-};
-
-/* controid nn
-{
-{ 0.0066, 0.4742, 0.8316, -0.0842,  -0.563, 0.1264, -0.7996,  -0.0832,},
-{ -0.0564,  0.2682, 0.0388, 0.009,  -0.075, 0.9812, -0.7254,  0.7934,},
-{ 0.1564, -0.1882,  -0.1216,  0.0216, -0.3684,  0.448,  0.833,  0.5022,},
-{ -0.8944,  -0.2914,  -0.2838,  -0.0084,  -0.9336,  0.3802, 0.1388, -0.3276,},
-{ 0.1306, 0.7086, -0.18,  -0.4894,  0.924,  -0.5994,  0.4542, 0.9976,},
-{ -0.593, -0.711, -0.9474,  -0.3176,  1.1,  2.585,  1.776,  -0.967,},};
-*/
-
-/* controid nn
-{
-{ 0.5738, 0.2046,},
-{ 0.3906, -0.6196,},
-{ -0.4542,  0.2314,},
-{ -0.5594,  0.7498,},
-{ 0.3346, -0.5458,},
-{ -0.2122,  0.371,},
-{ 0.3254, -0.2864,},
-{ 0.6944, -0.7304,},
-{ -0.2692,  0.053,},};
- */
-
+static const double weights[NR_LAYERS-1][MAX_NEURONS][MAX_NEURONS] = {{
+    { -0.5834,  -0.9828,  -0.0208,  -0.9592,  -0.077, 0.0192, -0.338, -0.5828,},
+    { -0.166, -0.6566,  0.9078, 0.5458, 0.053,  0.4698, -0.7876,  -0.821,},
+    { 0.9598, -0.4942,  -0.4448,  -0.9702,  0.4738, -0.018, -0.365, 0.239,},
+    { -0.2954,  4.698,  -2.212, 0.443,  1.844,  -0.683, -0.574, -1.796,}},
+    {{ 0.1708, 0.8054,},
+    { -0.5764,  0.2716,},
+    { -0.592, 0.7324,},
+    { 0.3474, -0.0458,},
+    { 0.037,  0.1778,},
+    { -0.4548,  0.393,},
+    { 0.415,  0.0176,},
+    { -0.9162,  -0.343,},
+    { -0.542, -0.344,}}};
 #endif
 
 void guidance_h_module_init(void){};
 void guidance_h_module_enter(void){};
 void guidance_h_module_read_rc(void){};
-void guidance_h_module_run(bool in_flight){
-  stabilization_indi_run(FALSE, FALSE); // run yaw control
+
+int32_t count = 0;
+void guidance_h_module_run(bool in_flight)
+{
+  /* Check if we are in the correct AP_MODE before setting commands */
+  /*if (!in_flight || autopilot_mode != AP_MODE_MODULE) {
+    return;
+  }*/
+
+  /* safety check
+   * if vehicle exceeds maximum bank angle switch immediately to hover mode
+   * to regain stable flight
+   */
+  if( fabs(stateGetNedToBodyEulers_f()->phi) > STABILIZATION_ATTITUDE_SP_MAX_PHI ||
+      fabs(stateGetNedToBodyEulers_f()->theta) > STABILIZATION_ATTITUDE_SP_MAX_THETA)
+  {
+    autopilot_mode_auto2 = AP_MODE_HOVER_Z_HOLD;
+    autopilot_set_mode(AP_MODE_HOVER_Z_HOLD);
+    return;
+  }
+
+  if(count++ % 5 == 0)
+  {
+    count = 0;
+    DOWNLINK_SEND_NPS_RATE_ATTITUDE(DefaultChannel, DefaultDevice,
+                            &stateGetBodyRates_f()->p, &stateGetBodyRates_f()->q,
+                            &stateGetNedToBodyEulers_f()->phi, &stateGetNedToBodyEulers_f()->theta,
+                            &stateGetSpeedEnu_f()->x, &stateGetSpeedEnu_f()->y);
+  }
+
   swarm_nn_periodic();
 
-  stabilization_cmd[COMMAND_ROLL]  = sp.x;
+  /* call standard stab code to control heading */
+  stabilization_attitude_run(in_flight);
+
+  // Command pitch and roll
+  stabilization_cmd[COMMAND_ROLL] = sp.x;
   stabilization_cmd[COMMAND_PITCH] = sp.y;
+
+  /* bound the result */
+  BoundAbs(stabilization_cmd[COMMAND_ROLL], MAX_PPRZ);
+  BoundAbs(stabilization_cmd[COMMAND_PITCH], MAX_PPRZ);
+  BoundAbs(stabilization_cmd[COMMAND_YAW], MAX_PPRZ);
 }
 
 /*
@@ -250,22 +261,23 @@ void swarm_nn_periodic(void)
   //my_pos.y += my_speed.y * ABS(gps.tow - gps_tow_from_sys_ticks(sys_time.nb_tick)) / 1000.;
   struct EnuCoor_f ac_pos;
   struct EnuCoor_f ac_speed;
+  struct EnuCoor_f* other_vel;
 
   // compute nn inputs
   rx = ry = rz = d = 0;
   for (i = 0; i < ti_acs_idx; i++) {
     if (ti_acs[i].ac_id == 0 || ti_acs[i].ac_id == AC_ID) { continue; }
     ac_pos = *acInfoGetPositionEnu_f(ti_acs[i].ac_id);
-    ac_speed = *acInfoGetVelocityEnu_f(ti_acs[i].ac_id);
+    other_vel = acInfoGetVelocityEnu_f(ti_acs[i].ac_id);
 
     // if AC not responding for too long, continue, else compute force
-    float delta_t = ABS(gps.tow - acInfoGetItow(ti_acs[i].ac_id));
-    if(delta_t > 5000) { continue; }
+    float delta_t = ABS(gps.tow - acInfoGetItow(ti_acs[i].ac_id)) / 1000.;
+    if(delta_t > 5.) { continue; }
 
     // get distance to other with the assumption of constant velocity since last position message
-    float de = ac_pos.x  - my_pos.x;// + ac_speed.x * delta_t / 1000.;
-    float dn = ac_pos.y  - my_pos.y; //+ ac_speed.y * delta_t / 1000.;
-    float da = ac_pos.z - my_pos.z;// + acInfoGetClimb(ti_acs[i].ac_id) * delta_t / 1000.;
+    float de = ac_pos.x - my_pos.x + other_vel->x * delta_t;
+    float dn = ac_pos.y - my_pos.y + other_vel->y * delta_t;
+    float da = ac_pos.z - my_pos.z + other_vel->z * delta_t;
 
     float dist2 = de * de + dn * dn;
     if (use_height) { dist2 += da * da; }
@@ -280,9 +292,6 @@ void swarm_nn_periodic(void)
   layer_in[0] = rx;
   layer_in[1] = ry;
   layer_in[2] = d;
-  layer_in[3] = 0;
-  layer_in[4] = 0;
-
 #ifdef HIFI
   layer_in[3] = stateGetBodyRates_f()->p;
   layer_in[4] = stateGetBodyRates_f()->q;
@@ -295,9 +304,9 @@ void swarm_nn_periodic(void)
   /* Compute output for hidden layer */
   for (i = 0; i < NR_LAYERS - 1; i++) {
     layer_in[nr_neurons[i]] = 1.;   // bias neuron
-    for (j = 0; j < nr_neurons[i]; j++) {
+    for (j = 0; j < nr_neurons[i+1]; j++) {
       layer_out[j] = 0.;
-      for (k = 0; k <= nr_neurons[i+1]; k++) {
+      for (k = 0; k <= nr_neurons[i]; k++) {
         layer_out[j] += layer_in[k] * weights[i][k][j];
       }
       // set input for next layer
