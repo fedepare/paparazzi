@@ -62,7 +62,7 @@ let modes_of_type = fun vt ->
 let aircrafts = Hashtbl.create 3
 
 (** Broadcast of the received aircrafts *)
-let aircraft_msg_period = 500 (* ms *)
+let aircraft_msg_period = 200 (* ms *)
 let wind_msg_period = 5000 (* ms *)
 let aircraft_alerts_period = 1000 (* ms *)
 let send_aircrafts_msg = fun _asker _values ->

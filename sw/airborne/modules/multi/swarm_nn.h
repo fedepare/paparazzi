@@ -26,7 +26,7 @@
 #ifndef SWARM_NN_H
 #define SWARM_NN_H
 
-#include "math/pprz_algebra_int.h"
+#include <std.h>
 
 extern float max_hor_speed;
 extern float max_vert_speed;
@@ -34,5 +34,15 @@ extern uint8_t use_height;
 
 extern void swarm_nn_init(void);
 extern void swarm_nn_periodic(void);
+
+// Demo with own guidance_h
+#define GUIDANCE_H_MODE_MODULE_SETTING GUIDANCE_H_MODE_MODULE
+#define GUIDANCE_V_MODE_MODULE_SETTING GUIDANCE_V_MODE_HOVER
+
+// Implement own Horizontal loops
+extern void guidance_h_module_init(void);
+extern void guidance_h_module_enter(void);
+extern void guidance_h_module_read_rc(void);
+extern void guidance_h_module_run(bool in_flight);
 
 #endif // swarm_nn_H

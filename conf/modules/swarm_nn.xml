@@ -31,7 +31,7 @@
     <file name="swarm_nn.h"/>
   </header>
   <init fun="swarm_nn_init()"/>
-  <periodic fun="swarm_nn_periodic()" freq="5" autorun="TRUE"/>
+  <periodic fun="swarm_nn_periodic()" freq="10" autorun="TRUE"/>
   <makefile>
     <file name="swarm_nn.c"/>
   </makefile>
