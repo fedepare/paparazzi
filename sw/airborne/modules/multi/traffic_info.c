@@ -172,11 +172,10 @@ bool parse_acinfo_dl(void)
 void set_ac_info_utm(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t alt, uint8_t utm_zone, uint16_t course,
                  uint16_t gspeed, uint16_t climb, uint32_t itow)
 {
-  if (ti_acs_idx < NB_ACS) {
-    if (id > 0 && ti_acs_id[id] == 0) {    // new aircraft id
-      ti_acs_id[id] = ti_acs_idx++;
-      ti_acs[ti_acs_id[id]].ac_id = id;
-    }
+  if (id > 0 && ti_acs_id[id] == 0 && ti_acs_idx < NB_ACS) {    // new aircraft id
+    ti_acs_id[id] = ti_acs_idx++;
+    ti_acs[ti_acs_id[id]].ac_id = id;
+  } else if (ti_acs_id[id] > 0){
 
     ti_acs[ti_acs_id[id]].status = 0;
 
@@ -214,11 +213,10 @@ void set_ac_info_utm(uint8_t id, uint32_t utm_east, uint32_t utm_north, uint32_t
 void set_ac_info_lla(uint8_t id, int32_t lat, int32_t lon, int32_t alt,
                      int16_t course, uint16_t gspeed, int16_t climb, uint32_t itow)
 {
-  if (ti_acs_idx < NB_ACS) {
-    if (id > 0 && ti_acs_id[id] == 0) {
-      ti_acs_id[id] = ti_acs_idx++;
-      ti_acs[ti_acs_id[id]].ac_id = id;
-    }
+  if (id > 0 && ti_acs_id[id] == 0 && ti_acs_idx < NB_ACS) {
+    ti_acs_id[id] = ti_acs_idx++;
+    ti_acs[ti_acs_id[id]].ac_id = id;
+  } else if (ti_acs_id[id] > 0) {
 
     ti_acs[ti_acs_id[id]].status = 0;
 

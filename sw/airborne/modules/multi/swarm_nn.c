@@ -140,41 +140,33 @@ const double layer1_weights[7][8] = {
   { -0.142, -0.363, 2.412,  -1.586, 0.041,  -1.86,  0.443,  1.194,},
 };
 
-double layer2_out[2]; //nr_output_neurons
-const double layer2_weights[9][2] = {
-  { -0.3672,  -0.3484,},
-  { 0.3754, -0.537,},
-  { 0.886,  0.1956,},
-  { -0.1652,  0.684,},
-  { -0.1538,  -0.1288,},
-  { 0.4614, -0.0138,},
-  { 0.2718, 0.1088,},
-  { 0.1112, 0.0138,},
-  { -0.161, -0.072,},
-};
-
-double layer3_out[2]; //nr_output_neurons
-const double layer3_weights[9][2] = {
-  { -0.3672,  -0.3484,},
-  { 0.3754, -0.537,},
-  { 0.886,  0.1956,},
-  { -0.1652,  0.684,},
-  { -0.1538,  -0.1288,},
-  { 0.4614, -0.0138,},
-  { 0.2718, 0.1088,},
-  { 0.1112, 0.0138,},
-  { -0.161, -0.072,},
-};
 #else
 
 #define NR_LAYERS 3
-static const uint8_t nr_neurons[NR_LAYERS] = {3, 8, 2};
+static const uint8_t nr_neurons[NR_LAYERS] = {5, 8, 2};
 
 #define MAX_NEURONS 8
 double layer_out[MAX_NEURONS+1];
 double layer_in[MAX_NEURONS+1];
 
-static const double weights[NR_LAYERS-1][MAX_NEURONS][MAX_NEURONS] = {{
+static const double weights[NR_LAYERS-1][MAX_NEURONS+1][MAX_NEURONS] = {{
+{ -0.249, 0.6456, 0.2576, -0.0324,  -0.1644,  0.7892, -0.313, -0.5042,},
+{ 0.0736, 0.9582, 0.6542, 0.5952, -0.7244,  -0.367, -0.2034,  -0.3356,},
+{ 0.1306, -0.6844,  0.8562, 0.1484, -0.4876,  -0.345, -0.611, -0.7448,},
+{ 0.039,  0.5906, 0.822,  0.8968, 0.2194, -0.8234,  -0.0694,  -0.3796,},
+{ -0.044, -0.2248,  0.645,  -0.5442,  -0.5442,  -0.8088,  -0.67,  -0.9184,},
+{ -0.142, -0.363, 2.412,  -1.586, 0.041,  -1.86,  0.443,  1.194,}},
+{{ -0.3672,  -0.3484,},
+{ 0.3754, -0.537,},
+{ 0.886,  0.1956,},
+{ -0.1652,  0.684,},
+{ -0.1538,  -0.1288,},
+{ 0.4614, -0.0138,},
+{ 0.2718, 0.1088,},
+{ 0.1112, 0.0138,},
+{ -0.161, -0.072,}}};
+
+/*{{
     { -0.5834,  -0.9828,  -0.0208,  -0.9592,  -0.077, 0.0192, -0.338, -0.5828,},
     { -0.166, -0.6566,  0.9078, 0.5458, 0.053,  0.4698, -0.7876,  -0.821,},
     { 0.9598, -0.4942,  -0.4448,  -0.9702,  0.4738, -0.018, -0.365, 0.239,},
@@ -187,7 +179,7 @@ static const double weights[NR_LAYERS-1][MAX_NEURONS][MAX_NEURONS] = {{
     { -0.4548,  0.393,},
     { 0.415,  0.0176,},
     { -0.9162,  -0.343,},
-    { -0.542, -0.344,}}};
+    { -0.542, -0.344,}}};*/
 #endif
 
 void guidance_h_module_init(void){};
@@ -245,13 +237,6 @@ void guidance_h_module_run(bool in_flight)
  */
 void swarm_nn_periodic(void)
 {
-  /* This algorithm only works if I have a gps fix. */
-  //if (gps.fix == 0) {
-  //  /* set default speed */
-  //    autopilot_guided_move_ned(0, 0, 0, 0);
-  //    return;
-// }
-
   /* counters */
   uint8_t i, j, k;
 
@@ -264,7 +249,7 @@ void swarm_nn_periodic(void)
   struct EnuCoor_f* other_vel;
 
   // compute nn inputs
-  rx = ry = rz = d = 0;
+  rx = ry = rz = d = 0.;
   for (i = 0; i < ti_acs_idx; i++) {
     if (ti_acs[i].ac_id == 0 || ti_acs[i].ac_id == AC_ID) { continue; }
     ac_pos = *acInfoGetPositionEnu_f(ti_acs[i].ac_id);
@@ -272,12 +257,14 @@ void swarm_nn_periodic(void)
 
     // if AC not responding for too long, continue, else compute force
     float delta_t = ABS(gps.tow - acInfoGetItow(ti_acs[i].ac_id)) / 1000.;
-    if(delta_t > 5.) { continue; }
+    //if(delta_t > 5.) { continue; }
 
     // get distance to other with the assumption of constant velocity since last position message
-    float de = ac_pos.x - my_pos.x + other_vel->x * delta_t;
-    float dn = ac_pos.y - my_pos.y + other_vel->y * delta_t;
-    float da = ac_pos.z - my_pos.z + other_vel->z * delta_t;
+    float de = ac_pos.x - my_pos.x;// + other_vel->x * delta_t;
+    float dn = ac_pos.y - my_pos.y;// + other_vel->y * delta_t;
+    float da = ac_pos.z - my_pos.z;// + other_vel->z * delta_t;
+
+    printf("%d %f %f %f %f %f %f\n", ti_acs[i].ac_id, de, dn, ac_pos.x, my_pos.x, ac_pos.y, my_pos.y);
 
     float dist2 = de * de + dn * dn;
     if (use_height) { dist2 += da * da; }
@@ -289,20 +276,23 @@ void swarm_nn_periodic(void)
   }
 
   /* set nn inputs */
-  layer_in[0] = rx;
-  layer_in[1] = ry;
-  layer_in[2] = d;
+  layer_out[0] = rx;
+  layer_out[1] = ry;
+  layer_out[2] = d;
+  layer_out[3] = 0;
+  layer_out[4] = 0;
 #ifdef HIFI
-  layer_in[3] = stateGetBodyRates_f()->p;
-  layer_in[4] = stateGetBodyRates_f()->q;
-  layer_in[5] = stateGetNedToBodyEulers_f()->phi;
-  layer_in[6] = stateGetNedToBodyEulers_f()->theta;
-  layer_in[7] = stateGetSpeedNed_f()->x;
-  layer_in[8] = stateGetSpeedNed_f()->y;
+  layer_out[3] = stateGetBodyRates_f()->p;
+  layer_out[4] = stateGetBodyRates_f()->q;
+  layer_out[5] = stateGetNedToBodyEulers_f()->phi;
+  layer_out[6] = stateGetNedToBodyEulers_f()->theta;
+  layer_out[7] = stateGetSpeedNed_f()->x;
+  layer_out[8] = stateGetSpeedNed_f()->y;
 #endif
 
   /* Compute output for hidden layer */
   for (i = 0; i < NR_LAYERS - 1; i++) {
+    memcpy(layer_in, layer_out, sizeof(layer_out)); // set the input for the next layer
     layer_in[nr_neurons[i]] = 1.;   // bias neuron
     for (j = 0; j < nr_neurons[i+1]; j++) {
       layer_out[j] = 0.;
@@ -312,7 +302,6 @@ void swarm_nn_periodic(void)
       // set input for next layer
       layer_out[j] = tanh(layer_out[j]);
     }
-    memcpy(layer_in, layer_out, sizeof(layer_out)); // set the input for the next layer
   }
 
 #ifdef HIFI
@@ -329,7 +318,7 @@ void swarm_nn_periodic(void)
   BoundAbs(speed_sp.z, MAX_PPRZ);
 #else
   /* scale output to max speed setting */
-  sp.x = max_hor_speed * (float)layer_out[0];
+  sp.x = max_hor_speed * (float)layer_out[0];  // due to error in initial evolution
   sp.y = max_hor_speed * (float)layer_out[1];
   if (use_height && nr_neurons[NR_LAYERS-1] > 2) {
     sp.z = max_vert_speed * (float)layer_out[2];
@@ -341,8 +330,7 @@ void swarm_nn_periodic(void)
   BoundAbs(sp.z, max_vert_speed);
 
   /* set speed */
-  //guidance_h_set_guided_vel(vx, vy);
-  guidance_h_set_guided_vel(sp.x,sp.y); // due to error in initial evolution
+  guidance_h_set_guided_vel(sp.y,sp.x); // sp in enu
 #endif
 
 }
