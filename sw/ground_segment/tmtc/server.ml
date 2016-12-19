@@ -364,6 +364,7 @@ let send_aircraft_msg = fun ac ->
     if Hashtbl.length aircrafts > 1 then
       begin
         let cm_of_m_32 = fun f -> PprzLink.Int32 (Int32.of_int (truncate (100. *. f))) in
+        let mm_of_m_32 = fun f -> PprzLink.Int32 (Int32.of_int (truncate (1000. *. f))) in
         let cm_of_m = fun f -> PprzLink.Int (truncate (100. *. f)) in
         if a.vehicle_type = FixedWing then
           let pos = LL.utm_of WGS84 a.pos in
@@ -383,7 +384,7 @@ let send_aircraft_msg = fun ac ->
                              "lat", deg7_of_rad a.pos.posn_lat;
                              "lon", deg7_of_rad a.pos.posn_long;
                              "course", PprzLink.Int (truncate (10. *. (Geometry_2d.rad2deg a.course)));
-                             "alt", cm_of_m_32 a.alt;
+                             "alt", mm_of_m_32 (a.ground_alt -. a.d_hmsl);
                              "speed", cm_of_m a.gspeed;
                              "climb", cm_of_m a.climb;
                              "itow", PprzLink.Int64 a.itow] in

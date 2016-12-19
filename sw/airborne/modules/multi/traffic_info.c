@@ -154,7 +154,7 @@ bool parse_acinfo_dl(void)
         set_ac_info_lla(DL_ACINFO_LLA_ac_id(dl_buffer),
                   DL_ACINFO_LLA_lat(dl_buffer),
                   DL_ACINFO_LLA_lon(dl_buffer),
-                  DL_ACINFO_LLA_alt(dl_buffer) * 10,
+                  DL_ACINFO_LLA_alt(dl_buffer),
                   DL_ACINFO_LLA_course(dl_buffer),
                   DL_ACINFO_LLA_speed(dl_buffer),
                   DL_ACINFO_LLA_climb(dl_buffer),

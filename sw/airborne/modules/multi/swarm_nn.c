@@ -72,7 +72,9 @@ static void send_swarm_nn(struct transport_tx *trans, struct link_device *dev)
 {
 /* send log data to gs */
   struct EnuCoor_f ac1 = *acInfoGetPositionEnu_f(ti_acs[2].ac_id);
+  ac1.x *= 2.49; ac1.y *= 2.49;
   struct EnuCoor_f ac2 = *acInfoGetPositionEnu_f(ti_acs[3].ac_id);
+  ac2.x *= 2.49; ac2.y *= 2.49;
 
   struct EnuCoor_f my_enu_pos = *stateGetPositionEnu_f();
 
@@ -260,11 +262,11 @@ void swarm_nn_periodic(void)
     //if(delta_t > 5.) { continue; }
 
     // get distance to other with the assumption of constant velocity since last position message
-    float de = ac_pos.x - my_pos.x;// + other_vel->x * delta_t;
-    float dn = ac_pos.y - my_pos.y;// + other_vel->y * delta_t;
+    float de = ac_pos.x*2.49 - my_pos.x;// + other_vel->x * delta_t;
+    float dn = ac_pos.y*2.49 - my_pos.y;// + other_vel->y * delta_t;
     float da = ac_pos.z - my_pos.z;// + other_vel->z * delta_t;
 
-    printf("%d %f %f %f %f %f %f\n", ti_acs[i].ac_id, de, dn, ac_pos.x, my_pos.x, ac_pos.y, my_pos.y);
+    //printf("%d %d %f %f %f %f %f %f %f %f\n", i, ti_acs[i].ac_id, de, dn, ac_pos.x*2.49, my_pos.x, ac_pos.y*2.49, my_pos.y, ac_pos.z, my_pos.z);
 
     float dist2 = de * de + dn * dn;
     if (use_height) { dist2 += da * da; }
