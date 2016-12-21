@@ -13,6 +13,7 @@
 
 #include "cmd_def.h"
 
+volatile uint8_t ready_to_send = 1;
 
 void (*bglib_output)(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2) = 0;
 static const struct ble_msg  apis[] = {
@@ -297,6 +298,7 @@ const struct ble_msg *ble_get_msg_hdr(struct ble_header hdr)
     if (hdr.command >= ble_class_rsp_handlers[hdr.cls].maxhandlers) {
       return NULL;
     }
+    ready_to_send = 1;
     return ble_class_rsp_handlers[hdr.cls].msgs[hdr.command];
   }
   return ble_find_msg_hdr(hdr);

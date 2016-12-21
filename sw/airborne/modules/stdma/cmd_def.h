@@ -75,6 +75,8 @@ const struct ble_msg *ble_get_msg_hdr(struct ble_header hdr) ;
 extern void (*bglib_output)(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2);
 void ble_send_message(uint8_t msgid, ...);
 
+extern volatile uint8_t ready_to_send;
+
 enum system_endpoints {
   system_endpoint_api    = 0,
   system_endpoint_test   = 1,

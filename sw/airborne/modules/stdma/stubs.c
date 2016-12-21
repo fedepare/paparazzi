@@ -12,6 +12,26 @@ void ble_default(const void __attribute__((unused)) *v)
 {
 }
 
+void ble_rsp_system_get_info(const struct ble_msg_system_get_info_rsp_t __attribute__((unused)) *msg)
+{
+}
+
+void ble_rsp_gap_set_adv_data(const struct ble_msg_gap_set_adv_data_rsp_t __attribute__((unused)) *msg)
+{
+}
+
+void ble_rsp_gap_set_adv_parameters(const struct ble_msg_gap_set_adv_parameters_rsp_t __attribute__((unused)) *msg)
+{
+}
+
+void ble_rsp_gap_set_scan_parameters(const struct ble_msg_gap_set_scan_parameters_rsp_t __attribute__((unused)) *msg)
+{
+}
+
+void ble_rsp_attributes_write(const struct ble_msg_attributes_write_rsp_t __attribute__((unused)) *msg)
+{
+}
+
 void ble_rsp_attributes_send(const struct ble_msg_attributes_send_rsp_t __attribute__((unused)) *msg)
 {
 }
@@ -44,10 +64,6 @@ void ble_rsp_flash_read_data(const struct ble_msg_flash_read_data_rsp_t __attrib
 void ble_rsp_test_channel_mode(const void __attribute__((unused)) *nul)
 {
 
-}
-
-void ble_evt_system_protocol_error(const struct ble_msg_system_protocol_error_evt_t __attribute__((unused)) *msg)
-{
 }
 
 void ble_rsp_system_reset(const void __attribute__((unused)) *nul)

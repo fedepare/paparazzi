@@ -34,8 +34,6 @@
 #include <time.h>    // time()
 #include <signal.h>
 
-#include "led.h"
-
 #include "cmd_def.h"
 
 #include "generated/airframe.h"
@@ -46,8 +44,11 @@
 
 struct link_device* dev = &(BLUEGIGA_UART.device);
 
-uint8_t stdma_data_out[256];
+uint8_t stdma_data[31];
 uint8_t stdma_data_len = 0;
+bool stdma_initialised = false;
+
+struct pprz_transport stdma_trans;
 
 //#define DEBUG
 
@@ -103,29 +104,11 @@ const uint8_t POS_ADV_STDMA_OFFSET = 7;               // stdma offset
 const uint8_t POS_ADV_STDMA_TIMEOUT = 8;              // stdma timeout
 const uint8_t POS_ADV_TX_STRENGTH = 9;                // transmit power dBm
 
-uint8_t broadcast_msg[128];                    // temporary buffer for recieved data waiting to be sent to lisa
-int8_t broadcast_len;
-
 // PPRZ MSG positions
 const uint8_t PPRZ_POS_STX = 0;
 const uint8_t PPRZ_POS_LEN = 1;
 const uint8_t PPRZ_POS_SENDER_ID = 2;
 const uint8_t PPRZ_POS_MSG_ID = 3;
-
-/**
- * Compare Bluetooth addresses
- *
- * @param first First address
- * @param second Second address
- * @return Zero if addresses are equal
- */
-static int cmp_bdaddr(const bd_addr first, const bd_addr second)
-{
-  for (uint8_t i = 0; i < sizeof(bd_addr); i++) {
-    if (first.addr[i] != second.addr[i]) { return 1; }
-  }
-  return 0;
-}
 
 static int cmp_addr(const uint8_t first[], const uint8_t second[])
 {
@@ -134,6 +117,15 @@ static int cmp_addr(const uint8_t first[], const uint8_t second[])
     if (first[i] != second[i]) { return 5 - i; }
   }
   return 6;
+}
+
+#ifdef DEBUG
+static int cmp_bdaddr(const bd_addr first, const bd_addr second)
+{
+  for (uint8_t i = 0; i < sizeof(bd_addr); i++) {
+    if (first.addr[i] != second.addr[i]) { return 1; }
+  }
+  return 0;
 }
 
 static void print_bdaddr(const bd_addr __attribute__((unused)) bdaddr)
@@ -158,17 +150,45 @@ static void print_raw_packet(struct ble_header *hdr, uint8_t __attribute__((unus
   }
   debug_print("\n");
 }
+#endif
 
 /* This is a helper function to output data from the BLE-API commands */
+#define OUTPUT_BUFFER_SIZE 256
+uint8_t output_buffer[OUTPUT_BUFFER_SIZE];
+uint16_t write_idx = 0;
+uint16_t read_idx = 0;
 static void output(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2)
 {
-  if(dev->check_free_space(dev->periph, 0, len1 + len2)){
-#ifdef PACKET_MODE
-    // prefix total message length byte when in packet mode
-    dev->put_byte(dev->periph, 0, len1+len2);
-#endif
-    dev->put_buffer(dev->periph, 0, data1, len1);
-    dev->put_buffer(dev->periph, 0, data2, len2);
+  if ((read_idx - write_idx - 1 + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE >= len1 + len2){
+    memcpy(output_buffer + write_idx, data1, len1);
+    write_idx = (write_idx + len1) % OUTPUT_BUFFER_SIZE;
+    memcpy(output_buffer + write_idx, data2, len2);
+    write_idx = (write_idx + len2) % OUTPUT_BUFFER_SIZE;
+  } else {
+    // It is possible that something went wrong in reading or writing causing a lock up in the coms
+    // this can be identified if the buffer is full
+    // If this happens, reset the coms
+    //stdma_initialised = false;
+    write_idx = read_idx = 0;
+    ready_to_send = 1;
+    //ble_cmd_system_reset(0);
+  }
+}
+
+void write_message(void){
+  if (ready_to_send && (write_idx - read_idx + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE > 0){
+    uint8_t msg_len = output_buffer[(read_idx+1) % OUTPUT_BUFFER_SIZE] + 4; // message length is header + data (which is indicated by header[1]
+    if(dev->check_free_space(dev->periph, 0, msg_len)){
+  #ifdef PACKET_MODE
+      // prefix total message length byte when in packet mode
+      dev->put_byte(dev->periph, 0, msg_len);
+  #endif
+      for (uint8_t i = 0; i < msg_len; i++){
+        dev->put_byte(dev->periph, 0, output_buffer[read_idx]);
+        read_idx = (read_idx + 1) % OUTPUT_BUFFER_SIZE;
+      }
+      ready_to_send = 0;
+    }
   }
 }
 
@@ -176,7 +196,6 @@ void read_message(void)
 {
   static struct ble_header hdr = {0};
   static bool hdr_found = false;
-  static uint8_t hdr_index = 0;
   static uint8_t data_in[256];
   static uint8_t data_index = 0;
 
@@ -195,6 +214,15 @@ void read_message(void)
       }
 
       const struct ble_msg *msg = ble_get_msg_hdr(hdr);
+
+#ifdef DEBUG_RAW
+      print_raw_packet(&hdr, data_in);
+#endif
+      if (!msg) {
+        debug_print("ERROR: Unknown message received\n");
+
+      }
+
       // handle message
       msg->handler(data_in);
 
@@ -206,38 +234,13 @@ void read_message(void)
       break;
     }
   }
-  /*while(dev->char_available(dev->periph)){
-    if(hdr_index < sizeof(hdr)){    // read bluetooth header to determine total message size
-      ((uint8_t*)&hdr)[hdr_index++] = dev->get_byte(dev->periph);
-      if (hdr.lolen != 12 && hdr.lolen != 0)
-        LED_ON(AHRS_ALIGNER_LED);
-    } else if(data_index < hdr.lolen){  // we have received a complete header message
-      data_in[data_index++] = dev->get_byte(dev->periph);
-    } else {
-      const struct ble_msg *msg = ble_get_msg_hdr(hdr);
-#ifdef DEBUG_RAW
-      print_raw_packet(&hdr, data_in);
-#endif
-      if (!msg) {
-        debug_print("ERROR: Unknown message received\n");
-      }
-      // handle message
-      msg->handler(data_in);
-
-      // reset buffer index counters for next message
-      hdr_index= 0;
-      data_index = 0;
-    }
-  }*/
 }
 
-struct pprz_transport stdma_trans;
 void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg)
 {
   // check if sender is likely a bluegiga module or dongle
   if (cmp_addr(msg->sender.addr, MAC_ADDR) < 3) { return; }
 
-  //debug_print("%02x %02x\n", msg->data.data[POS_ADV_STDMA_OFFSET], msg->data.data[POS_ADV_STDMA_TIMEOUT]);
   // store stdma slot, offset and timeout
   // response data is [header, offset, timeout, data]
   uint8_t temp = stdma_current_slot + msg->data.data[POS_ADV_STDMA_OFFSET];       // next reserved slot
@@ -250,10 +253,6 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
   }
 
   uint8_t data[128];
-  // handle spi
-  //data[0] = 0xff - msg->data.len - STDMA_ADV_HEADER_LEN;    // encode msg length in header
-  //data[1] = msg->data.data[POS_ADV_TX_STRENGTH];            // tx_strength
-  //data[2] = msg->rssi;                                      // rssi
 
   memcpy(data, msg->data.data + STDMA_ADV_HEADER_LEN, msg->data.len - STDMA_ADV_HEADER_LEN);
 
@@ -291,7 +290,6 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
   }
 }
 
-void ble_rsp_system_get_info(const struct ble_msg_system_get_info_rsp_t __attribute__((unused)) *msg) {}
 void ble_evt_connection_status(const struct ble_msg_connection_status_evt_t __attribute__((unused)) *msg) {}
 void ble_evt_connection_disconnected(const struct ble_msg_connection_disconnected_evt_t __attribute__((unused)) *msg) {}
 void ble_evt_attclient_procedure_completed(const struct ble_msg_attclient_procedure_completed_evt_t __attribute__((unused)) *msg) {}
@@ -299,34 +297,18 @@ void ble_evt_attclient_group_found(const struct ble_msg_attclient_group_found_ev
 void ble_evt_attclient_find_information_found(const struct ble_msg_attclient_find_information_found_evt_t __attribute__((unused)) *msg) {}
 void ble_evt_attclient_attribute_value(const struct ble_msg_attclient_attribute_value_evt_t __attribute__((unused)) *msg) {}
 
-
-bool ready_to_send = true;
-void ble_rsp_gap_set_adv_data(const struct ble_msg_gap_set_adv_data_rsp_t __attribute__((unused)) *msg)
+void ble_evt_system_protocol_error(const struct ble_msg_system_protocol_error_evt_t __attribute__((unused)) *msg)
 {
-  ready_to_send = true;
-}
-
-void ble_rsp_gap_set_adv_parameters(const struct ble_msg_gap_set_adv_parameters_rsp_t __attribute__((unused)) *msg)
-{
-  ready_to_send = true;
-}
-
-void ble_rsp_gap_set_scan_parameters(const struct ble_msg_gap_set_scan_parameters_rsp_t __attribute__((unused)) *msg)
-{
-}
-
-void ble_rsp_attributes_write(const struct ble_msg_attributes_write_rsp_t __attribute__((unused)) *msg)
-{
-  ready_to_send = true;
+  ready_to_send = 1;
 }
 
 /* set_stdma_data - set output
  *
  */
-void set_stdma_data(uint8_t *stdma_data, uint8_t data_len)
+void set_stdma_data(uint8_t *data, uint8_t data_len)
 {
   stdma_data_len = data_len;
-  memcpy(stdma_data_out, stdma_data, stdma_data_len);
+  memcpy(stdma_data, data, stdma_data_len);
 }
 
 /* paparazzi specific initialisation */
@@ -349,8 +331,11 @@ static void stdma_start(void)
   memset(stdma_next_slot_timeout, 0, STDMA_SLOTS);
   memset(stdma_free_slots, 0, STDMA_SLOTS);
 
-  memset(broadcast_msg, 0, 31);
-  broadcast_len = 0;
+  memset(stdma_data, 0, 31);
+  stdma_data_len = 0;
+
+  memset(adv_data, 0, STDMA_ADV_MAX_DATA_LEN);
+  adv_data_len = 0;
 
   stdma_my_slot = 0;
   stdma_my_next_slot = 0;
@@ -370,22 +355,11 @@ static void stdma_start(void)
   adv_data[6] = 0xff;               // unknown/prototype Company Identifier Code - octet 1
 
   // stdma header
-  adv_data[POS_ADV_STDMA_OFFSET] = 0x0;                // stdma offset
-  adv_data[POS_ADV_STDMA_TIMEOUT] = 0x0;                // stdma timeout
+  adv_data[POS_ADV_STDMA_OFFSET] = 0x0;                  // stdma offset
+  adv_data[POS_ADV_STDMA_TIMEOUT] = 0x0;                 // stdma timeout
 
   // TX power in dBm for BLE121LR USB Dongle
-  adv_data[9] = 11;
-
-  // set aircraft id
-  adv_data[STDMA_ADV_HEADER_LEN + PPRZ_POS_SENDER_ID] = AC_ID;
-
-  // msg data
-  adv_data_len = STDMA_ADV_MAX_DATA_LEN;
-
-  for(uint8_t i = 0; i < adv_data_len; i++){
-    adv_data[STDMA_ADV_HEADER_LEN+i] = i;
-  }
-  ble_cmd_gap_set_adv_data(0, STDMA_ADV_HEADER_LEN + adv_data_len, adv_data);          // Set advertisement data
+  adv_data[POS_ADV_TX_STRENGTH] = 11;
 
   // set advertisement interval on all three spi_channels
   // increments of 625us
@@ -393,52 +367,52 @@ static void stdma_start(void)
   // 0x07: All three channels are used
   // 0x03: Advertisement channels 37 and 38 are used.
   // 0x04: Only advertisement channel 39 is used
-  //ble_cmd_gap_set_adv_parameters(0x20, 0x28, 0x07);
+  ble_cmd_gap_set_adv_parameters(0x20, 0x28, 0x07);
 
   // set scan parameters interval/window/use active scanning
   // the scan interval defines the period between restarting a scan, each new scan will switch to a new channel
   // increments of 625us
   // range: 0x4 - 0x4000
   // with active scanning receiver will send a scan response msg
-  //ble_cmd_gap_set_scan_parameters(0x20, 0x20, 0);     // the values selected should be a multiple of the stdma interval
+  ble_cmd_gap_set_scan_parameters(0x20, 0x20, 0);     // the values selected should be a multiple of the stdma interval
 
   // set name of device
-  char name[256] = {"my_name"};
+  char name[256] = {"Bluegiga    "};
+  name[11] = '0' + (AC_ID % 10);
+  name[10] = '0' + ((AC_ID/10) % 10);
+  name[9] = '0' + ((AC_ID/100) % 10);
+
   // todo add AC_ID here
-  //ble_cmd_attributes_write(0x0002, 0x2a00, sizeof(name), name);
+  ble_cmd_attributes_write(3, 0, 12, name);
 
   /* Intialize random number generator */
   srand(sys_time.nb_tick);
 
-  //ble_cmd_gap_discover(gap_discover_observation);   // scan for other modules
-  //ble_cmd_gap_set_mode(gap_general_discoverable, gap_undirected_connectable);
+  ble_cmd_gap_set_mode(gap_general_discoverable, gap_undirected_connectable);
 
-  stdma_data_len = 10;
-  for (uint8_t i = 0; i < stdma_data_len; i++)
-  {
-    stdma_data_out[i] = i;
-  }
+  stdma_initialised = true;
 }
 
+/*
+ * Wait for Bluegiga module to tell us it is ready to receive messages
+ */
 void ble_evt_system_boot(const struct ble_msg_system_boot_evt_t __attribute__((unused)) *msg)
 {
+  ready_to_send = 1;
   // start stdma after receiving boot signal from dongle
   stdma_start();
-  LED_OFF(AHRS_ALIGNER_LED);
 }
 
 /* stdma_periodic() - staged new advertise message to be set as advertisement
  *
  */
 void stdma_periodic(void){
-  return;
+  if (!stdma_initialised) {return;}
 
-  // only send message 252, in this config, this msg not sent to ground
-  // && spi_data(1+PPRZ_POS_LEN:1) <= STDMA_ADV_MAX_DATA_LEN && spi_data(1+PPRZ_POS_LEN:1) > SPI_DATA_LEN 252
-  //if (broadcast_msg[PPRZ_POS_STX] == 0x99 && broadcast_msg[PPRZ_POS_MSG_ID] == 252) {
-  if (stdma_data_len > 0 && broadcast_len < STDMA_ADV_MAX_DATA_LEN) {
-    adv_data_len = broadcast_len;
-    memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_data_out, stdma_data_len);
+  if (stdma_data_len > 0 && stdma_data_len < STDMA_ADV_MAX_DATA_LEN) {
+    adv_data_len = stdma_data_len;
+    memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_data, stdma_data_len);
+    stdma_data_len = 0;
   }
 
   static uint8_t skip = 0;
@@ -455,7 +429,6 @@ void stdma_periodic(void){
 
   if (++stdma_current_slot == STDMA_SLOTS) {       // end of frame
     stdma_current_slot = 0;                        // wrap slot counter
-    skip = 0;
 
     // decrement timeout values
     i = 0;
@@ -472,7 +445,6 @@ void stdma_periodic(void){
       if (stdma_slot_timeout[i] == 0) {
         stdma_slot_status[i] = STDMA_STATE_FREE;  // update slot statuses
       }
-
       i++;
     }
 
@@ -501,7 +473,6 @@ void stdma_periodic(void){
       }
 
       // determine next slot using random offset
-
       stdma_my_next_slot = stdma_free_slots[rand() % k];
       stdma_slot_status[stdma_my_next_slot] = STDMA_STATE_INTER_ALLOC;
 
@@ -510,45 +481,48 @@ void stdma_periodic(void){
     }
   }
 
-  if (stdma_current_slot == stdma_my_slot && skip == 0) {
-    stdma_my_slot = stdma_my_next_slot;
-    // set advertisement data
-    adv_data[POS_ADV_STDMA_OFFSET] = stdma_my_slot - stdma_current_slot + STDMA_SLOTS;    // offset to next transmission
+  if (stdma_current_slot == stdma_my_slot) {
+    if (skip == 1){
+      skip = 0;
+    } else {
+      stdma_my_slot = stdma_my_next_slot;
 
-    while (adv_data[POS_ADV_STDMA_OFFSET] < STDMA_SLOTS + STDMA_MAX_INTERVAL - STDMA_MIN_INTERVAL) {
-      adv_data[POS_ADV_STDMA_OFFSET] = adv_data[POS_ADV_STDMA_OFFSET]  + STDMA_SLOTS;
+      // set timeout
+      adv_data[POS_ADV_STDMA_TIMEOUT] = stdma_slot_timeout[stdma_my_slot];
+
+      // set advertisement data
+      adv_data[POS_ADV_STDMA_OFFSET] = stdma_my_slot - stdma_current_slot + STDMA_SLOTS;    // offset to next transmission
+
+      if (adv_data[POS_ADV_STDMA_OFFSET] < STDMA_SLOTS){
+        adv_data[POS_ADV_STDMA_OFFSET] += STDMA_SLOTS;
+        skip = 1;
+        stdma_slot_timeout[stdma_my_slot] += 1;
+      }
+
+      adv_data_len = STDMA_SLOTS;
+      memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_slot_timeout, STDMA_SLOTS);
+
+      adv_data[POS_ADV_LEN] = adv_data_len + STDMA_ADV_DATA_HEADER_LEN;
+      ble_cmd_gap_set_adv_data(0, STDMA_ADV_HEADER_LEN + adv_data_len, adv_data);          // Set advertisement data
+
+  #ifdef DEBUG
+      int g;
+      debug_print("advertise data: ");
+      for (g = 0; g < STDMA_ADV_HEADER_LEN + adv_data_len; g++) {
+        debug_print("%02x ", adv_data[g]);
+      }
+      debug_print("\n");
+  #endif
+
+      // broadcast!
+      ble_cmd_gap_end_procedure();                        // disable scan
+
+      // enable advertisement
+      stdma_braodcasting = 1;
+      ble_cmd_gap_set_mode(gap_user_data, gap_scannable_non_connectable);
     }
-
-    while (adv_data[POS_ADV_STDMA_OFFSET] > STDMA_SLOTS + STDMA_MAX_INTERVAL - STDMA_MIN_INTERVAL) {
-      adv_data[POS_ADV_STDMA_OFFSET] = adv_data[POS_ADV_STDMA_OFFSET] - STDMA_SLOTS;
-    }
-
-    if (adv_data[POS_ADV_STDMA_OFFSET] > STDMA_SLOTS) {
-      skip = 1;
-    }
-
-    adv_data[POS_ADV_STDMA_TIMEOUT] = stdma_slot_timeout[stdma_my_slot];
-
-    adv_data[POS_ADV_LEN] = adv_data_len + STDMA_ADV_DATA_HEADER_LEN;
-    ble_cmd_gap_set_adv_data(0, STDMA_ADV_HEADER_LEN + adv_data_len, adv_data);          // Set advertisement data
-
-#ifdef DEBUG
-    int g;
-    debug_print("advertise data: ");
-    for (g = 0; g < STDMA_ADV_HEADER_LEN + adv_data_len; g++) {
-      debug_print("%02x ", adv_data[g]);
-    }
-    debug_print("\n");
-#endif
-
-    // broadcast!
-    ble_cmd_gap_end_procedure();                        // disable scan
-
-    // enable advertisement
-    stdma_braodcasting = 1;
-    ble_cmd_gap_set_mode(gap_user_data, gap_scannable_non_connectable);
   }
-#ifdef debug
+#ifdef DEBUG
   int s;
   debug_print("timeout: ");
   for (s = 0; s < STDMA_SLOTS; s++) {

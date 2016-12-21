@@ -26,6 +26,7 @@
   <init fun="stdma_init()"/>
   <periodic fun="stdma_periodic()" autorun="TRUE" freq="40"/>
   <event fun="read_message()"/>
+  <event fun="write_message()"/>
   <makefile target="!fbw|sim|nps">
   	<configure name="BLUEGIGA_UART" default="UART2" case="upper|lower"/>
   	<configure name="BLUEGIGA_BAUD" default="B115200"/>
