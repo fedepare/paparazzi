@@ -24,7 +24,7 @@
     <file name="stdma.h"/>
   </header>
   <init fun="stdma_init()"/>
-  <periodic fun="stdma_periodic()" autorun="TRUE" freq="40"/>
+  <periodic fun="stdma_periodic()" autorun="TRUE" freq="30"/>
   <event fun="read_message()"/>
   <event fun="write_message()"/>
   <makefile target="!fbw|sim|nps">

@@ -40,6 +40,7 @@
 #include "subsystems/datalink/datalink.h"
 #include "mcu_periph/uart.h"
 #include "pprzlink/pprz_transport.h"
+//#include "pprzlink/messages.h"
 #include "mcu_periph/sys_time.h"
 
 struct link_device* dev = &(BLUEGIGA_UART.device);
@@ -57,6 +58,8 @@ struct pprz_transport stdma_trans;
 #else
 #define debug_print(...)
 #endif
+
+#define DEBUG_SEND
 
 // this needs to be defined for two wire uart not for USB
 // TODO generalize over usart/usb
@@ -160,10 +163,14 @@ uint16_t read_idx = 0;
 static void output(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2)
 {
   if ((read_idx - write_idx - 1 + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE >= len1 + len2){
-    memcpy(output_buffer + write_idx, data1, len1);
-    write_idx = (write_idx + len1) % OUTPUT_BUFFER_SIZE;
-    memcpy(output_buffer + write_idx, data2, len2);
-    write_idx = (write_idx + len2) % OUTPUT_BUFFER_SIZE;
+    for (uint8_t i = 0; i < len1; i++){
+      output_buffer[write_idx] = data1[i];
+      write_idx = (write_idx + 1) % OUTPUT_BUFFER_SIZE;
+    }
+    for (uint8_t i = 0; i < len2; i++){
+      output_buffer[write_idx] = data2[i];
+      write_idx = (write_idx + 1) % OUTPUT_BUFFER_SIZE;
+    }
   } else {
     // It is possible that something went wrong in reading or writing causing a lock up in the coms
     // this can be identified if the buffer is full
@@ -176,7 +183,8 @@ static void output(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2)
 }
 
 void write_message(void){
-  if (ready_to_send && (write_idx - read_idx + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE > 0){
+  // check if we ahve a message to send
+  if (ready_to_send && (write_idx - read_idx + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE >= 4){
     uint8_t msg_len = output_buffer[(read_idx+1) % OUTPUT_BUFFER_SIZE] + 4; // message length is header + data (which is indicated by header[1]
     if(dev->check_free_space(dev->periph, 0, msg_len)){
   #ifdef PACKET_MODE
@@ -199,13 +207,14 @@ void read_message(void)
   static uint8_t data_in[256];
   static uint8_t data_index = 0;
 
+  // todo: current protocol assumes we have no lost bytes, write a way to handle that
   while (dev->char_available(dev->periph)){
     if(!hdr_found && dev->char_available(dev->periph) >= 4){
-        hdr.type_hilen = dev->get_byte(dev->periph);
-        hdr.lolen = dev->get_byte(dev->periph);
-        hdr.cls = dev->get_byte(dev->periph);
-        hdr.command = dev->get_byte(dev->periph);
-        hdr_found = true;
+      hdr.type_hilen = dev->get_byte(dev->periph);
+      hdr.lolen = dev->get_byte(dev->periph);
+      hdr.cls = dev->get_byte(dev->periph);
+      hdr.command = dev->get_byte(dev->periph);
+      hdr_found = true;
     }
 
     if(hdr_found && dev->char_available(dev->periph) >= hdr.lolen){
@@ -243,22 +252,20 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
 
   // store stdma slot, offset and timeout
   // response data is [header, offset, timeout, data]
-  uint8_t temp = stdma_current_slot + msg->data.data[POS_ADV_STDMA_OFFSET];       // next reserved slot
-  while (temp > STDMA_SLOTS) { // wrap index on number of slots
-    temp = temp - STDMA_SLOTS;
-  }
+  uint8_t temp = (stdma_current_slot + msg->data.data[POS_ADV_STDMA_OFFSET]) % STDMA_SLOTS;       // next reserved slot
 
   if (temp != stdma_my_next_slot && msg->data.data[POS_ADV_STDMA_TIMEOUT] > stdma_next_slot_timeout[temp]) {
     stdma_next_slot_timeout[temp]  = msg->data.data[POS_ADV_STDMA_TIMEOUT];
   }
 
   uint8_t data[128];
-
   memcpy(data, msg->data.data + STDMA_ADV_HEADER_LEN, msg->data.len - STDMA_ADV_HEADER_LEN);
 
+  // Compose RSSI message for pprzlink
+  // todo: replace with pprzlink functions
   // msg form {header, length, ac_id, msg_id, [msg], crc_a, crc_b}
   // rssi message is [rssi, trans_strength}
-  uint8_t rssi_msg[8] = {0x99, 8, data[PPRZ_POS_SENDER_ID], 28, msg->rssi, msg->data.data[POS_ADV_TX_STRENGTH], 0, 0};
+  uint8_t rssi_msg[8] = {PPRZ_STX, 8, data[PPRZ_POS_SENDER_ID], 28, msg->rssi, msg->data.data[POS_ADV_TX_STRENGTH], 0, 0};
   
   uint8_t j = 0, ck_a = 0, ck_b = 0;
   for(j = 1; j < 6; j++){
@@ -382,7 +389,7 @@ static void stdma_start(void)
   name[10] = '0' + ((AC_ID/10) % 10);
   name[9] = '0' + ((AC_ID/100) % 10);
 
-  // todo add AC_ID here
+  // change name of drone to include the ac_id
   ble_cmd_attributes_write(3, 0, 12, name);
 
   /* Intialize random number generator */
@@ -409,6 +416,7 @@ void ble_evt_system_boot(const struct ble_msg_system_boot_evt_t __attribute__((u
 void stdma_periodic(void){
   if (!stdma_initialised) {return;}
 
+  // check for new message to send
   if (stdma_data_len > 0 && stdma_data_len < STDMA_ADV_MAX_DATA_LEN) {
     adv_data_len = stdma_data_len;
     memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_data, stdma_data_len);
@@ -421,31 +429,29 @@ void stdma_periodic(void){
   int8_t k = 0;
 
   // stop broadcasting if I just was
-  if (stdma_braodcasting == 1) {
+  if (stdma_braodcasting) {
     ble_cmd_gap_set_mode(0, 0); // stop advertisement
     ble_cmd_gap_discover(gap_discover_observation);     // scan for other modules to get rssi values
     stdma_braodcasting = 0;
   }
 
-  if (++stdma_current_slot == STDMA_SLOTS) {       // end of frame
+  if (stdma_current_slot == STDMA_SLOTS) {        // end of frame
     stdma_current_slot = 0;                        // wrap slot counter
 
     // decrement timeout values
-    i = 0;
-    while (i < STDMA_SLOTS) {
+    for (i = 0; i < STDMA_SLOTS; i++) {
+      if (stdma_slot_timeout[i] > 0) {
+        stdma_slot_timeout[i] = stdma_slot_timeout[i] - 1;
+        if (stdma_slot_timeout[i] == 0) {
+          stdma_slot_status[i] = STDMA_STATE_FREE;  // update slot statuses
+        }
+      }
+
       if (stdma_next_slot_timeout[i] > stdma_slot_timeout[i]) { // copy next statuses to list
         stdma_slot_timeout[i] = stdma_next_slot_timeout[i];
         stdma_slot_status[i] = STDMA_STATE_EXTER_ALLOC;
       }
       stdma_next_slot_timeout[i] = 0;
-
-      if (stdma_slot_timeout[i] > 0) {
-        stdma_slot_timeout[i] = stdma_slot_timeout[i] - 1;
-      }
-      if (stdma_slot_timeout[i] == 0) {
-        stdma_slot_status[i] = STDMA_STATE_FREE;  // update slot statuses
-      }
-      i++;
     }
 
     // check if my slot is about to expire, if so then broadcast and select new one
@@ -455,21 +461,12 @@ void stdma_periodic(void){
       k = 1;
       stdma_free_slots[0] = stdma_my_slot;
       i = 0 - STDMA_SELECTION_INTERVAL;
-      while (i <= STDMA_SELECTION_INTERVAL) {
-        j = stdma_my_slot + i;
-        // bound in [0,STDMA_SLOTS)
-        while (j < 0) {
-          j = j + STDMA_SLOTS;
-        }
-        while (j >= STDMA_SLOTS) {
-          j = j - STDMA_SLOTS;
-        }
-
+      for (i = -STDMA_SELECTION_INTERVAL; i <= STDMA_SELECTION_INTERVAL; i++) {
+        j = (stdma_my_slot + i + STDMA_SLOTS) % STDMA_SLOTS;
         if (stdma_slot_status[j] == STDMA_STATE_FREE) {
           stdma_free_slots[k] = j;
-          k = k + 1;
+          k++;
         }
-        i = i + 1;
       }
 
       // determine next slot using random offset
@@ -477,12 +474,13 @@ void stdma_periodic(void){
       stdma_slot_status[stdma_my_next_slot] = STDMA_STATE_INTER_ALLOC;
 
       // determine new timeout
-      stdma_slot_timeout[stdma_my_next_slot] = rand() % (STDMA_MAX_INTERVAL - STDMA_MIN_INTERVAL) + STDMA_MIN_INTERVAL;
+      stdma_slot_timeout[stdma_my_next_slot] = rand() % (STDMA_MAX_INTERVAL - STDMA_MIN_INTERVAL + 1) + STDMA_MIN_INTERVAL;
     }
   }
 
+  // set new stdma parameters and broadcast
   if (stdma_current_slot == stdma_my_slot) {
-    if (skip == 1){
+    if (skip){
       skip = 0;
     } else {
       stdma_my_slot = stdma_my_next_slot;
@@ -493,14 +491,16 @@ void stdma_periodic(void){
       // set advertisement data
       adv_data[POS_ADV_STDMA_OFFSET] = stdma_my_slot - stdma_current_slot + STDMA_SLOTS;    // offset to next transmission
 
-      if (adv_data[POS_ADV_STDMA_OFFSET] < STDMA_SLOTS){
-        adv_data[POS_ADV_STDMA_OFFSET] += STDMA_SLOTS;
+      // if my new slot is ahead of me skip it once
+      if (stdma_my_slot > stdma_current_slot){
         skip = 1;
-        stdma_slot_timeout[stdma_my_slot] += 1;
       }
 
+#ifdef DEBUG_SEND
       adv_data_len = STDMA_SLOTS;
       memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_slot_timeout, STDMA_SLOTS);
+      //memcpy(adv_data + STDMA_ADV_HEADER_LEN + STDMA_SLOTS, stdma_slot_status, STDMA_SLOTS);
+#endif
 
       adv_data[POS_ADV_LEN] = adv_data_len + STDMA_ADV_DATA_HEADER_LEN;
       ble_cmd_gap_set_adv_data(0, STDMA_ADV_HEADER_LEN + adv_data_len, adv_data);          // Set advertisement data
@@ -514,7 +514,7 @@ void stdma_periodic(void){
       debug_print("\n");
   #endif
 
-      // broadcast!
+      // time to broadcast!
       ble_cmd_gap_end_procedure();                        // disable scan
 
       // enable advertisement
@@ -530,4 +530,6 @@ void stdma_periodic(void){
   }
   debug_print("\n");
 #endif
+
+  stdma_current_slot++;
 }
