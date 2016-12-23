@@ -483,23 +483,8 @@ void stdma_periodic(void){
     stdma_data_len = 0;
   }
 
-  // TEST
-    // Convert Course to the proper format (NED)
-    float spd, crs;
-    cart2polar(stateGetSpeedEnu_f()->y, stateGetSpeedEnu_f()->x, &spd, &crs); // Get the total speed and course
-    NormRadAngle(crs);                                // Wrap to 2 Pi since the sent result is unsigned
-
-    int32_t course = (int32_t)(crs*(1e7)); // Typecast crs into a int32_t type integer with proper unit (see gps.course in gps.h)
-    uint32_t multiplex_speed = (((uint32_t)(floor(DeciDegOfRad(course) / 1e7) / 2)) & 0x7FF) <<
-                            21;                     // bits 31-21 course (where the magnitude is pointed at)
-    multiplex_speed |= (((uint32_t)(spd*100)) & 0x7FF) << 10;         // bits 20-10 speed in cm/s
-    multiplex_speed |= (((uint32_t)(-gps.ned_vel.z)) & 0x3FF);        // bits 9-0 z velocity in cm/s
-
-    // int16_t alt = (int16_t)(gps.hmsl / 10);            // height in cm
-    int16_t alt = (int16_t)(stateGetPositionEnu_f()->z*100.0);
-
     // Message through USB bluetooth dongle to other drones
-    DOWNLINK_SEND_GPS_SMALL(stdma_trans, bluegiga_p, &multiplex_speed, &gps.lla_pos.lat, &gps.lla_pos.lon, &alt);
+//    DOWNLINK_SEND_GPS_SMALL(stdma_trans, bluegiga_p, &multiplex_speed, &gps.lla_pos.lat, &gps.lla_pos.lon, &alt);
 
   static uint8_t skip = 0;
   int8_t i = 0;
