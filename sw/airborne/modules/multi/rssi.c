@@ -26,6 +26,7 @@
 #include "modules/multi/rssi.h"
 
 #include "subsystems/datalink/datalink.h"
+#include "subsystems/datalink/downlink.h"
 #include "pprzlink/messages.h"
 
 #include "subsystems/abi.h"                 // rssi messages subscription
@@ -85,6 +86,7 @@ void set_rssi(uint8_t _ac_id, int8_t _tx_strength, int8_t _rssi)
     rssi_acs[rssi_acs_id[_ac_id]].rssi = _rssi;
     rssi_acs[rssi_acs_id[_ac_id]].tx_strength = _tx_strength;
   }
+  DOWNLINK_SEND_RSSI(DefaultChannel, DefaultDevice, &_rssi, &_tx_strength);
 }
 
 struct rssi_info_ get_rssi(uint8_t _ac_id)

@@ -177,13 +177,17 @@
 
 
  <modules main_freq="512">
-   <module name="gps" type="ubx_ucenter"/>
    <module name="send_imu_mag_current"/>
    <module name="stdma">
      <configure name="BLUEGIGA_UART" value="UART3"/>
      <configure name="BLUEGIGA_BAUD" value="B115200"/>
      <!--define name="UART3_STOP" value="USTOP_2"/-->
    </module>
+   <module name="stereocam">
+    <configure name="STEREO_UART" value="UART2"/>
+    <configure name="STEREO_BAUD" value="115200"/>
+   </module>
+   <module name="rssi"/>
  </modules>
 
   <firmware name="rotorcraft">
@@ -214,16 +218,13 @@
     </module>
 
     <module name="telemetry" type="transparent">
-      <configure name="MODEM_PORT" value="UART4"/>
+      <configure name="MODEM_PORT" value="UART1"/>
       <configure name="MODEM_BAUD" value="B115200"/>
     </module>
 
     <module name="imu" type="lisa_mx_v2.1"/>
 
-    <module name="gps" type="ublox">
-      <configure name="GPS_PORT" value="UART2"/>
-      <configure name="GPS_BAUD" value="B38400"/>
-    </module>
+    <module name="gps" type="datalink"/>
 
     <module name="stabilization" type="int_quat"/>
     <module name="ahrs" type="int_cmpl_quat"/>

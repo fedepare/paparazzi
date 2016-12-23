@@ -26,6 +26,7 @@
 
 #include "generated/airframe.h"
 #include "subsystems/datalink/datalink.h"
+#include "subsystems/datalink/downlink.h"
 #include "mcu_periph/uart.h"
 #include "pprzlink/pprz_transport.h"
 #include "mcu_periph/sys_time.h"
@@ -296,8 +297,11 @@ void read_message(void)
 
 void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg)
 {
+
   // check if sender is likely a bluegiga module or dongle
   if (msg->data.len < STDMA_ADV_HEADER_LEN || cmp_addr(msg->sender.addr, MAC_ADDR) < 3) { return; }
+
+  DOWNLINK_SEND_DEBUG(DefaultChannel, DefaultDevice, msg->data.len, msg->data.data);
 
   // store stdma slot, offset and timeout
   // response data is [header, offset, timeout, data]
@@ -330,7 +334,7 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
   }
 
   // Process RSSI
-  AbiSendMsgRSSI(RSSI_BLUEGIGA_ID, data[PPRZ_POS_SENDER_ID], data[POS_ADV_TX_STRENGTH], msg->rssi);
+  AbiSendMsgRSSI(RSSI_BLUEGIGA_ID, msg->data.data[PPRZ_POS_SENDER_ID], msg->data.data[POS_ADV_TX_STRENGTH], msg->rssi);
 }
 
 void ble_evt_connection_status(const struct ble_msg_connection_status_evt_t __attribute__((unused)) *msg) {}
