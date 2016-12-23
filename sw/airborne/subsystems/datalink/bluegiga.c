@@ -39,8 +39,8 @@
 // for memset
 #include <string.h>
 
-#ifndef BLUEGIGA_SPI_DEV
-#error "bluegiga: must define a BLUEGIGA_SPI_DEV"
+#ifndef BLUEGIGA_DL_PORT
+#error "bluegiga: must define a BLUEGIGA_DL_PORT"
 #endif
 
 // Bluegiga: DRDY defaults to SuperbitRf DRDY
@@ -59,13 +59,20 @@
 
 enum BlueGigaStatus coms_status;
 struct bluegiga_periph bluegiga_p;
-struct spi_transaction bluegiga_spi;
 
 uint8_t broadcast_msg[20];
 
+#ifdef BLUEGIGA_UART
+struct link_device* uart_dev = &(BLUEGIGA_UART.device);
+#define BLUEGIGA_MAX_MSG_LEN 60
+#elif defined(BLUEGIGA_SPI)
+struct spi_transaction bluegiga_spi;
+BLUEGIGA_MAX_MSG_LEN 19
+#endif
+
 void bluegiga_load_tx(struct bluegiga_periph *p);
 void bluegiga_transmit(struct bluegiga_periph *p, uint8_t data);
-void bluegiga_receive(struct spi_transaction *trans);
+void bluegiga_spi_read(struct spi_transaction *trans);
 
 // Functions for the generic link device device API
 static int dev_check_free_space(struct bluegiga_periph *p, long *fd __attribute__((unused)), uint16_t len)
@@ -109,7 +116,7 @@ static uint8_t dev_get_byte(struct bluegiga_periph *p)
 // Functions for the generic spi device API
 static void trans_cb(struct spi_transaction *trans)
 {
-  bluegiga_receive(trans);
+  bluegiga_spi_read(trans);
 }
 
 /* check if character available in receive buffer */
@@ -151,20 +158,6 @@ void bluegiga_init(struct bluegiga_periph *p)
   LED_INIT(MODEM_LED);
 #endif
 
-  // configure the SPI bus
-  bluegiga_spi.input_buf      = p->work_rx;
-  bluegiga_spi.output_buf     = p->work_tx;
-  bluegiga_spi.input_length   = BLUEGIGA_SPI_BUF_SIZE;
-  bluegiga_spi.output_length  = BLUEGIGA_SPI_BUF_SIZE;
-  bluegiga_spi.slave_idx      = 0; // Not used for SPI-Slave: always NSS pin
-  bluegiga_spi.select         = SPISelectUnselect;
-  bluegiga_spi.cpol           = SPICpolIdleHigh;
-  bluegiga_spi.cpha           = SPICphaEdge2;
-  bluegiga_spi.dss            = SPIDss8bit;
-  bluegiga_spi.bitorder       = SPIMSBFirst;
-  bluegiga_spi.cdiv           = SPIDiv256;
-  bluegiga_spi.after_cb       = (SPICallback) trans_cb;
-
   // Configure generic link device
   p->device.periph            = (void *)(p);
   p->device.check_free_space  = (check_free_space_t) dev_check_free_space;
@@ -180,8 +173,8 @@ void bluegiga_init(struct bluegiga_periph *p)
   p->tx_insert_idx    = 0;
   p->tx_extract_idx   = 0;
 
-  memset(p->work_rx, 0, bluegiga_spi.input_length);
-  memset(p->work_tx, 0, bluegiga_spi.output_length);
+  memset(p->work_rx, 0, BLUEGIGA_SEND_BUF_SIZE);
+  memset(p->work_tx, 0, BLUEGIGA_SEND_BUF_SIZE);
 
   memset(broadcast_msg, 0, 19);
 
@@ -189,18 +182,36 @@ void bluegiga_init(struct bluegiga_periph *p)
   p->end_of_msg = p->tx_insert_idx;
   p->connected = 0;
 
+#ifdef BLUEGIGA_UART
+  uart_periph_init(uart_p);
+#elif defined(BLUEGIGA_SPI)
+    // configure the SPI bus
+  bluegiga_spi.input_buf      = p->work_rx;
+  bluegiga_spi.output_buf     = p->work_tx;
+  bluegiga_spi.input_length   = BLUEGIGA_SPI_BUF_SIZE;
+  bluegiga_spi.output_length  = BLUEGIGA_SPI_BUF_SIZE;
+  bluegiga_spi.slave_idx      = 0; // Not used for SPI-Slave: always NSS pin
+  bluegiga_spi.select         = SPISelectUnselect;
+  bluegiga_spi.cpol           = SPICpolIdleHigh;
+  bluegiga_spi.cpha           = SPICphaEdge2;
+  bluegiga_spi.dss            = SPIDss8bit;
+  bluegiga_spi.bitorder       = SPIMSBFirst;
+  bluegiga_spi.cdiv           = SPIDiv256;
+  bluegiga_spi.after_cb       = (SPICallback) trans_cb;
+
   // set DRDY interrupt pin for spi master triggered on falling edge
   gpio_setup_output(BLUEGIGA_DRDY_GPIO, BLUEGIGA_DRDY_GPIO_PIN);
   gpio_set(BLUEGIGA_DRDY_GPIO, BLUEGIGA_DRDY_GPIO_PIN);
+
+  // register spi slave read for transaction
+  spi_slave_register(&(BLUEGIGA_DL_PORT), &bluegiga_spi);
+#endif
 
   coms_status = BLUEGIGA_UNINIT;
 
 #if PERIODIC_TELEMETRY
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_BLUEGIGA, send_bluegiga);
 #endif
-
-  // register spi slave read for transaction
-  spi_slave_register(&(BLUEGIGA_SPI_DEV), &bluegiga_spi);
 }
 
 /* Add one byte to the end of tx circular buffer */
@@ -219,8 +230,8 @@ void bluegiga_load_tx(struct bluegiga_periph *p)
   uint8_t packet_len;
   // check data available in buffer to send
   packet_len = ((p->end_of_msg - p->tx_extract_idx + BLUEGIGA_BUFFER_SIZE) % BLUEGIGA_BUFFER_SIZE);
-  if (packet_len > 19) {
-    packet_len = 19;
+  if (packet_len > BLUEGIGA_MAX_MSG_LEN) {
+    packet_len = BLUEGIGA_MAX_MSG_LEN;
   }
 
   if (packet_len && coms_status == BLUEGIGA_IDLE) {
@@ -235,9 +246,13 @@ void bluegiga_load_tx(struct bluegiga_periph *p)
     bluegiga_increment_buf(&p->tx_extract_idx, packet_len);
 
     // clear unused bytes
-    for (i = packet_len + 1; i < BLUEGIGA_SPI_BUF_SIZE; i++) {
+    for (i = packet_len + 1; i < BLUEGIGA_SEND_BUF_SIZE; i++) {
       p->work_tx[i] = 0;
     }
+
+#ifdef BLUGIGA_UART
+    write_message();
+#endif
 
     coms_status = BLUEGIGA_SENDING;
   }
@@ -247,7 +262,7 @@ void bluegiga_load_tx(struct bluegiga_periph *p)
  *
  * TODO Remove use of bluegiga_p global in following function
  */
-void bluegiga_receive(struct spi_transaction *trans)
+void bluegiga_spi_read(struct spi_transaction *trans)
 {
   if (trans->status == SPITransSuccess) {
     // handle successful msg send
@@ -311,16 +326,12 @@ void bluegiga_receive(struct spi_transaction *trans)
             }
             a2a_msgs++;
           }
-
           read_offset = 3;
         }
     }
 
     // handle incoming datalink message
     if (packet_len > 0 && packet_len <= trans->input_length - read_offset) {
-//#ifdef MODEM_LED
-//      LED_TOGGLE(MODEM_LED);
-//#endif
       // Handle received message
       for (uint8_t i = 0; i < packet_len; i++) {
         bluegiga_p.rx_buf[(bluegiga_p.rx_insert_idx + i) % BLUEGIGA_BUFFER_SIZE] = trans->input_buf[i + read_offset];
@@ -333,7 +344,7 @@ void bluegiga_receive(struct spi_transaction *trans)
     bluegiga_load_tx(&bluegiga_p);
 
     // register spi slave read for next transaction
-    spi_slave_register(&(BLUEGIGA_SPI_DEV), trans);
+    spi_slave_register(&(BLUEGIGA_DL_PORT), trans);
   }
 }
 

@@ -1,5 +1,4 @@
-//
-// Bluegiga's Bluetooth Smart Demo Application
+//// Bluegiga's Bluetooth Smart Demo Application
 // Contact: support@bluegiga.com.
 //
 // This is free software distributed under the terms of the MIT license reproduced below.
@@ -23,25 +22,17 @@
 
 #include "stdma.h"
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
-#include <math.h>
-#include <errno.h>
-#include <sys/time.h>
-#include <time.h>    // time()
-#include <signal.h>
-
 #include "cmd_def.h"
 
 #include "generated/airframe.h"
 #include "subsystems/datalink/datalink.h"
 #include "mcu_periph/uart.h"
 #include "pprzlink/pprz_transport.h"
-//#include "pprzlink/messages.h"
 #include "mcu_periph/sys_time.h"
+#include "subsystems/abi.h"
+
+#include "state.h"
+#include "pprzlink/messages.h"
 
 struct link_device* dev = &(BLUEGIGA_UART.device);
 
@@ -50,6 +41,7 @@ uint8_t stdma_data_len = 0;
 bool stdma_initialised = false;
 
 struct pprz_transport stdma_trans;
+struct bluegiga_periph bluegiga_p;
 
 //#define DEBUG
 
@@ -58,8 +50,6 @@ struct pprz_transport stdma_trans;
 #else
 #define debug_print(...)
 #endif
-
-#define DEBUG_SEND
 
 // this needs to be defined for two wire uart not for USB
 // TODO generalize over usart/usb
@@ -112,6 +102,65 @@ const uint8_t PPRZ_POS_STX = 0;
 const uint8_t PPRZ_POS_LEN = 1;
 const uint8_t PPRZ_POS_SENDER_ID = 2;
 const uint8_t PPRZ_POS_MSG_ID = 3;
+
+// Functions for the generic link device device API
+static int dev_check_free_space(struct bluegiga_periph *p, long *fd __attribute__((unused)), uint16_t len)
+{
+  // check if there is enough space for message
+  // NB if BLUEGIGA_BUFFER_SIZE is smaller than 256 then an additional check is needed that len < BLUEGIGA_BUFFER_SIZE
+  if (len - 1 <= ((p->tx_extract_idx - p->tx_insert_idx - 1 + BLUEGIGA_BUFFER_SIZE) % BLUEGIGA_BUFFER_SIZE)) {
+    return true;
+  }
+  return false;
+}
+/* Add one byte to the end of tx circular buffer */
+static void bluegiga_transmit(struct bluegiga_periph *p, uint8_t data)
+{
+  long fd = 0;
+  if (dev_check_free_space(p, &fd, 1) && coms_status != BLUEGIGA_UNINIT) {
+    p->tx_buf[p->tx_insert_idx] = data;
+    bluegiga_increment_buf(&p->tx_insert_idx, 1);
+  }
+}
+static void dev_put_byte(struct bluegiga_periph *p, long fd __attribute__((unused)), uint8_t byte)
+{
+  bluegiga_transmit(p, byte);
+}
+static void dev_put_buffer(struct bluegiga_periph *p, long fd __attribute__((unused)), uint8_t *data, uint16_t len)
+{
+  int i;
+  for (i = 0; i < len; i++) {
+    dev_put_byte(p, 0, data[i]);
+  }
+}
+static void dev_send_message(struct bluegiga_periph *p, long fd __attribute__((unused)))
+{
+  p->end_of_msg = p->tx_insert_idx;
+  stdma_data_len = (p->end_of_msg - p->tx_extract_idx + BLUEGIGA_BUFFER_SIZE) % BLUEGIGA_BUFFER_SIZE;
+  for (uint8_t i = 0; i < stdma_data_len; i++){
+    stdma_data[i] = p->tx_buf[p->tx_extract_idx];
+    p->tx_extract_idx = (p->tx_extract_idx + 1) % BLUEGIGA_BUFFER_SIZE;
+  }
+}
+static int dev_char_available(struct bluegiga_periph *p)
+{
+  return (p->rx_insert_idx - p->rx_extract_idx + BLUEGIGA_BUFFER_SIZE) % BLUEGIGA_BUFFER_SIZE;
+  return (p->rx_extract_idx != p->rx_insert_idx);
+}
+/* safe increment of circular buffer */
+void bluegiga_increment_buf(uint8_t *buf_idx, uint8_t len)
+{
+  *buf_idx = (*buf_idx + len) % BLUEGIGA_BUFFER_SIZE;
+}
+// note, need to run dev_char_available first
+static uint8_t dev_get_byte(struct bluegiga_periph *p)
+{
+  uint8_t ret = p->rx_buf[p->rx_extract_idx];
+  bluegiga_increment_buf(&p->rx_extract_idx, 1);
+  return ret;
+}
+
+/***************************************************************************/
 
 static int cmp_addr(const uint8_t first[], const uint8_t second[])
 {
@@ -177,25 +226,25 @@ static void output(uint8_t len1, uint8_t *data1, uint16_t len2, uint8_t *data2)
     // If this happens, reset the coms
     //stdma_initialised = false;
     write_idx = read_idx = 0;
-    ready_to_send = 1;
+    coms_status = BLUEGIGA_IDLE;
     //ble_cmd_system_reset(0);
   }
 }
 
 void write_message(void){
   // check if we ahve a message to send
-  if (ready_to_send && (write_idx - read_idx + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE >= 4){
+  if (coms_status == BLUEGIGA_IDLE && (write_idx - read_idx + OUTPUT_BUFFER_SIZE) % OUTPUT_BUFFER_SIZE >= 4){
     uint8_t msg_len = output_buffer[(read_idx+1) % OUTPUT_BUFFER_SIZE] + 4; // message length is header + data (which is indicated by header[1]
     if(dev->check_free_space(dev->periph, 0, msg_len)){
-  #ifdef PACKET_MODE
+#ifdef PACKET_MODE
       // prefix total message length byte when in packet mode
       dev->put_byte(dev->periph, 0, msg_len);
-  #endif
+#endif
       for (uint8_t i = 0; i < msg_len; i++){
         dev->put_byte(dev->periph, 0, output_buffer[read_idx]);
         read_idx = (read_idx + 1) % OUTPUT_BUFFER_SIZE;
       }
-      ready_to_send = 0;
+      coms_status = BLUEGIGA_SENDING;
     }
   }
 }
@@ -248,35 +297,19 @@ void read_message(void)
 void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg)
 {
   // check if sender is likely a bluegiga module or dongle
-  if (cmp_addr(msg->sender.addr, MAC_ADDR) < 3) { return; }
+  if (msg->data.len < STDMA_ADV_HEADER_LEN || cmp_addr(msg->sender.addr, MAC_ADDR) < 3) { return; }
 
   // store stdma slot, offset and timeout
   // response data is [header, offset, timeout, data]
   uint8_t temp = (stdma_current_slot + msg->data.data[POS_ADV_STDMA_OFFSET]) % STDMA_SLOTS;       // next reserved slot
 
   if (temp != stdma_my_next_slot && msg->data.data[POS_ADV_STDMA_TIMEOUT] > stdma_next_slot_timeout[temp]) {
-    stdma_next_slot_timeout[temp]  = msg->data.data[POS_ADV_STDMA_TIMEOUT];
+    stdma_next_slot_timeout[temp] = msg->data.data[POS_ADV_STDMA_TIMEOUT];
   }
 
+  // forward message contained in advertisement to pprzlink
   uint8_t data[128];
   memcpy(data, msg->data.data + STDMA_ADV_HEADER_LEN, msg->data.len - STDMA_ADV_HEADER_LEN);
-
-  // Compose RSSI message for pprzlink
-  // todo: replace with pprzlink functions
-  // msg form {header, length, ac_id, msg_id, [msg], crc_a, crc_b}
-  // rssi message is [rssi, trans_strength}
-  uint8_t rssi_msg[8] = {PPRZ_STX, 8, data[PPRZ_POS_SENDER_ID], 28, msg->rssi, msg->data.data[POS_ADV_TX_STRENGTH], 0, 0};
-  
-  uint8_t j = 0, ck_a = 0, ck_b = 0;
-  for(j = 1; j < 6; j++){
-    ck_a += rssi_msg[j];
-    ck_b += ck_a;
-  }
-  
-  rssi_msg[6] = ck_a;
-  rssi_msg[7] = ck_b;
-
-  memcpy(data + msg->data.len - STDMA_ADV_HEADER_LEN, rssi_msg, 8);
 
 #ifdef DEBUG
   debug_print("recv'd data: ");
@@ -295,6 +328,9 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
     DlCheckAndParse(&DOWNLINK_DEVICE.device, &stdma_trans.trans_tx, stdma_trans.trans_rx.payload);
     stdma_trans.trans_rx.msg_received = false;
   }
+
+  // Process RSSI
+  AbiSendMsgRSSI(RSSI_BLUEGIGA_ID, data[PPRZ_POS_SENDER_ID], data[POS_ADV_TX_STRENGTH], msg->rssi);
 }
 
 void ble_evt_connection_status(const struct ble_msg_connection_status_evt_t __attribute__((unused)) *msg) {}
@@ -306,7 +342,7 @@ void ble_evt_attclient_attribute_value(const struct ble_msg_attclient_attribute_
 
 void ble_evt_system_protocol_error(const struct ble_msg_system_protocol_error_evt_t __attribute__((unused)) *msg)
 {
-  ready_to_send = 1;
+  coms_status = BLUEGIGA_IDLE;
 }
 
 /* set_stdma_data - set output
@@ -328,6 +364,23 @@ void stdma_init(void){
 
   // Reset dongle to get it into known state
   ble_cmd_system_reset(0);
+
+  // Configure generic link device
+  bluegiga_p.device.periph            = (void *)(&bluegiga_p);
+  bluegiga_p.device.check_free_space  = (check_free_space_t) dev_check_free_space;
+  bluegiga_p.device.put_byte          = (put_byte_t) dev_put_byte;
+  bluegiga_p.device.put_buffer        = (put_buffer_t) dev_put_buffer;
+  bluegiga_p.device.send_message      = (send_message_t) dev_send_message;
+  bluegiga_p.device.char_available    = (char_available_t) dev_char_available;
+  bluegiga_p.device.get_byte          = (get_byte_t) dev_get_byte;
+
+  // initialize peripheral variables
+  bluegiga_p.rx_insert_idx    = 0;
+  bluegiga_p.rx_extract_idx   = 0;
+  bluegiga_p.tx_insert_idx    = 0;
+  bluegiga_p.tx_extract_idx   = 0;
+
+  coms_status = BLUEGIGA_UNINIT;
 }
 
 static void stdma_start(void)
@@ -374,7 +427,7 @@ static void stdma_start(void)
   // 0x07: All three channels are used
   // 0x03: Advertisement channels 37 and 38 are used.
   // 0x04: Only advertisement channel 39 is used
-  ble_cmd_gap_set_adv_parameters(0x20, 0x28, 0x07);
+  ble_cmd_gap_set_adv_parameters(0x20, 0x2D, 0x07);
 
   // set scan parameters interval/window/use active scanning
   // the scan interval defines the period between restarting a scan, each new scan will switch to a new channel
@@ -405,10 +458,17 @@ static void stdma_start(void)
  */
 void ble_evt_system_boot(const struct ble_msg_system_boot_evt_t __attribute__((unused)) *msg)
 {
-  ready_to_send = 1;
+  coms_status = BLUEGIGA_IDLE;
   // start stdma after receiving boot signal from dongle
   stdma_start();
 }
+
+/* Function to convert cartesian coordinates to polar */
+static void cart2polar(float x, float y, float *radius, float *radians)
+{
+  *radius  = sqrt(pow(x,2) + pow(y,2));
+  *radians = atan2(y,x);
+};
 
 /* stdma_periodic() - staged new advertise message to be set as advertisement
  *
@@ -422,6 +482,24 @@ void stdma_periodic(void){
     memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_data, stdma_data_len);
     stdma_data_len = 0;
   }
+
+  // TEST
+    // Convert Course to the proper format (NED)
+    float spd, crs;
+    cart2polar(stateGetSpeedEnu_f()->y, stateGetSpeedEnu_f()->x, &spd, &crs); // Get the total speed and course
+    NormRadAngle(crs);                                // Wrap to 2 Pi since the sent result is unsigned
+
+    int32_t course = (int32_t)(crs*(1e7)); // Typecast crs into a int32_t type integer with proper unit (see gps.course in gps.h)
+    uint32_t multiplex_speed = (((uint32_t)(floor(DeciDegOfRad(course) / 1e7) / 2)) & 0x7FF) <<
+                            21;                     // bits 31-21 course (where the magnitude is pointed at)
+    multiplex_speed |= (((uint32_t)(spd*100)) & 0x7FF) << 10;         // bits 20-10 speed in cm/s
+    multiplex_speed |= (((uint32_t)(-gps.ned_vel.z)) & 0x3FF);        // bits 9-0 z velocity in cm/s
+
+    // int16_t alt = (int16_t)(gps.hmsl / 10);            // height in cm
+    int16_t alt = (int16_t)(stateGetPositionEnu_f()->z*100.0);
+
+    // Message through USB bluetooth dongle to other drones
+    DOWNLINK_SEND_GPS_SMALL(stdma_trans, bluegiga_p, &multiplex_speed, &gps.lla_pos.lat, &gps.lla_pos.lon, &alt);
 
   static uint8_t skip = 0;
   int8_t i = 0;
@@ -495,12 +573,6 @@ void stdma_periodic(void){
       if (stdma_my_slot > stdma_current_slot){
         skip = 1;
       }
-
-#ifdef DEBUG_SEND
-      adv_data_len = STDMA_SLOTS;
-      memcpy(adv_data + STDMA_ADV_HEADER_LEN, stdma_slot_timeout, STDMA_SLOTS);
-      //memcpy(adv_data + STDMA_ADV_HEADER_LEN + STDMA_SLOTS, stdma_slot_status, STDMA_SLOTS);
-#endif
 
       adv_data[POS_ADV_LEN] = adv_data_len + STDMA_ADV_DATA_HEADER_LEN;
       ble_cmd_gap_set_adv_data(0, STDMA_ADV_HEADER_LEN + adv_data_len, adv_data);          // Set advertisement data

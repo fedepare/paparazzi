@@ -2,6 +2,7 @@
 #define STDMA_H_
 
 #include "stdint.h"
+#include "subsystems/datalink/bluegiga.h"
 
 extern void stdma_init(void);
 extern void stdma_periodic(void);

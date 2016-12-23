@@ -25,6 +25,8 @@
  *
  *
  ****************************************************************************/
+#include "subsystems/datalink/bluegiga.h"
+extern enum BlueGigaStatus coms_status;
 
 #include "apitypes.h"
 #ifdef __cplusplus

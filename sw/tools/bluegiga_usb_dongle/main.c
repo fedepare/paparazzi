@@ -977,7 +977,7 @@ int main(int argc, char *argv[])
 
     if (strcmp(argv[CLARG_ACTION], "scan") == 0) {
       action = action_scan;
-      connect_all = 1;
+      connect_all = 0;
     } else if (strcmp(argv[CLARG_ACTION], "info") == 0) {
       action = action_info;
     } else if (strcmp(argv[CLARG_ACTION], "broadcast") == 0 || strcmp(argv[CLARG_ACTION], "broadcast_connect") == 0) {
