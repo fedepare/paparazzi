@@ -328,13 +328,16 @@ void ble_evt_gap_scan_response(const struct ble_msg_gap_scan_response_evt_t *msg
     parse_pprz(&stdma_trans, data[i]);
   }
   if (stdma_trans.trans_rx.msg_received){
+    for (uint8_t i = 0; i < stdma_trans.trans_rx.payload_len; i++) {
+      dl_buffer[i] = stdma_trans.trans_rx.payload[i];
+    }
     dl_msg_available = true;
-    DlCheckAndParse(&DOWNLINK_DEVICE.device, &stdma_trans.trans_tx, stdma_trans.trans_rx.payload);
+    DlCheckAndParse(&DOWNLINK_DEVICE.device, &stdma_trans.trans_tx, dl_buffer);
     stdma_trans.trans_rx.msg_received = false;
   }
 
   // Process RSSI
-  AbiSendMsgRSSI(RSSI_BLUEGIGA_ID, msg->data.data[PPRZ_POS_SENDER_ID], msg->data.data[POS_ADV_TX_STRENGTH], msg->rssi);
+  AbiSendMsgRSSI(RSSI_BLUEGIGA_ID, data[PPRZ_POS_SENDER_ID], msg->data.data[POS_ADV_TX_STRENGTH], msg->rssi);
 }
 
 void ble_evt_connection_status(const struct ble_msg_connection_status_evt_t __attribute__((unused)) *msg) {}
