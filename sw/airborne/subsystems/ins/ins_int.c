@@ -391,16 +391,27 @@ void ins_int_update_gps(struct GpsState *gps_s)
   ned_of_ecef_vect_i(&gps_speed_cm_s_ned, &ins_int.ltp_def, &gps_s->ecef_vel);
 
 #if INS_USE_GPS_ALT
-  if (gps_s->fix > GPS_FIX_DGPS) {
+#if USE_GPS_ACC4R
+  if ((float) gps.pacc / 100. < INS_VFF_R_GPS / 8.) {
     vff_update_z_conf(((float)gps_pos_cm_ned.z) / 100.0, INS_VFF_R_GPS / 8.);
-  } else if (gps_s->fix > GPS_FIX_3D) {
-    vff_update_z_conf(((float)gps_pos_cm_ned.z) / 100.0, INS_VFF_R_GPS / 2.);
-  } else  {
-    vff_update_z_conf(((float)gps_pos_cm_ned.z) / 100.0, INS_VFF_R_GPS);
+  } else {
+    vff_update_z_conf(((float)gps_pos_cm_ned.z) / 100.0, (float) gps.pacc / 100.);
   }
+#else
+  vff_update_z_conf(((float)gps_pos_cm_ned.z) / 100.0, INS_VFF_R_GPS);
 #endif
+#endif
+
 #if INS_USE_GPS_ALT_SPEED
+#if USE_GPS_ACC4R
+  if ((float) gps.sacc / 100. < INS_VFF_VZ_R_GPS / 8.) {
+    vff_update_vz_conf(((float)gps_speed_cm_s_ned.z) / 100.0, INS_VFF_VZ_R_GPS / 8.);
+  } else {
+    vff_update_vz_conf(((float)gps_speed_cm_s_ned.z) / 100.0, (float) gps.sacc / 100.);
+  }
+#else
   vff_update_vz_conf(((float)gps_speed_cm_s_ned.z) / 100.0, INS_VFF_VZ_R_GPS);
+#endif
 #endif
 
 #if USE_HFF

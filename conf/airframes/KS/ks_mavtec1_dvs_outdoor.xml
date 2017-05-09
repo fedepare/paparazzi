@@ -15,6 +15,7 @@
       <configure name="FLASH_MODE" value="SWD" />
 
       <define name="REMAP_UART3" value="TRUE"/>
+      <define name="USE_GPS_ACC4R" value="TRUE"/>
       <!-- MPU6000 is configured to output data at 2kHz, but polled at 512Hz PERIODIC_FREQUENCY -->
     </target>
 
@@ -33,10 +34,13 @@
       <define name="USE_PIKSI_EXT_ANTENNA" value="TRUE"/>
     </module>
     <module name="stabilization" type="int_quat"/>
-    <module name="ahrs"          type="int_cmpl_quat">
-      <define name="AHRS_GRAVITY_HEURISTIC_FACTOR" value="0"/>
+    <module name="ahrs"          type="int_cmpl_quat"/>
+    <module name="ins"           type="hff">
+      <define name="HFF_R_POS" value="2."/>
+      <define name="HFF_R_POS_MIN" value="0.1"/>
+      <define name="HFF_R_SPEED" value="2."/>
+      <define name="HFF_R_SPEED_MIN" value="0.1"/>
     </module>
-    <module name="ins"           type="hff"/>
     <!--module name="guidance"      type="indi"/-->
     <module name="uart">
       <define name="USE_UART3"/>
@@ -127,6 +131,7 @@
     <define name="H_X" value="0.3770441"/>
     <define name="H_Y" value="0.0193986"/>
     <define name="H_Z" value="0.9259921"/>
+    <define name="GRAVITY_HEURISTIC_FACTOR" value="0"/>
     <define name="USE_GPS_HEADING" value="0"/>
   </section>
 
