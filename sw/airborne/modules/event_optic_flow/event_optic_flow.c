@@ -152,7 +152,7 @@ bool irLedSwitch = IR_LEDS_SWITCH;
 static const uint8_t EVENT_SEPARATOR = 255;
 static const float UART_INT16_TO_FLOAT = 10.0f;
 //static const float LENS_DISTANCE_TO_CENTER = 0.13f; // approximate distance of lens focal length to center of OptiTrack markers
-static const uint32_t EVENT_BYTE_SIZE = 13; // +1 for separator
+static const uint16_t EVENT_BYTE_SIZE = 13; // +1 for separator
 //static const float inactivityDecayFactor = 0.8f;
 static const float power = 1;
 //static const float LANDING_THRUST_FRACTION = 0.95f; //TODO find MAVTEC value
@@ -443,23 +443,20 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
 
   *N = 0;
   // Now scan across received data and extract events
-  // Scan until read pointer is one byte behind ith the write pointer
   static bool synchronized = false;
-  while(uart_char_available(&DVS_PORT) > (int32_t) EVENT_BYTE_SIZE
-      && *N < 500) {
+  while(uart_char_available(&DVS_PORT) >= EVENT_BYTE_SIZE && *N < 500) {
     // Timestamp syncing at first event reception, by generating artificial event rate
     if (!eofState.caerInputReceived) {
       if (uart_getch(&DVS_PORT) == EVENT_SEPARATOR) {
         eofState.caerInputReceived = TRUE;
-        *N = 10;
         returnStatus = UPDATE_WARNING_RATE;
       }
     } else {
       if (synchronized) {
         // Next set of bytes contains a new event
-        struct flowEvent e;
-        uint8_t separator;
-        int16_t x,y,u,v;
+        static struct flowEvent e;
+        static uint8_t separator;
+        static int16_t x,y,u,v;
         x = uartGetInt16(&DVS_PORT);
         y = uartGetInt16(&DVS_PORT);
         e.t = uartGetInt32(&DVS_PORT);
@@ -468,7 +465,7 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
         separator = uart_getch(&DVS_PORT);
         if (separator == EVENT_SEPARATOR) {
           // Full event received - we can process this further
-          //TODO add timestamp checking - reject events that are outdated
+          // TODO add timestamp checking - reject events that are outdated
 
           // Extract floating point position and velocity
           e.x = (float) x / UART_INT16_TO_FLOAT;
@@ -478,17 +475,12 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
 
           flowStatsUpdate(s, e, eofState.ratesMA, enableDerotation, dvs128Intrinsics);
           returnStatus = UPDATE_STATS;
-          //        if (!eofState.caerInputReceived) {
-          //          eofState.caerInputReceived = TRUE;
-          //        }
           (*N)++;
-        }
-        else {
+        } else {
           // we are apparently out of sync - do not process event
           synchronized = false;
         }
-      }
-      else {
+      } else {
         // (Re)synchronize at next separator
         if (uart_getch(&DVS_PORT) == EVENT_SEPARATOR) {
           synchronized = true;

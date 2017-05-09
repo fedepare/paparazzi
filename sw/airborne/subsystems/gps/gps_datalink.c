@@ -110,7 +110,7 @@ static void parse_gps_datalink_small(int16_t heading, uint32_t pos_xyz, uint32_t
 
   gps_datalink.num_sv = 7;
   gps_datalink.tow = tow;
-  gps_datalink.fix = GPS_FIX_3D; // set 3D fix to true
+  gps_datalink.fix = GPS_FIX_RTK; // set 3D fix to true
 
   // set gps msg time
   gps_datalink.last_msg_ticks = sys_time.nb_sec_rem;
@@ -159,7 +159,7 @@ static void parse_gps_datalink(uint8_t numsv, int32_t ecef_x, int32_t ecef_y, in
 
   gps_datalink.num_sv = numsv;
   gps_datalink.tow = tow;
-  gps_datalink.fix = GPS_FIX_3D;
+  gps_datalink.fix = GPS_FIX_RTK;
 
   // set gps msg time
   gps_datalink.last_msg_ticks = sys_time.nb_sec_rem;

@@ -32,6 +32,10 @@
       <call_once fun="NavKillThrottle()"/>
       <while cond="!GpsFixValid()"/>
     </block>
+    <block name="Geo init">
+      <while cond="LessThan(NavBlockTime(), 10)"/>
+      <call_once fun="NavSetGroundReferenceHere()"/>
+    </block>
     <block name="Holding point">
       <call_once fun="NavKillThrottle()"/>
       <attitude pitch="0" roll="0" throttle="0" until="FALSE" vmode="throttle"/>
@@ -42,6 +46,7 @@
     </block>
     <block name="Takeoff" strip_button="Takeoff" strip_icon="takeoff.png">
       <exception cond="stateGetPositionEnu_f()->z > 1.0" deroute="Standby"/>
+      <call_once fun="NavSetWaypointHere(WP_STDBY)"/>
       <call_once fun="NavSetWaypointHere(WP_CLIMB)"/>
       <stay climb="nav_climb_vspeed" vmode="climb" wp="CLIMB"/>
     </block>
@@ -53,29 +58,6 @@
     </block>
     <block name="StayGoal">
       <stay wp="GOAL"/>
-    </block>
-    <block name="stay_p1">
-      <stay wp="p1"/>
-    </block>
-    <block name="go_p2">
-      <call_once fun="nav_set_heading_deg(90)"/>
-      <go wp="p2"/>
-      <deroute block="stay_p1"/>
-    </block>
-    <block name="line_p1_p2">
-      <go from="p1" hmode="route" wp="p2"/>
-      <stay until="stage_time>10" wp="p2"/>
-      <go from="p2" hmode="route" wp="p1"/>
-      <deroute block="stay_p1"/>
-    </block>
-    <block name="route">
-      <go from="p1" hmode="route" wp="p3"/>
-      <go from="p3" hmode="route" wp="p4"/>
-      <go from="p4" hmode="route" wp="p1"/>
-      <deroute block="stay_p1"/>
-    </block>
-    <block name="Oval">
-      <oval p1="p1" p2="p2" radius="-1"/>
     </block>
     <block name="land here" strip_button="Land Here" strip_icon="land-right.png">
       <call_once fun="NavSetWaypointHere(WP_TD)"/>
