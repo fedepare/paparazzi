@@ -55,25 +55,25 @@
 #endif
 PRINT_CONFIG_VAR(EOF_ENABLE_DEROTATION)
 
-#ifndef EOF_FILTER_TIME_CONSTANT
-#define EOF_FILTER_TIME_CONSTANT 0.02f
+#ifndef EOF_FILTER_TIME_CONST
+#define EOF_FILTER_TIME_CONST 0.02f
 #endif
-PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONSTANT)
+PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONST)
+
+#ifndef EOF_FILTER_RETENTION_TIME_CONST
+#define EOF_FILTER_RETENTION_TIME_CONST 0.02f
+#endif
+PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 
 #ifndef EOF_INLIER_MAX_DIFF
 #define EOF_INLIER_MAX_DIFF 0.3f
 #endif
 PRINT_CONFIG_VAR(EOF_INLIER_MAX_DIFF)
 
-#ifndef EOF_DEROTATION_MOVING_AVERAGE_FACTOR
-#define EOF_DEROTATION_MOVING_AVERAGE_FACTOR 1.0f
+#ifndef EOF_DEROTATION_MOVING_AVERAGE_TIME_CONST
+#define EOF_DEROTATION_MOVING_AVERAGE_TIME_CONST 0.01f
 #endif
-PRINT_CONFIG_VAR(EOF_DEROTATION_MOVING_AVERAGE_FACTOR)
-
-#ifndef EOF_MIN_EVENT_RATE
-#define EOF_MIN_EVENT_RATE 0.01f
-#endif
-PRINT_CONFIG_VAR(EOF_MIN_EVENT_RATE)
+PRINT_CONFIG_VAR(EOF_DEROTATION_MOVING_AVERAGE_TIME_CONST)
 
 #ifndef EOF_MIN_POSITION_VARIANCE
 #define EOF_MIN_POSITION_VARIANCE 600.0f
@@ -128,13 +128,13 @@ struct module_state eofState;
 
 // Sensing parameters
 uint8_t enableDerotation = EOF_ENABLE_DEROTATION;
-float filterTimeConstant = EOF_FILTER_TIME_CONSTANT;
+float filterTimeConstant = EOF_FILTER_TIME_CONST;
+float kfTimeConst = EOF_FILTER_RETENTION_TIME_CONST;
 float inlierMaxDiff = EOF_INLIER_MAX_DIFF;
-float derotationMovingAverageFactor = EOF_DEROTATION_MOVING_AVERAGE_FACTOR;
+float derotationMovingAverageTimeConst = EOF_DEROTATION_MOVING_AVERAGE_TIME_CONST;
 
 // Confidence thresholds
 float minPosVariance = EOF_MIN_POSITION_VARIANCE;
-float minEventRate = EOF_MIN_EVENT_RATE;
 float minR2 = EOF_MIN_R2;
 
 // Control parameters
@@ -147,17 +147,11 @@ uint8_t divergenceControlUseVision = EOF_DIVERGENCE_CONTROL_USE_VISION;
 bool irLedSwitch = IR_LEDS_SWITCH;
 
 // Constants
-//static const int32_t MAX_NUMBER_OF_UART_EVENTS = 100;
-//static const float MOVING_AVERAGE_MIN_WINDOW = 5.0f;
 static const uint8_t EVENT_SEPARATOR = 255;
 static const float UART_INT16_TO_FLOAT = 10.0f;
 //static const float LENS_DISTANCE_TO_CENTER = 0.13f; // approximate distance of lens focal length to center of OptiTrack markers
 static const uint16_t EVENT_BYTE_SIZE = 13; // +1 for separator
-//static const float inactivityDecayFactor = 0.8f;
 static const float power = 1;
-//static const float LANDING_THRUST_FRACTION = 0.95f; //TODO find MAVTEC value
-//static const float CONTROL_CONFIDENCE_LIMIT = 0.2f;
-//static const float CONTROL_CONFIDENCE_MAX_DT = 0.2f;
 
 // SWITCH THIS ON TO ENABLE CONTROL THROTTLE
 //static const bool ASSIGN_CONTROL = false; //TODO Strange, had to rename this to make code compatible with optical_flow_landing
@@ -171,12 +165,11 @@ static const struct cameraIntrinsicParameters dvs128Intrinsics = {
 };
 
 // Internal function declarations (definitions below)
-enum updateStatus processUARTInput(struct flowStats* s, int32_t* N);
+enum updateStatus processUARTInput(struct flowStats* s, int32_t *N, float filterFactor, float kfFactor);
 static void sendFlowFieldState(struct transport_tx *trans, struct link_device *dev);
 int16_t uartGetInt16(struct uart_periph *p);
 int32_t uartGetInt32(struct uart_periph *p);
 void divergenceControlReset(void);
-
 
 /*************************
  * MAIN SENSING FUNCTIONS *
@@ -208,14 +201,6 @@ void event_optic_flow_start(void) {
 
 void event_optic_flow_periodic(void) {
   struct FloatRates *rates = stateGetBodyRates_f();
-  // Moving average filtering of body rates
-  eofState.ratesMA.p += (rates->p - eofState.ratesMA.p) * derotationMovingAverageFactor;
-  eofState.ratesMA.q += (rates->q - eofState.ratesMA.q) * derotationMovingAverageFactor;
-  eofState.ratesMA.r += (rates->r - eofState.ratesMA.r) * derotationMovingAverageFactor;
-
-  // Obtain UART data if available
-  eofState.NNew = 0;
-  enum updateStatus status = processUARTInput(&eofState.stats, &eofState.NNew);
 
   // Timing bookkeeping, do this after the most uncertain computations,
   // but before operations where timing info is necessary
@@ -223,21 +208,23 @@ void event_optic_flow_periodic(void) {
   float dt = currentTime - eofState.lastTime;
   eofState.moduleFrequency = 1.0f/dt;
   eofState.lastTime = currentTime;
-  eofState.stats.eventRate = (float) eofState.NNew / dt;
-  float filterFactor = dt/filterTimeConstant;
-  if (filterFactor < 0.01f) {
-    filterFactor = 0.01f; // always perform a minimal update
-  }
-  if (filterFactor > 1.0f) {
-    filterFactor = 1.0f;
-  }
 
-  if (status == UPDATE_STATS) {
-    // If new events are received, recompute flow field
-    // In case the flow field is ill-posed, do not update
-    status = recomputeFlowField(&eofState.field, &eofState.stats,filterFactor,
-        inlierMaxDiff, minEventRate, minPosVariance, minR2, power, dvs128Intrinsics);
-  }
+  // Moving average filtering of body rates
+  eofState.ratesMA.p += (rates->p - eofState.ratesMA.p) * dt/derotationMovingAverageTimeConst;
+  eofState.ratesMA.q += (rates->q - eofState.ratesMA.q) * dt/derotationMovingAverageTimeConst;
+  eofState.ratesMA.r += (rates->r - eofState.ratesMA.r) * dt/derotationMovingAverageTimeConst;
+
+  float filterFactor = dt/filterTimeConstant;
+  Bound(filterFactor, 0.01, 1.);
+
+  float kfFactor = dt/kfTimeConst;
+  Bound(filterFactor, 0.01, 1.);
+
+  // Obtain UART data if available
+  eofState.NNew = 0;
+  enum updateStatus status = processUARTInput(&eofState.stats, &eofState.NNew, filterFactor, kfFactor);
+
+  eofState.stats.eventRate = (float) eofState.NNew / dt;
 
   // If no update has been performed, decay flow field parameters towards zero
   if (status != UPDATE_SUCCESS) {
@@ -247,7 +234,6 @@ void event_optic_flow_periodic(void) {
     // Assign timestamp to last update
     eofState.field.t = currentTime;
     // Allow controller to update
-//    eofState.divergenceUpdated = true;
     uint32_t now_ts = get_sys_time_usec();
     AbiSendMsgOPTICAL_FLOW(OPTICFLOW_SENDER_ID, now_ts,
         0,//FIXME only divergence is sent now
@@ -260,18 +246,6 @@ void event_optic_flow_periodic(void) {
   }
   // Set  status globally
   eofState.status = status;
-
-  // Reset sums for next iteration
-  int32_t i;
-  float retainFactor = 1.0f - filterFactor;
-  for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
-    eofState.stats.sumS [i] *= retainFactor;
-    eofState.stats.sumSS[i] *= retainFactor;
-    eofState.stats.sumV [i] *= retainFactor;
-    eofState.stats.sumVV[i] *= retainFactor;
-    eofState.stats.sumSV[i] *= retainFactor;
-    eofState.stats.N[i] *= retainFactor;
-  }
 
   //TODO get rid of wx/wyDerotated correctly; they are no longer necessary
   eofState.field.wxDerotated = eofState.field.wx;
@@ -299,7 +273,6 @@ void event_optic_flow_periodic(void) {
 
   // Set hover control signals (not used for now)
   if (EOF_CONTROL_HOVER) {
-
     // Assuming a perfectly aligned downward facing camera,
     // the camera X-axis is opposite to the body Y-axis
     // and the Y-axis is aligned to its X-axis
@@ -312,112 +285,11 @@ void event_optic_flow_periodic(void) {
     // Update control state
     AbiSendMsgVELOCITY_ESTIMATE(1, timestamp, vxB, vyB, vzB, 0);
   }
-
-  // TEST CONTROLLER MAINLOOP
-  //guidance_v_module_run(true);
 }
 
 void event_optic_flow_stop(void) {
   //TODO is now present as dummy, may be removed if not required
 }
-
-/*******************************
- * VERTICAL GUIDANCE FUNCTIONS *
- *******************************/
-/*
-void UNUSED_guidance_v_module_init() {
-  //TODO is this part necessary?
-  divergenceControlReset();
-  eofState.nominalThrottleEnter = guidance_v_nominal_throttle * MAX_PPRZ;
-  eofState.controlThrottleLast = eofState.nominalThrottleEnter; // set to nominal
-}
-
-void UNUSED_guidance_v_module_enter() {
-  divergenceControlReset();
-}
-
-void UNUSED_guidance_v_module_run(bool in_flight) {
-  if (!in_flight) {
-    // When not flying and in mode module:
-    // Reset state
-    divergenceControlReset();
-  }
-  else {
-
-     // UPDATE
-
-    if (divergenceControlUseVision) {
-      // Use latest divergence estimate
-      if (eofState.divergenceUpdated) {
-        eofState.divergenceControlLast = eofState.field.D;
-        eofState.divergenceUpdated = false;
-      }
-      else {
-        // after re-entering the module, the divergence should be equal to the set point:
-        if (eofState.controlReset) {
-          eofState.divergenceControlLast = divergenceControlSetpoint;
-          int32_t nominal_throttle = eofState.nominalThrottleEnter;
-          if (ASSIGN_CONTROL) {
-            stabilization_cmd[COMMAND_THRUST] = nominal_throttle;
-          }
-          eofState.controlReset = false;
-          eofState.controlThrottleLast = nominal_throttle;
-        }
-        // else: do nothing
-        return;
-      }
-    }
-    else {
-      // Use ground truth divergence
-      // Update height/ground truth speeds from Optitrack
-      struct NedCoor_f *pos = stateGetPositionNed_f();
-      struct NedCoor_f *vel = stateGetSpeedNed_f();
-      float DTruth = -vel->z / (pos->z - 0.01);
-      float deltaD = DTruth-eofState.divergenceControlLast;
-      // Cap update rate to prevent outliers
-      Bound(deltaD, -inlierMaxDiff, inlierMaxDiff);
-      eofState.divergenceControlLast += deltaD;
-      eofState.DTruth = eofState.divergenceControlLast;
-    }
-
-    // Cap divergence in case of unreliable values
-    float divergenceLimit = 1.5;
-    Bound(eofState.divergenceControlLast, -divergenceLimit, divergenceLimit);
-
-    // CONTROL
-
-    int32_t nominalThrottle = eofState.nominalThrottleEnter;
-
-    // landing indicates whether the drone is already performing a final landing procedure (flare):
-    //    if (!eofState.landing) {
-    // use the divergence for control:
-    float err = divergenceControlSetpoint - eofState.divergenceControlLast;
-    // Negative P-gain - positive control yields negative increase in div
-    int32_t thrust = nominalThrottle - divergenceControlGainP * err * MAX_PPRZ;
-
-    //        if (eofState.z_NED > -divergenceControlHeightLimit) {
-    //        // land by setting 90% nominal thrust:
-    //          eofState.landing = true;
-    //          thrust = LANDING_THRUST_FRACTION * nominalThrottle;
-    //        }
-    // bound thrust:
-    Bound(thrust, 0.2 * MAX_PPRZ, MAX_PPRZ);
-    if (ASSIGN_CONTROL){
-      stabilization_cmd[COMMAND_THRUST] = thrust;
-    }
-    eofState.controlThrottleLast = thrust;
-
-//    } else {
-//      // land with constant fraction of nominal thrust:
-//      int32_t thrust = LANDING_THRUST_FRACTION * nominalThrottle;
-//      Bound(thrust, 0.6 * nominalThrottle, 0.8 * MAX_PPRZ);
-//      if (ASSIGN_CONTROL) {
-//        stabilization_cmd[COMMAND_THRUST] = thrust;
-//      }
-//      eofState.controlThrottleLast = thrust;
-//    }
-  }
-}*/
 
 /***********************
  * SUPPORTING FUNCTIONS
@@ -438,7 +310,7 @@ int32_t uartGetInt32(struct uart_periph *p) {
   return out;
 }
 
-enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
+enum updateStatus processUARTInput(struct flowStats* s, int32_t *N, float filterFactor, float kfFactor) {
   enum updateStatus returnStatus = UPDATE_NONE;
 
   *N = 0;
@@ -476,6 +348,9 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
           flowStatsUpdate(s, e, eofState.ratesMA, enableDerotation, dvs128Intrinsics);
           returnStatus = UPDATE_STATS;
           (*N)++;
+
+          returnStatus = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor, kfFactor,
+              inlierMaxDiff, minPosVariance, minR2, power, dvs128Intrinsics);
         } else {
           // we are apparently out of sync - do not process event
           synchronized = false;
@@ -501,7 +376,6 @@ static void sendFlowFieldState(struct transport_tx *trans, struct link_device *d
   float D  = eofState.field.D;
   float p = eofState.ratesMA.p;
   float q = eofState.ratesMA.q;
-  //float q = eofState.divergenceControlLast;
   float wxTruth = eofState.wxTruth;
   float wyTruth = eofState.wyTruth;
   float DTruth = eofState.DTruth;
