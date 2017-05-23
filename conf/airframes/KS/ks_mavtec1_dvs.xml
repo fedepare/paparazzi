@@ -92,7 +92,7 @@
   </command_laws>
 
   <section name="MISC">
-    <define name="NAV_CLIMB_VSPEED" value="2.5"/>
+    <define name="NAV_CLIMB_VSPEED" value="1.5"/>
     <define name="NAV_DESCEND_VSPEED" value="-1.0"/>
     <define name="NO_RC_THRUST_LIMIT" value="FALSE"/>
   </section>
@@ -226,8 +226,8 @@
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-    <define name="HOVER_KP"    value="150"/>
-    <define name="HOVER_KD"    value="80"/>
+    <define name="HOVER_KP"    value="300"/>
+    <define name="HOVER_KD"    value="150"/>
     <define name="HOVER_KI"    value="0"/>
     <define name="NOMINAL_HOVER_THROTTLE" value="0.6"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="TRUE"/>
@@ -236,7 +236,7 @@
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <define name="MAX_BANK" value="35" unit="deg"/>
     <define name="USE_SPEED_REF" value="TRUE"/>
-    <define name="PGAIN" value="100"/>
+    <define name="PGAIN" value="150"/>
     <define name="DGAIN" value="150"/>
     <define name="AGAIN" value="70"/>
     <define name="IGAIN" value="10"/>
@@ -244,7 +244,7 @@
 
   <section name="AUTOPILOT">
     <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
-    <define name="MODE_AUTO1"  value="AP_MODE_HOVER_Z_HOLD"/>
+    <define name="MODE_AUTO1"  value="AP_MODE_NAV"/>
     <define name="MODE_AUTO2"  value="AP_MODE_MODULE"/>
   </section>
 

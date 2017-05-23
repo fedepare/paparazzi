@@ -117,6 +117,8 @@ struct RigidBody {
   struct LlaCoor_d lla_pos;         ///< Actually LLA position
   double heading;                   ///< Actually transmitted heading
   uint32_t tow;                     ///< Actually transmitted tow
+  
+  float latency;                    ///< Estiamted latency of measurement
 };
 struct RigidBody rigidBodies[MAX_RIGIDBODIES];    ///< All rigid bodies which are tracked
 
@@ -139,8 +141,10 @@ struct UdpSocket natnet_data, natnet_cmd;
 struct LtpDef_d tracking_ltp;       ///< The tracking system LTP definition
 double tracking_offset_angle;       ///< The offset from the tracking system to the North in degrees
 
-/** Save the latency from natnet */
-float natnet_latency;
+/** Save the timestamp from natnet */
+float natnet_timestamp;
+
+bool rigig_bTrackingValid;
 
 /** Parse the packet from NatNet */
 void natnet_parse(unsigned char *in)
@@ -316,7 +320,7 @@ void natnet_parse(unsigned char *in)
       if (((natnet_major == 2) && (natnet_minor >= 6)) || (natnet_major > 2) || (natnet_major == 0)) {
         // params
         short params = 0; memcpy(&params, ptr, 2); ptr += 2;
-//           bool bTrackingValid = params & 0x01; // 0x01 : rigid body was successfully tracked in this frame
+        rigig_bTrackingValid = params & 0x01; // 0x01 : rigid body was successfully tracked in this frame
       }
     } // next rigid body
 
@@ -455,8 +459,12 @@ void natnet_parse(unsigned char *in)
     }
 
     // Latency
-    natnet_latency = 0.0f; memcpy(&natnet_latency, ptr, 4); ptr += 4;
-    printf_natnet("latency : %3.3f\n", natnet_latency);
+    float latency = 0.0f; memcpy(&latency, ptr, 4); ptr += 4;
+    printf_natnet("latency : %3.3f\n", latency);
+    
+    for (j = 0; j < nRigidBodies; j++) {
+      rigidBodies[j].latency = latency;
+    }
 
     // Timecode
     unsigned int timecode = 0;  memcpy(&timecode, ptr, 4);  ptr += 4;
@@ -473,6 +481,9 @@ void natnet_parse(unsigned char *in)
       memcpy(&fTemp, ptr, 4); ptr += 4;
       timestamp = (double)fTemp;
     }
+    printf_natnet("timestamp : %f\n", timestamp);
+    if(rigig_bTrackingValid)
+      natnet_timestamp = timestamp;
 
     // frame params
     short params = 0;  memcpy(&params, ptr, 2); ptr += 2;
@@ -508,7 +519,7 @@ gboolean timeout_transmit_callback(gpointer data)
     // When we don't track anymore and timeout or start tracking
     if (rigidBodies[i].nSamples < 1
         && aircrafts[rigidBodies[i].id].connected
-        && (natnet_latency - aircrafts[rigidBodies[i].id].lastSample) > CONNECTION_TIMEOUT) {
+        && (natnet_timestamp - aircrafts[rigidBodies[i].id].lastSample) > CONNECTION_TIMEOUT) {
       aircrafts[rigidBodies[i].id].connected = FALSE;
       fprintf(stderr, "#error Lost tracking rigid id %d, aircraft id %d.\n",
               rigidBodies[i].id, aircrafts[rigidBodies[i].id].ac_id);
@@ -524,7 +535,7 @@ gboolean timeout_transmit_callback(gpointer data)
 
     // Update the last tracked
     aircrafts[rigidBodies[i].id].connected = TRUE;
-    aircrafts[rigidBodies[i].id].lastSample = natnet_latency;
+    aircrafts[rigidBodies[i].id].lastSample = natnet_timestamp;
 
     // Defines to make easy use of paparazzi math
     struct DoubleQuat orient;
@@ -570,9 +581,9 @@ gboolean timeout_transmit_callback(gpointer data)
                      tracking_offset_angle; //the optitrack axes are 90 degrees rotated wrt ENU
     NormRadAngle(rigidBodies[i].heading);
 
-    printf_debug("[%d -> %d]Samples: %d\t%d\t\tTiming: %3.3f latency\n", rigidBodies[i].id,
+    printf_debug("[%d -> %d]Samples: %d\t%d\t\tTiming: %3.3f\n", rigidBodies[i].id,
                  aircrafts[rigidBodies[i].id].ac_id
-                 , rigidBodies[i].nSamples, rigidBodies[i].nVelocitySamples, natnet_latency);
+                 , rigidBodies[i].nSamples, rigidBodies[i].nVelocitySamples, natnet_timestamp);
     printf_debug("    Heading: %f\t\tPosition: %f\t%f\t%f\t\tVelocity: %f\t%f\t%f\n", DegOfRad(rigidBodies[i].heading),
                  rigidBodies[i].x, rigidBodies[i].y, rigidBodies[i].z,
                  rigidBodies[i].ecef_vel.x, rigidBodies[i].ecef_vel.y, rigidBodies[i].ecef_vel.z);
@@ -599,20 +610,21 @@ gboolean timeout_transmit_callback(gpointer data)
       } else {
         struct timeval cur_time;
         gettimeofday(&cur_time, NULL);
-        fprintf(fp, "%d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+        fprintf(fp, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
                 aircrafts[rigidBodies[i].id].ac_id,
-                rigidBodies[i].nMarkers,                          //uint8 Number of markers (sv_num)
+                rigidBodies[i].nMarkers,                           //uint8 Number of markers (sv_num)
                 (int)(rigidBodies[i].pos.x * 1000.0),              //int32 ECEF X in CM
                 (int)(rigidBodies[i].pos.y * 1000.0),              //int32 ECEF Y in CM
                 (int)(rigidBodies[i].pos.z * 1000.0),              //int32 ECEF Z in CM
                 (int)(rigidBodies[i].speed.x * 1000.0),            //int32 ECEF speed X in CM
                 (int)(rigidBodies[i].speed.y * 1000.0),            //int32 ECEF speed Y in CM
                 (int)(rigidBodies[i].speed.z * 1000.0),            //int32 ECEF speed Z in CM
-                (int)(orient_eulers.phi*10000000.0),              //int32 Roll angle in rad*1e7
-                (int)(orient_eulers.theta*10000000.0),            //int32 Pitch angle in rad*1e7
-                (int)(-orient_eulers.psi*10000000.0),             //int32 Yaw angle in rad*1e7
-                (int)cur_time.tv_sec,                             //int32 Time in seconds
-                (int)cur_time.tv_usec);                           //int32 Time decimal part in microseconds
+                (int)(orient_eulers.phi*10000000.0),               //int32 Roll angle in rad*1e7
+                (int)(orient_eulers.theta*10000000.0),             //int32 Pitch angle in rad*1e7
+                (int)(-orient_eulers.psi*10000000.0),              //int32 Yaw angle in rad*1e7
+                (int)cur_time.tv_sec,                              //int32 Time in seconds
+                (int)cur_time.tv_usec,                             //int32 Time decimal part in microseconds
+                (int)(rigidBodies[i].latency * 1000));             //int32 Latency of measurement in microseconds
       }
     }
 

@@ -255,7 +255,7 @@ let output_vmode = fun stage_xml wp last_wp ->
               if wp = ""
               then failwith "alt or waypoint required in alt vmode"
               else sprintf "WaypointAlt(%s)" wp in
-        lprintf "NavVerticalAltitudeMode(%s, 0.);\n" alt;
+        lprintf "NavVerticalAltitudeMode(%s, stateGetPositionEnu_f()->z);\n" alt;
       | "xyz" -> () (** Handled in Goto3D() *)
       | "glide" ->
         lprintf "NavGlide(%s, %s);\n" last_wp wp
