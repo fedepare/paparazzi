@@ -75,6 +75,11 @@ PRINT_CONFIG_VAR(EOF_INLIER_MAX_DIFF)
 #endif
 PRINT_CONFIG_VAR(EOF_DEROTATION_MOVING_AVERAGE_TIME_CONST)
 
+#ifndef EOF_MIN_EVENT_RATE
+#define EOF_MIN_EVENT_RATE 0.01f
+#endif
+PRINT_CONFIG_VAR(EOF_MIN_EVENT_RATE)
+
 #ifndef EOF_MIN_POSITION_VARIANCE
 #define EOF_MIN_POSITION_VARIANCE 600.0f
 #endif
@@ -135,6 +140,7 @@ float derotationMovingAverageTimeConst = EOF_DEROTATION_MOVING_AVERAGE_TIME_CONS
 
 // Confidence thresholds
 float minPosVariance = EOF_MIN_POSITION_VARIANCE;
+float minEventRate = EOF_MIN_EVENT_RATE;
 float minR2 = EOF_MIN_R2;
 
 // Control parameters
@@ -200,8 +206,6 @@ void event_optic_flow_start(void) {
 }
 
 void event_optic_flow_periodic(void) {
-  struct FloatRates *rates = stateGetBodyRates_f();
-
   // Timing bookkeeping, do this after the most uncertain computations,
   // but before operations where timing info is necessary
   float currentTime = get_sys_time_float();
@@ -209,6 +213,7 @@ void event_optic_flow_periodic(void) {
   eofState.moduleFrequency = 1.0f/dt;
   eofState.lastTime = currentTime;
 
+  struct FloatRates *rates = stateGetBodyRates_f();
   // Moving average filtering of body rates
   eofState.ratesMA.p += (rates->p - eofState.ratesMA.p) * dt/derotationMovingAverageTimeConst;
   eofState.ratesMA.q += (rates->q - eofState.ratesMA.q) * dt/derotationMovingAverageTimeConst;
@@ -222,9 +227,16 @@ void event_optic_flow_periodic(void) {
 
   // Obtain UART data if available
   eofState.NNew = 0;
-  enum updateStatus status = processUARTInput(&eofState.stats, &eofState.NNew, filterFactor, kfFactor);
+  enum updateStatus status = processUARTInput(&eofState.stats, &eofState.NNew);
 
   eofState.stats.eventRate = (float) eofState.NNew / dt;
+
+  if (status == UPDATE_STATS) {
+    // If new events are received, recompute flow field
+    // In case the flow field is ill-posed, do not update
+    status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor, kfFactor,
+              inlierMaxDiff, minEventRate, minPosVariance, minR2, power, dvs128Intrinsics);
+  }
 
   // If no update has been performed, decay flow field parameters towards zero
   if (status != UPDATE_SUCCESS) {
@@ -310,7 +322,7 @@ int32_t uartGetInt32(struct uart_periph *p) {
   return out;
 }
 
-enum updateStatus processUARTInput(struct flowStats* s, int32_t *N, float filterFactor, float kfFactor) {
+enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
   enum updateStatus returnStatus = UPDATE_NONE;
 
   *N = 0;
@@ -348,9 +360,6 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N, float filter
           flowStatsUpdate(s, e, eofState.ratesMA, enableDerotation, dvs128Intrinsics);
           returnStatus = UPDATE_STATS;
           (*N)++;
-
-          returnStatus = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor, kfFactor,
-              inlierMaxDiff, minPosVariance, minR2, power, dvs128Intrinsics);
         } else {
           // we are apparently out of sync - do not process event
           synchronized = false;

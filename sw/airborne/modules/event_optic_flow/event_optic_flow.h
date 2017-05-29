@@ -70,6 +70,7 @@ extern float filterTimeConstant;
 extern float inlierMaxDiff;
 extern float derotationMovingAverageTimeConst;
 extern float minPosVariance;
+extern float minEventRate;
 extern float minR2;
 extern bool irLedSwitch;
 extern float divergenceControlGainP;

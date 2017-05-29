@@ -67,7 +67,7 @@ void flowStatsUpdate(struct flowStats* s, struct flowEvent e, struct FloatRates 
 }
 
 enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* s,
-    float filterFactor, float kfFactor, float inlierMaxDiff, float minPosVariance,
+    float filterFactor, float kfFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
     float minR2, float power, struct cameraIntrinsicParameters intrinsics) {
 
   // Define persistant variables
@@ -82,6 +82,12 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
   float sumW = 0;
   uint32_t nValidDirections = 0;
 
+  // Compute rate confidence value
+  float c_rate = 1;
+  if (s->eventRate < minEventRate) {
+    c_rate *= s->eventRate / minEventRate;//powf(s->eventRate / minEventRate, power);
+  }
+
   // Loop over all directions and collect total flow field information
   for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
     // Skip if too few new events were added along this direction
@@ -94,13 +100,9 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
 
     // Obtain mean statistics
     float meanS  = s->sumS [i] / s->N[i];
-    float meanSS = s->sumSS[i] / s->N[i];
-    float meanV  = s->sumV [i] / s->N[i];
-    float meanVV = s->sumVV[i] / s->N[i];
-    float meanSV = s->sumSV[i] / s->N[i];
 
     // Compute position variances and confidence values from mean statistics
-    varS[i] = (meanSS - meanS * meanS) * intrinsics.focalLengthX * intrinsics.focalLengthX;
+    varS[i] = (s->sumSS[i] / s->N[i] - meanS * meanS) * intrinsics.focalLengthX * intrinsics.focalLengthX;
     c_var[i] = 1;
     if (varS[i] < minPosVariance) {
       //c_var[i] *= powf(varS[i] / minPosVariance, power);
@@ -111,17 +113,17 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
     float W = s->N[i] * c_var[i];
 
     // Fill in matrix entries (A is used as upper triangular matrix)
-    A[0][0] += W * cos(s->angles[i]) * cos(s->angles[i]);
-    A[1][1] += W * sin(s->angles[i]) * sin(s->angles[i]);
-    A[2][2] += W * meanSS;
-    A[0][1] += W * cos(s->angles[i]) * sin(s->angles[i]);
-    A[0][2] += W * cos(s->angles[i]) * meanS;
-    A[1][2] += W * sin(s->angles[i]) * meanS;
-    Y[0] += W * cos(s->angles[i]) * meanV;
-    Y[1] += W * sin(s->angles[i]) * meanV;
-    Y[2] += W * meanSV;
-    sumV += W * meanV;
-    sumVV += W * meanVV;
+    A[0][0] += W * cosf(s->angles[i]) * cosf(s->angles[i]);
+    A[1][1] += W * sinf(s->angles[i]) * sinf(s->angles[i]);
+    A[2][2] += W * s->sumSS[i];
+    A[0][1] += W * cosf(s->angles[i]) * sinf(s->angles[i]);
+    A[0][2] += W * cosf(s->angles[i]) * s->sumS[i];
+    A[1][2] += W * sinf(s->angles[i]) * s->sumS[i];
+    Y[0] += W * cosf(s->angles[i]) * s->sumV[i];
+    Y[1] += W * sinf(s->angles[i]) * s->sumV[i];
+    Y[2] += W * s->sumSV[i];
+    sumV += W * s->sumV[i];
+    sumVV += W * s->sumVV[i];
     sumW += W;
     nValidDirections++;
   }
@@ -164,7 +166,7 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
     }
   }
 
-  float c_total = c_var_max * c_R2 * filterFactor;
+  float c_total = c_rate * c_var_max * c_R2 * filterFactor;
   lowPassFilterWithThreshold(&field->wx,p[0],c_total,inlierMaxDiff);
   lowPassFilterWithThreshold(&field->wy,p[1],c_total,inlierMaxDiff);
   lowPassFilterWithThreshold(&field->D,p[2],c_total,inlierMaxDiff);
