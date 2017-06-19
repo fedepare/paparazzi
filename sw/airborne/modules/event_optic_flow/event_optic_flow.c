@@ -134,14 +134,14 @@ static const float power = 1;
 
 // Camera intrinsic parameters
 static const struct cameraIntrinsicParameters dvs128Intrinsics = {
-    .principalPointX = 76.70f,
-    .principalPointY = 56.93f,
-    .focalLengthX = 115.0f,
-    .focalLengthY = 115.0f
+  .principalPointX = 76.70f,
+  .principalPointY = 56.93f,
+  .focalLengthX = 115.0f,
+  .focalLengthY = 115.0f
 };
 
 // Internal function declarations (definitions below)
-enum updateStatus processUARTInput(struct flowStats* s, int32_t *N);
+enum updateStatus processUARTInput(struct flowStats *s, int32_t *N);
 static void sendFlowFieldState(struct transport_tx *trans, struct link_device *dev);
 int16_t uartGetInt16(struct uart_periph *p);
 int32_t uartGetInt32(struct uart_periph *p);
@@ -150,12 +150,14 @@ void divergenceControlReset(void);
 /*************************
  * MAIN SENSING FUNCTIONS *
  *************************/
-void event_optic_flow_init(void) {
+void event_optic_flow_init(void)
+{
   register_periodic_telemetry(DefaultPeriodic,
-      PPRZ_MSG_ID_EVENT_OPTIC_FLOW_EST, sendFlowFieldState);
+                              PPRZ_MSG_ID_EVENT_OPTIC_FLOW_EST, sendFlowFieldState);
 }
 
-void event_optic_flow_start(void) {
+void event_optic_flow_start(void)
+{
   // Timing
   eofState.lastTime = get_sys_time_float();
   // Reset low pass filter for rates
@@ -168,30 +170,31 @@ void event_optic_flow_start(void) {
   eofState.wxTruth = 0.0f;
   eofState.wyTruth = 0.0f;
   eofState.DTruth = 0.0f;
-  struct flowField field = {0., 0., 0., 0., 0., 0.,0};
+  struct flowField field = {0., 0., 0., 0., 0., 0., 0};
   eofState.field = field;
   flowStatsInit(&eofState.stats);
   eofState.NNew = 0;
 }
 
-void event_optic_flow_periodic(void) {
+void event_optic_flow_periodic(void)
+{
   // Timing bookkeeping, do this after the most uncertain computations,
   // but before operations where timing info is necessary
   float currentTime = get_sys_time_float();
   float dt = currentTime - eofState.lastTime;
-  eofState.moduleFrequency = 1.0f/dt;
+  eofState.moduleFrequency = 1.0f / dt;
   eofState.lastTime = currentTime;
 
   struct FloatRates *rates = stateGetBodyRates_f();
   // Moving average filtering of body rates
-  eofState.ratesMA.p += (rates->p - eofState.ratesMA.p) * dt/derotationMovingAverageTimeConst;
-  eofState.ratesMA.q += (rates->q - eofState.ratesMA.q) * dt/derotationMovingAverageTimeConst;
-  eofState.ratesMA.r += (rates->r - eofState.ratesMA.r) * dt/derotationMovingAverageTimeConst;
+  eofState.ratesMA.p += (rates->p - eofState.ratesMA.p) * dt / derotationMovingAverageTimeConst;
+  eofState.ratesMA.q += (rates->q - eofState.ratesMA.q) * dt / derotationMovingAverageTimeConst;
+  eofState.ratesMA.r += (rates->r - eofState.ratesMA.r) * dt / derotationMovingAverageTimeConst;
 
-  float filterFactor = dt/filterTimeConstant;
+  float filterFactor = dt / filterTimeConstant;
   Bound(filterFactor, 0., 1.);
 
-  float kfFactor = 1 - dt/kfTimeConst;
+  float kfFactor = 1 - dt / kfTimeConst;
   Bound(kfFactor, 0., 1.);
 
   static uint16_t i;
@@ -210,8 +213,8 @@ void event_optic_flow_periodic(void) {
   enum updateStatus status = processUARTInput(&eofState.stats, &eofState.NNew);
 
   eofState.stats.eventRate = 0;
-  if (dt > 0){
-    for (i = 0; i < N_FIELD_DIRECTIONS; i++){
+  if (dt > 0) {
+    for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
       eofState.stats.eventRate += eofState.stats.N[i];
     }
     eofState.stats.eventRate /= kfTimeConst;
@@ -222,26 +225,25 @@ void event_optic_flow_periodic(void) {
     // If new events are received, recompute flow field
     // In case the flow field is ill-posed, do not update
     status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
-              inlierMaxDiff, minEventRate, minPosVariance, minR2, power, dvs128Intrinsics);
+                                inlierMaxDiff, minEventRate, minPosVariance, minR2, power, dvs128Intrinsics);
   }
 
   // If no update has been performed, decay flow field parameters towards zero
   if (status != UPDATE_SUCCESS) {
     eofState.field.confidence = 0;
-  }
-  else {
+  } else {
     // Assign timestamp to last update
     eofState.field.t = currentTime;
     // Allow controller to update
     uint32_t now_ts = get_sys_time_usec();
     AbiSendMsgOPTICAL_FLOW(OPTICFLOW_SENDER_ID, now_ts,
-        0,//FIXME only divergence is sent now
-        0,
-        0,
-        0,
-        0,
-        -eofState.field.D,  // control divergence in strange axis system
-        0.0);
+                           0,//FIXME only divergence is sent now
+                           0,
+                           0,
+                           0,
+                           0,
+                           -eofState.field.D,  // control divergence in strange axis system
+                           0.0);
   }
   // Set  status globally
   eofState.status = status;
@@ -266,8 +268,8 @@ void event_optic_flow_periodic(void) {
   velB.z = rot->m[2][0] * vel->x + rot->m[2][1] * vel->y + rot->m[2][2] * vel->z;
   float R = -pos->z/(cosf(ang->theta)*cosf(ang->phi));*/
 
-  eofState.wxTruth = (vel->y*cosf(ang->psi) -vel->x*sinf(ang->psi)) / (pos->z - 0.01);
-  eofState.wyTruth = (vel->x*cosf(ang->psi) +vel->y*sinf(ang->psi)) / (pos->z - 0.01);
+  eofState.wxTruth = (vel->y * cosf(ang->psi) - vel->x * sinf(ang->psi)) / (pos->z - 0.01);
+  eofState.wyTruth = (vel->x * cosf(ang->psi) + vel->y * sinf(ang->psi)) / (pos->z - 0.01);
   eofState.DTruth = -vel->z / (pos->z - 0.01);
 
   // Set hover control signals (not used for now)
@@ -286,21 +288,24 @@ void event_optic_flow_periodic(void) {
   }
 }
 
-void event_optic_flow_stop(void) {
+void event_optic_flow_stop(void)
+{
   //TODO is now present as dummy, may be removed if not required
 }
 
 /***********************
  * SUPPORTING FUNCTIONS
  ***********************/
-int16_t uartGetInt16(struct uart_periph *p) {
+int16_t uartGetInt16(struct uart_periph *p)
+{
   int16_t out = 0;
   out |= uart_getch(p);
   out |= uart_getch(p) << 8;
   return out;
 }
 
-int32_t uartGetInt32(struct uart_periph *p) {
+int32_t uartGetInt32(struct uart_periph *p)
+{
   int32_t out = 0;
   out |= uart_getch(p);
   out |= uart_getch(p) << 8;
@@ -309,19 +314,20 @@ int32_t uartGetInt32(struct uart_periph *p) {
   return out;
 }
 
-enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
+enum updateStatus processUARTInput(struct flowStats *s, int32_t *N)
+{
   enum updateStatus returnStatus = UPDATE_NONE;
 
   *N = 0;
   // Now scan across received data and extract events
   static bool synchronized = false;
-  while(uart_char_available(&DVS_PORT) >= EVENT_BYTE_SIZE && *N < 500) {
+  while (uart_char_available(&DVS_PORT) >= EVENT_BYTE_SIZE && *N < 500) {
     // Timestamp syncing at first event reception, by generating artificial event rate
     if (synchronized) {
       // Next set of bytes contains a new event
       static struct flowEvent e;
       static uint8_t separator;
-      static int16_t x,y,u,v;
+      static int16_t x, y, u, v;
       x = uartGetInt16(&DVS_PORT);
       y = uartGetInt16(&DVS_PORT);
       e.t = uartGetInt32(&DVS_PORT);
@@ -355,7 +361,8 @@ enum updateStatus processUARTInput(struct flowStats* s, int32_t *N) {
   return returnStatus;
 }
 
-static void sendFlowFieldState(struct transport_tx *trans, struct link_device *dev) {
+static void sendFlowFieldState(struct transport_tx *trans, struct link_device *dev)
+{
   float fps = eofState.moduleFrequency;
   uint8_t status = (uint8_t) eofState.status;
   float confidence = eofState.field.confidence;
@@ -373,11 +380,12 @@ static void sendFlowFieldState(struct transport_tx *trans, struct link_device *d
   uint8_t controlMode = eofState.landing;
 
   pprz_msg_send_EVENT_OPTIC_FLOW_EST(trans, dev, AC_ID,
-      &fps, &status, &confidence, &eventRate, &nNew, &wx, &wy, &D, &p, &q,
-      &wxTruth,&wyTruth,&DTruth,&controlThrottle,&controlMode);
+                                     &fps, &status, &confidence, &eventRate, &nNew, &wx, &wy, &D, &p, &q,
+                                     &wxTruth, &wyTruth, &DTruth, &controlThrottle, &controlMode);
 }
 
-void divergenceControlReset(void) {
+void divergenceControlReset(void)
+{
   eofState.controlReset = true;
   eofState.landing = false;
   eofState.divergenceUpdated = false;

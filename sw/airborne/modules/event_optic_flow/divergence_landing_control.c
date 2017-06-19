@@ -15,7 +15,8 @@
 
 #include <time.h>
 
-void divergence_control_init(struct divergenceControlState *DCState) {
+void divergence_control_init(struct divergenceControlState *DCState)
+{
   divergence_control_reset(DCState);
   DCState->landing_thrust_fraction = 0.9f;
   DCState->lp_factor = 0.95;
@@ -24,7 +25,8 @@ void divergence_control_init(struct divergenceControlState *DCState) {
   DCState->divergence_setpoint = 0.0f;
 }
 
-void divergence_control_reset(struct divergenceControlState *DCState) {
+void divergence_control_reset(struct divergenceControlState *DCState)
+{
   DCState->agl = 0.0f;
   DCState->agl_landing_limit = 0.5f;
   DCState->agl_lp = 0.0f;
@@ -35,12 +37,14 @@ void divergence_control_reset(struct divergenceControlState *DCState) {
   DCState->reset = true;
 }
 
-extern void divergence_control_update_setpoint(struct divergenceControlState *DCState, float DNew) {
+extern void divergence_control_update_setpoint(struct divergenceControlState *DCState, float DNew)
+{
   DCState->divergence_measured = DNew;
   DCState->divergence_new = true;
 }
 
-void divergence_control_run(bool in_flight, struct divergenceControlState *DCState){
+void divergence_control_run(bool in_flight, struct divergenceControlState *DCState)
+{
   float lp_height; // low-pass height
 
   // ensure dt >= 0
@@ -62,8 +66,7 @@ void divergence_control_run(bool in_flight, struct divergenceControlState *DCSta
     // When not flying and in mode module:
     // Reset state
     divergence_control_reset(state);
-  }
-  else {
+  } else {
 
     /***************
      * MEASUREMENT
@@ -102,24 +105,23 @@ void divergence_control_run(bool in_flight, struct divergenceControlState *DCSta
 //      }
 //    }
 //    else {
-      // USE REAL VISION OUTPUTS:
-      if (DCState->divergence_new && dt > 1E-5) {
-        DCState->divergence = DCState->divergence_measured;
-        DCState->divergence_new = false;
+    // USE REAL VISION OUTPUTS:
+    if (DCState->divergence_new && dt > 1E-5) {
+      DCState->divergence = DCState->divergence_measured;
+      DCState->divergence_new = false;
+      dt = 0.0f;
+    } else {
+      // after re-entering the module, the divergence should be equal to the set point:
+      if (DCState->reset) {
+        DCState->divergence = DCState->divergence_setpoint;
         dt = 0.0f;
+        int32_t nominal_throttle = DCState->nominal_thrust * MAX_PPRZ;
+        stabilization_cmd[COMMAND_THRUST] = nominal_throttle;
+        DCState->reset = false;
       }
-      else {
-        // after re-entering the module, the divergence should be equal to the set point:
-        if (DCState->reset) {
-          DCState->divergence = DCState->divergence_setpoint;
-          dt = 0.0f;
-          int32_t nominal_throttle = DCState->nominal_thrust * MAX_PPRZ;
-          stabilization_cmd[COMMAND_THRUST] = nominal_throttle;
-          DCState->reset = false;
-        }
-        // else: do nothing, let dt increment
-        return;
-      }
+      // else: do nothing, let dt increment
+      return;
+    }
 //    }
 
     /***********
@@ -130,20 +132,20 @@ void divergence_control_run(bool in_flight, struct divergenceControlState *DCSta
 
     // landing indicates whether the drone is already performing a final landing procedure (flare):
     if (!landing) {
-        // use the divergence for control:
-        float err = DCState->divergence_setpoint - DCState->divergence;
-        int32_t thrust = nominal_throttle + DCState->pgain * err * MAX_PPRZ;
+      // use the divergence for control:
+      float err = DCState->divergence_setpoint - DCState->divergence;
+      int32_t thrust = nominal_throttle + DCState->pgain * err * MAX_PPRZ;
 
-        // bound thrust:
-        Bound(thrust, 0.8 * nominal_throttle, 0.75 * MAX_PPRZ);
-        normalized_thrust = (float)(thrust / (MAX_PPRZ / 100));
+      // bound thrust:
+      Bound(thrust, 0.8 * nominal_throttle, 0.75 * MAX_PPRZ);
+      normalized_thrust = (float)(thrust / (MAX_PPRZ / 100));
 
-        if (DCState->agl_lp < 1.0) {
+      if (DCState->agl_lp < 1.0) {
         // land by setting 90% nominal thrust:
-          landing = 1;
-          thrust = DCState->landing_thrust_fraction * nominal_throttle;
-        }
-        stabilization_cmd[COMMAND_THRUST] = thrust;
+        landing = 1;
+        thrust = DCState->landing_thrust_fraction * nominal_throttle;
+      }
+      stabilization_cmd[COMMAND_THRUST] = thrust;
     } else {
       // land with constant fraction of nominal thrust:
       int32_t thrust = DCState->landing_thrust_fraction * nominal_throttle;

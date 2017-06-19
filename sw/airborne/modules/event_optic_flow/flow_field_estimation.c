@@ -12,7 +12,8 @@ float DET_MIN_RESOLUTION = 1e-2;
 
 void lowPassFilterWithThreshold(float *val, float new, float factor, float limit);
 
-void flowStatsInit(struct flowStats *s) {
+void flowStatsInit(struct flowStats *s)
+{
   s->eventRate = 0;
   int32_t i;
   for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
@@ -22,61 +23,63 @@ void flowStatsInit(struct flowStats *s) {
     s->sumVV[i] = 0;
     s->sumSV[i] = 0;
     s->N[i] = 0;
-    s->angles[i] = ((float) i)/N_FIELD_DIRECTIONS*M_PI;
+    s->angles[i] = ((float) i) / N_FIELD_DIRECTIONS * M_PI;
     s->cos_angles[i] = cosf(s->angles[i]);
     s->sin_angles[i] = sinf(s->angles[i]);
   }
 }
 
-void flowStatsUpdate(struct flowStats* s, struct flowEvent e, struct FloatRates rates,
-    bool enableDerotation, struct cameraIntrinsicParameters intrinsics) {
+void flowStatsUpdate(struct flowStats *s, struct flowEvent e, struct FloatRates rates,
+                     bool enableDerotation, struct cameraIntrinsicParameters intrinsics)
+{
   // X,Y are defined around the camera's principal point
-    float x = (e.x - intrinsics.principalPointX)/intrinsics.focalLengthX;
-    float y = (e.y - intrinsics.principalPointY)/intrinsics.focalLengthY;
-    float u = e.u/intrinsics.focalLengthX;
-    float v = e.v/intrinsics.focalLengthY;
+  float x = (e.x - intrinsics.principalPointX) / intrinsics.focalLengthX;
+  float y = (e.y - intrinsics.principalPointY) / intrinsics.focalLengthY;
+  float u = e.u / intrinsics.focalLengthX;
+  float v = e.v / intrinsics.focalLengthY;
 
-    // Find direction/index of flow
-    float alpha = atan2f(v,u);
-    alpha += M_PI / (2 * N_FIELD_DIRECTIONS);
-    if (alpha < 0) {
-      alpha += M_PI;
-    }
-    if (alpha >= M_PI) {
-      alpha -= M_PI;
-    }
-    int32_t a = (int32_t) (N_FIELD_DIRECTIONS*alpha/M_PI);
+  // Find direction/index of flow
+  float alpha = atan2f(v, u);
+  alpha += M_PI / (2 * N_FIELD_DIRECTIONS);
+  while (alpha < 0) {
+    alpha += M_PI;
+  }
+  while (alpha >= M_PI) {
+    alpha -= M_PI;
+  }
+  int32_t a = (int32_t)(N_FIELD_DIRECTIONS * alpha / M_PI);
 
-    // Transform flow to direction reference frame
-    float S = x * s->cos_angles[a] + y * s->sin_angles[a];
-    float V = u * s->cos_angles[a] + v * s->sin_angles[a];
+  // Transform flow to direction reference frame
+  float S = x * s->cos_angles[a] + y * s->sin_angles[a];
+  float V = u * s->cos_angles[a] + v * s->sin_angles[a];
 
-    // Derotation in direction of flow field
-    if (enableDerotation) {
-      V -= s->cos_angles[a] *(rates.p - y*rates.r - x*y*rates.q + x*x*rates.p)
-          - s->sin_angles[a] *(rates.q - x*rates.r - x*y*rates.p + y*y*rates.q);
-    }
+  // Derotation in direction of flow field
+  if (enableDerotation) {
+    V -= s->cos_angles[a] * (rates.p - y * rates.r - x * y * rates.q + x * x * rates.p)
+         - s->sin_angles[a] * (rates.q - x * rates.r - x * y * rates.p + y * y * rates.q);
+  }
 
-    // Update flow field statistics
-    s->sumS [a] += S;
-    s->sumSS[a] += S*S;
-    s->sumV [a] += V;
-    s->sumVV[a] += V*V;
-    s->sumSV[a] += S*V;
-    s->N[a] += 1;
+  // Update flow field statistics
+  s->sumS [a] += S;
+  s->sumSS[a] += S * S;
+  s->sumV [a] += V;
+  s->sumVV[a] += V * V;
+  s->sumSV[a] += S * V;
+  s->N[a]++;
 }
 
-enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* s,
-    float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
-    float minR2, float power, struct cameraIntrinsicParameters intrinsics) {
+enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s,
+                                     float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
+                                     float minR2, float power, struct cameraIntrinsicParameters intrinsics)
+{
 
   // Define persistant variables
   static uint32_t i;
   static float varS[N_FIELD_DIRECTIONS];
   static float c_var[N_FIELD_DIRECTIONS];
 
-  float A[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-  float Y[3] = {0,0,0};
+  float A[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+  float Y[3] = {0, 0, 0};
   float sumV = 0;
   float sumVV = 0;
   float sumN = 0;
@@ -131,10 +134,10 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
 
   // Compute determinant
   float det = A[0][0] * A[1][1] * A[2][2]
-      + 2*A[0][1] * A[0][2] * A[1][2]
-      - A[0][0] * A[1][2] * A[1][2]
-      - A[1][1] * A[0][2] * A[0][2]
-      - A[2][2] * A[0][1] * A[0][1];
+              + 2 * A[0][1] * A[0][2] * A[1][2]
+              - A[0][0] * A[1][2] * A[1][2]
+              - A[1][1] * A[0][2] * A[0][2]
+              - A[2][2] * A[0][1] * A[0][1];
 
   if (nValidDirections < 2 || fabsf(det) < DET_MIN_RESOLUTION) {
     return UPDATE_WARNING_SINGULAR;
@@ -142,13 +145,13 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
 
   // Compute matrix inverse solution
   float p[3];
-  p[0] = (A[0][2]*Y[1]*A[1][2] - Y[0]*A[1][2]*A[1][2] - A[0][1]*Y[1]*A[2][2] + A[0][1]*A[1][2]*Y[2] - A[0][2]*A[1][1]*Y[2] + Y[0]*A[1][1]*A[2][2])/det;
-  p[1] = (Y[0]*A[0][2]*A[1][2] - Y[1]*A[0][2]*A[0][2] + A[0][1]*A[0][2]*Y[2] - Y[0]*A[0][1]*A[2][2] + A[0][0]*Y[1]*A[2][2] - A[0][0]*A[1][2]*Y[2])/det;
-  p[2] = (A[0][1]*A[0][2]*Y[1] - Y[2]*A[0][1]*A[0][1] + Y[0]*A[0][1]*A[1][2] - Y[0]*A[0][2]*A[1][1] - A[0][0]*Y[1]*A[1][2] + A[0][0]*A[1][1]*Y[2])/det;
+  p[0] = (A[0][2] * Y[1] * A[1][2] - Y[0] * A[1][2] * A[1][2] - A[0][1] * Y[1] * A[2][2] + A[0][1] * A[1][2] * Y[2] - A[0][2] * A[1][1] * Y[2] + Y[0] * A[1][1] * A[2][2]) / det;
+  p[1] = (Y[0] * A[0][2] * A[1][2] - Y[1] * A[0][2] * A[0][2] + A[0][1] * A[0][2] * Y[2] - Y[0] * A[0][1] * A[2][2] + A[0][0] * Y[1] * A[2][2] - A[0][0] * A[1][2] * Y[2]) / det;
+  p[2] = (A[0][1] * A[0][2] * Y[1] - Y[2] * A[0][1] * A[0][1] + Y[0] * A[0][1] * A[1][2] - Y[0] * A[0][2] * A[1][1] - A[0][0] * Y[1] * A[1][2] + A[0][0] * A[1][1] * Y[2]) / det;
 
   // To check coherence in the flow field, we compute the R2 fit value
-  float residualSumSquares = sumVV - (p[0]*Y[0] + p[1]*Y[1] + p[2]*Y[2]);
-  float totalSumSquares = sumVV - sumV*sumV/sumN;
+  float residualSumSquares = sumVV - (p[0] * Y[0] + p[1] * Y[1] + p[2] * Y[2]);
+  float totalSumSquares = sumVV - sumV * sumV / sumN;
   float R2 = 1 - residualSumSquares / totalSumSquares;
   float c_R2 = 1;
   if (R2 < minR2) {
@@ -176,13 +179,14 @@ enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* 
   return UPDATE_SUCCESS;
 }
 
-void lowPassFilterWithThreshold(float *val, float new, float factor, float limit) {
+void lowPassFilterWithThreshold(float *val, float new, float factor, float limit)
+{
   float delta = (new - *val)*factor;
   if (delta > limit) {
     delta = limit;
   }
   if (delta < -limit) {
-      delta = -limit;
-    }
+    delta = -limit;
+  }
   *val += delta;
 }
