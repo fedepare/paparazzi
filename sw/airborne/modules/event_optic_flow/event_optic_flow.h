@@ -67,27 +67,19 @@ extern struct module_state eofState;
 // Setting variables
 extern uint8_t enableDerotation;
 extern float filterTimeConstant;
+extern float kfTimeConst;
 extern float inlierMaxDiff;
 extern float derotationMovingAverageTimeConst;
 extern float minPosVariance;
 extern float minEventRate;
 extern float minR2;
 extern bool irLedSwitch;
-extern float divergenceControlGainP;
-extern float divergenceControlSetpoint;
-extern float divergenceControlHeightLimit;
-extern uint8_t divergenceControlUseVision;
 
 // Module main functions
 extern void event_optic_flow_init(void);
 extern void event_optic_flow_start(void);
 extern void event_optic_flow_periodic(void);
 extern void event_optic_flow_stop(void);
-
-// Vertical control loop functions (DISABLED: USE OPTICAL_FLOW_LANDING NOW)
-//extern void guidance_v_module_init(void);
-//extern void guidance_v_module_enter(void);
-//extern void guidance_v_module_run(bool in_flight);
 
 #endif
 

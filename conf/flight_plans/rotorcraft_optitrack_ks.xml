@@ -1,6 +1,6 @@
 <!DOCTYPE flight_plan SYSTEM "flight_plan.dtd">
 
-<flight_plan alt="1.5" ground_alt="0" lat0="51.990634" lon0="4.376789" max_dist_from_home="20" name="Rotorcraft Optitrack (Delft)" security_height="0.3">
+<flight_plan alt="1." ground_alt="0" lat0="51.990634" lon0="4.376789" max_dist_from_home="20" name="Rotorcraft Optitrack (Delft)" security_height="0.3">
   <header>
 #include "autopilot.h"
 </header>
@@ -8,8 +8,8 @@
     <waypoint name="HOME" x="0.0" y="0.0"/>
     <waypoint name="CLIMB" x="1.2" y="-0.6"/>
     <waypoint name="GOAL" x="2.0" y="2.0"/>
-    <waypoint name="STDBY" x="-0.7" y="-0.8"/>
-    <waypoint name="STDBY_HIGH" x="-0.7" y="-0.8" alt="4"/>
+    <waypoint name="STDBY" x="-0.7" y="-0.8" alt="0.5"/>
+    <waypoint name="STDBY_HIGH" x="-0.7" y="-0.8" alt="3.7"/>
     <waypoint name="TD" x="0.8" y="-1.7"/>
     <waypoint lat="51.990630" lon="4.376823" name="p1"/>
     <waypoint lat="51.990614" lon="4.376779" name="p2"/>
@@ -46,8 +46,9 @@
       <attitude pitch="0" roll="0" throttle="0" until="FALSE" vmode="throttle"/>
     </block>
     <block name="Takeoff" strip_button="Takeoff" strip_icon="takeoff.png">
-      <exception cond="stateGetPositionEnu_f()->z > 1.0" deroute="Standby"/>
+      <exception cond="stateGetPositionEnu_f()->z > 0.3" deroute="Standby"/>
       <call_once fun="NavSetWaypointHere(WP_STDBY)"/>
+      <call_once fun="NavSetWaypointHere(WP_STDBY_HIGH)"/>
       <call_once fun="NavSetWaypointHere(WP_CLIMB)"/>
       <stay climb="nav_climb_vspeed" vmode="climb" wp="CLIMB"/>
     </block>
@@ -55,56 +56,58 @@
       <stay wp="STDBY"/>
     </block>
     <block name="Standby high">
-      <call_once fun="NavSetWaypointHere(WP_STDBY)"/>
       <stay wp="STDBY_HIGH"/>
     </block>
-    <block name="Decend 0.1">
-      <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 0.1"/>
-      <stay climb="-0.1" vmode="climb" wp="STDBY"/>
-    </block>
     <block name="Ascend 0.1">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 0.1"/>
       <stay climb="0.1" vmode="climb" wp="STDBY"/>
     </block>
-    <block name="Decend 0.2">
+    <block name="Decend 0.1">
       <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 0.2"/>
-      <stay climb="-0.2" vmode="climb" wp="STDBY"/>
+      <stay climb="-0.1" vmode="climb" wp="STDBY"/>
     </block>
     <block name="Ascend 0.2">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 0.2"/>
       <stay climb="0.2" vmode="climb" wp="STDBY"/>
     </block>
-    <block name="Decend 0.3">
+    <block name="Decend 0.2">
       <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 0.3"/>
-      <stay climb="-0.3" vmode="climb" wp="STDBY"/>
+      <stay climb="-0.2" vmode="climb" wp="STDBY"/>
     </block>
     <block name="Ascend 0.3">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 0.3"/>
       <stay climb="0.3" vmode="climb" wp="STDBY"/>
     </block>
-    <block name="Decend 0.5">
+    <block name="Decend 0.3">
       <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 0.5"/>
-      <stay climb="-0.5" vmode="climb" wp="STDBY"/>
+      <stay climb="-0.3" vmode="climb" wp="STDBY"/>
     </block>
     <block name="Ascend 0.5">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 0.5"/>
       <stay climb="0.5" vmode="climb" wp="STDBY"/>
     </block>
-    <block name="Decend 0.7">
+    <block name="Decend 0.5">
       <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 0.7"/>
-      <stay climb="-0.7" vmode="climb" wp="STDBY"/>
+      <stay climb="-0.5" vmode="climb" wp="STDBY"/>
     </block>
     <block name="Ascend 0.7">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 0.7"/>
       <stay climb="0.7" vmode="climb" wp="STDBY"/>
     </block>
-    <block name="Decend 1.">
+    <block name="Decend 0.7">
       <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Ascend 1."/>
-      <stay climb="-1." vmode="climb" wp="STDBY"/>
+      <stay climb="-0.7" vmode="climb" wp="STDBY"/>
     </block>
     <block name="Ascend 1.">
-      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Standby high"/>
+      <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="Decend 1."/>
       <stay climb="1." vmode="climb" wp="STDBY"/>
+    </block>
+    <block name="Decend 1.">
+      <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="Standby"/>
+      <stay climb="-1." vmode="climb" wp="STDBY"/>
+    </block>
+    <block name="Circle">
+      <circle wp="STDBY" radius="1.5"/>
     </block>
     <block name="land here" strip_button="Land Here" strip_icon="land-right.png">
       <call_once fun="NavSetWaypointHere(WP_TD)"/>

@@ -73,8 +73,8 @@ char *ivy_bus                   = "127.255.255.255:2010";
 
 /** Sample frequency and derevitive defaults */
 uint32_t freq_transmit          = 30;     ///< Transmitting frequency in Hz
-uint16_t min_velocity_samples   = 4;      ///< The amount of position samples needed for a valid velocity
 bool small_packets              = FALSE;
+double vel_lowpass = 0.025;
 
 /** Connection timeout when not receiving **/
 #define CONNECTION_TIMEOUT          .5
@@ -106,11 +106,10 @@ struct RigidBody {
   int nSamples;                     ///< Number of samples since last transmit
   bool posSampled;                  ///< If the position is sampled last sampling
 
+  struct timeval prev_time;
   double vel_x, vel_y, vel_z;       ///< Sum of the (last_vel_* - current_vel_*) during nVelocitySamples
   struct EcefCoor_d ecef_vel;       ///< Last valid ECEF velocity in meters
   int nVelocitySamples;             ///< Number of velocity samples gathered
-  int totalVelocitySamples;         ///< Total amount of velocity samples possible
-  int nVelocityTransmit;            ///< Amount of transmits since last valid velocity transmit
 
   struct EnuCoor_d pos, speed;      ///< Actually transmitted position and speed
   struct EcefCoor_d ecef_pos;       ///< Actually transmitted ECEF position
@@ -141,10 +140,8 @@ struct UdpSocket natnet_data, natnet_cmd;
 struct LtpDef_d tracking_ltp;       ///< The tracking system LTP definition
 double tracking_offset_angle;       ///< The offset from the tracking system to the North in degrees
 
-/** Save the timestamp from natnet */
-float natnet_timestamp;
-
-bool rigig_bTrackingValid;
+/** Save the latency from natnet */
+float natnet_latency;
 
 /** Parse the packet from NatNet */
 void natnet_parse(unsigned char *in)
@@ -237,36 +234,26 @@ void natnet_parse(unsigned char *in)
       printf_natnet("ori: [%3.2f,%3.2f,%3.2f,%3.2f]\n", rigidBodies[j].qx, rigidBodies[j].qy, rigidBodies[j].qz,
                     rigidBodies[j].qw);
 
-      // Differentiate the position to get the speed (TODO: crossreference with labeled markers for occlussion)
-      rigidBodies[j].totalVelocitySamples++;
-      if (old_rigid.x != rigidBodies[j].x || old_rigid.y != rigidBodies[j].y || old_rigid.z != rigidBodies[j].z
-          || old_rigid.qx != rigidBodies[j].qx || old_rigid.qy != rigidBodies[j].qy || old_rigid.qz != rigidBodies[j].qz
-          || old_rigid.qw != rigidBodies[j].qw) {
-
-        if (old_rigid.posSampled) {
-          rigidBodies[j].vel_x += (rigidBodies[j].x - old_rigid.x);
-          rigidBodies[j].vel_y += (rigidBodies[j].y - old_rigid.y);
-          rigidBodies[j].vel_z += (rigidBodies[j].z - old_rigid.z);
-          rigidBodies[j].nVelocitySamples++;
-        }
-
+  if (old_rigid.id == rigidBodies[j].id){
+    if (old_rigid.x != rigidBodies[j].x || old_rigid.y != rigidBodies[j].y || old_rigid.z != rigidBodies[j].z || old_rigid.qx != rigidBodies[j].qx || old_rigid.qy != rigidBodies[j].qy || old_rigid.qz != rigidBodies[j].qz || old_rigid.qw != rigidBodies[j].qw) {
         rigidBodies[j].nSamples++;
-        rigidBodies[j].posSampled = TRUE;
+      }
+      
+      if (old_rigid.posSampled) {
+        static struct timeval now;
+        gettimeofday(&now, NULL);
+        float dt = now.tv_sec + now.tv_usec/1e6 - rigidBodies[j].prev_time.tv_sec - rigidBodies[j].prev_time.tv_usec/1e6;
+        double coeff = dt / (vel_lowpass+dt);
+        rigidBodies[j].vel_x = (1-coeff)*rigidBodies[j].vel_x + coeff*(rigidBodies[j].x - old_rigid.x) / dt;
+        rigidBodies[j].vel_y = (1-coeff)*rigidBodies[j].vel_y + coeff*(rigidBodies[j].y - old_rigid.y) / dt;
+        rigidBodies[j].vel_z = (1-coeff)*rigidBodies[j].vel_z + coeff*(rigidBodies[j].z - old_rigid.z) / dt;
+        rigidBodies[j].prev_time = now;
       } else {
-        rigidBodies[j].posSampled = FALSE;
+        rigidBodies[j].posSampled = TRUE;
+        gettimeofday(&rigidBodies[j].prev_time, NULL);
       }
-
-      // When marker id changed, reset the velocity
-      if (old_rigid.id != rigidBodies[j].id) {
-        rigidBodies[j].vel_x = 0;
-        rigidBodies[j].vel_y = 0;
-        rigidBodies[j].vel_z = 0;
-        rigidBodies[j].nSamples = 0;
-        rigidBodies[j].nVelocitySamples = 0;
-        rigidBodies[j].totalVelocitySamples = 0;
-        rigidBodies[j].posSampled = FALSE;
-      }
-
+    }
+      
       // Associated marker positions
       memcpy(&rigidBodies[j].nMarkers, ptr, 4); ptr += 4;
       printf_natnet("Marker Count: %d\n", rigidBodies[j].nMarkers);
@@ -320,7 +307,7 @@ void natnet_parse(unsigned char *in)
       if (((natnet_major == 2) && (natnet_minor >= 6)) || (natnet_major > 2) || (natnet_major == 0)) {
         // params
         short params = 0; memcpy(&params, ptr, 2); ptr += 2;
-        rigig_bTrackingValid = params & 0x01; // 0x01 : rigid body was successfully tracked in this frame
+//           bool bTrackingValid = params & 0x01; // 0x01 : rigid body was successfully tracked in this frame
       }
     } // next rigid body
 
@@ -459,12 +446,11 @@ void natnet_parse(unsigned char *in)
     }
 
     // Latency
-    float latency = 0.0f; memcpy(&latency, ptr, 4); ptr += 4;
-    printf_natnet("latency : %3.3f\n", latency);
-    
-    for (j = 0; j < nRigidBodies; j++) {
-      rigidBodies[j].latency = latency;
-    }
+    natnet_latency = 0.0f; memcpy(&natnet_latency, ptr, 4); ptr += 4;
+    printf_natnet("latency : %3.3f\n", natnet_latency);
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    natnet_latency = now.tv_sec +  now.tv_usec/1e6;
 
     // Timecode
     unsigned int timecode = 0;  memcpy(&timecode, ptr, 4);  ptr += 4;
@@ -481,9 +467,6 @@ void natnet_parse(unsigned char *in)
       memcpy(&fTemp, ptr, 4); ptr += 4;
       timestamp = (double)fTemp;
     }
-    printf_natnet("timestamp : %f\n", timestamp);
-    if(rigig_bTrackingValid)
-      natnet_timestamp = timestamp;
 
     // frame params
     short params = 0;  memcpy(&params, ptr, 2); ptr += 2;
@@ -516,10 +499,13 @@ gboolean timeout_transmit_callback(gpointer data)
       continue;
     }
 
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
     // When we don't track anymore and timeout or start tracking
     if (rigidBodies[i].nSamples < 1
         && aircrafts[rigidBodies[i].id].connected
-        && (natnet_timestamp - aircrafts[rigidBodies[i].id].lastSample) > CONNECTION_TIMEOUT) {
+        && (now.tv_sec + now.tv_usec/1e6 - natnet_latency) > CONNECTION_TIMEOUT) {
       aircrafts[rigidBodies[i].id].connected = FALSE;
       fprintf(stderr, "#error Lost tracking rigid id %d, aircraft id %d.\n",
               rigidBodies[i].id, aircrafts[rigidBodies[i].id].ac_id);
@@ -535,7 +521,7 @@ gboolean timeout_transmit_callback(gpointer data)
 
     // Update the last tracked
     aircrafts[rigidBodies[i].id].connected = TRUE;
-    aircrafts[rigidBodies[i].id].lastSample = natnet_timestamp;
+    aircrafts[rigidBodies[i].id].lastSample = natnet_latency;
 
     // Defines to make easy use of paparazzi math
     struct DoubleQuat orient;
@@ -550,24 +536,13 @@ gboolean timeout_transmit_callback(gpointer data)
     ecef_of_enu_point_d(&rigidBodies[i].ecef_pos , &tracking_ltp , &rigidBodies[i].pos);
     lla_of_ecef_d(&rigidBodies[i].lla_pos, &rigidBodies[i].ecef_pos);
 
-    // Check if we have enough samples to estimate the velocity
-    rigidBodies[i].nVelocityTransmit++;
-    if (rigidBodies[i].nVelocitySamples >= min_velocity_samples) {
-      // Calculate the derevative of the sum to get the correct velocity     (1 / freq_transmit) * (samples / total_samples)
-      double sample_time = //((double)rigidBodies[i].nVelocitySamples / (double)rigidBodies[i].totalVelocitySamples) /
-        ((double)rigidBodies[i].nVelocityTransmit / (double)freq_transmit_log);
-      rigidBodies[i].vel_x = rigidBodies[i].vel_x / sample_time;
-      rigidBodies[i].vel_y = rigidBodies[i].vel_y / sample_time;
-      rigidBodies[i].vel_z = rigidBodies[i].vel_z / sample_time;
+    // Add the Optitrack angle to the x and y velocities
+    rigidBodies[i].speed.x = cos(tracking_offset_angle) * rigidBodies[i].vel_x - sin(tracking_offset_angle) * rigidBodies[i].vel_y;
+    rigidBodies[i].speed.y = sin(tracking_offset_angle) * rigidBodies[i].vel_y + cos(tracking_offset_angle) * rigidBodies[i].vel_y;
+    rigidBodies[i].speed.z = rigidBodies[i].vel_z;
 
-      // Add the Optitrack angle to the x and y velocities
-      rigidBodies[i].speed.x = cos(tracking_offset_angle) * rigidBodies[i].vel_x - sin(tracking_offset_angle) * rigidBodies[i].vel_y;
-      rigidBodies[i].speed.y = sin(tracking_offset_angle) * rigidBodies[i].vel_x + cos(tracking_offset_angle) * rigidBodies[i].vel_y;
-      rigidBodies[i].speed.z = rigidBodies[i].vel_z;
-
-      // Conver the speed to ecef based on the Optitrack LTP
-      ecef_of_enu_vect_d(&rigidBodies[i].ecef_vel , &tracking_ltp , &rigidBodies[i].speed);
-    }
+    // Conver the speed to ecef based on the Optitrack LTP
+    ecef_of_enu_vect_d(&rigidBodies[i].ecef_vel , &tracking_ltp , &rigidBodies[i].speed);
 
     // Copy the quaternions and convert to euler angles for the heading
     orient.qi = rigidBodies[i].qw;
@@ -581,17 +556,15 @@ gboolean timeout_transmit_callback(gpointer data)
                      tracking_offset_angle; //the optitrack axes are 90 degrees rotated wrt ENU
     NormRadAngle(rigidBodies[i].heading);
 
-    printf_debug("[%d -> %d]Samples: %d\t%d\t\tTiming: %3.3f\n", rigidBodies[i].id,
+    printf_debug("[%d -> %d]Samples: %d\t%d\t\tTiming: %3.3f latency\n", rigidBodies[i].id,
                  aircrafts[rigidBodies[i].id].ac_id
-                 , rigidBodies[i].nSamples, rigidBodies[i].nVelocitySamples, natnet_timestamp);
+                 , rigidBodies[i].nSamples, rigidBodies[i].nVelocitySamples, natnet_latency);
     printf_debug("    Heading: %f\t\tPosition: %f\t%f\t%f\t\tVelocity: %f\t%f\t%f\n", DegOfRad(rigidBodies[i].heading),
                  rigidBodies[i].x, rigidBodies[i].y, rigidBodies[i].z,
                  rigidBodies[i].ecef_vel.x, rigidBodies[i].ecef_vel.y, rigidBodies[i].ecef_vel.z);
 
 
     /* Construct time of time of week (tow) */
-    struct timeval now;
-    gettimeofday(&now, NULL);
     struct tm *ts = localtime(&now.tv_sec);
 
     rigidBodies[i].tow = ts->tm_wday * (24 * 60 * 60 * 1000) + ts->tm_hour * (60 * 60 * 1000) + ts->tm_min *
@@ -610,34 +583,25 @@ gboolean timeout_transmit_callback(gpointer data)
       } else {
         struct timeval cur_time;
         gettimeofday(&cur_time, NULL);
-        fprintf(fp, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+        fprintf(fp, "%d %d %d %d %d %d %d %d %d %d %d %d %d\n",
                 aircrafts[rigidBodies[i].id].ac_id,
                 rigidBodies[i].nMarkers,                           //uint8 Number of markers (sv_num)
-                (int)(rigidBodies[i].pos.x * 1000.0),              //int32 ECEF X in CM
-                (int)(rigidBodies[i].pos.y * 1000.0),              //int32 ECEF Y in CM
-                (int)(rigidBodies[i].pos.z * 1000.0),              //int32 ECEF Z in CM
-                (int)(rigidBodies[i].speed.x * 1000.0),            //int32 ECEF speed X in CM
-                (int)(rigidBodies[i].speed.y * 1000.0),            //int32 ECEF speed Y in CM
-                (int)(rigidBodies[i].speed.z * 1000.0),            //int32 ECEF speed Z in CM
+                (int)(rigidBodies[i].pos.x * 1000.0),              //int32 ECEF X in MM
+                (int)(rigidBodies[i].pos.y * 1000.0),              //int32 ECEF Y in MM
+                (int)(rigidBodies[i].pos.z * 1000.0),              //int32 ECEF Z in MM
+                (int)(rigidBodies[i].speed.x * 1000.0),            //int32 ECEF speed X in MM/s
+                (int)(rigidBodies[i].speed.y * 1000.0),            //int32 ECEF speed Y in MM/s
+                (int)(rigidBodies[i].speed.z * 1000.0),            //int32 ECEF speed Z in MM/s
                 (int)(orient_eulers.phi*10000000.0),               //int32 Roll angle in rad*1e7
                 (int)(orient_eulers.theta*10000000.0),             //int32 Pitch angle in rad*1e7
                 (int)(-orient_eulers.psi*10000000.0),              //int32 Yaw angle in rad*1e7
                 (int)cur_time.tv_sec,                              //int32 Time in seconds
-                (int)cur_time.tv_usec,                             //int32 Time decimal part in microseconds
-                (int)(rigidBodies[i].latency * 1000));             //int32 Latency of measurement in microseconds
+                (int)cur_time.tv_usec);                            //int32 Time decimal part in microseconds
+
       }
     }
 
-    // Reset the velocity differentiator if we calculated the velocity
-    if (rigidBodies[i].nVelocitySamples >= min_velocity_samples) {
-      rigidBodies[i].vel_x = 0;
-      rigidBodies[i].vel_y = 0;
-      rigidBodies[i].vel_z = 0;
-      rigidBodies[i].nVelocitySamples = 0;
-      rigidBodies[i].totalVelocitySamples = 0;
-      rigidBodies[i].nVelocityTransmit = 0;
-    }
-
+    // reset number of samples
     rigidBodies[i].nSamples = 0;
   }
   // Now that all data is computed, set transmission flag to true
@@ -921,12 +885,6 @@ static void parse_options(int argc, char **argv)
 
       freq_transmit = atoi(argv[++i]);
     }
-    // Set the minimum amount of velocity samples for the differentiator
-    else if (strcmp(argv[i], "-vel_samples") == 0) {
-      check_argcount(argc, argv, i, 1);
-
-      min_velocity_samples = atoi(argv[++i]);
-    }
     // Set to use small packets
     else if (strcmp(argv[i], "-small") == 0) {
       small_packets = TRUE;
@@ -987,8 +945,7 @@ int main(int argc, char **argv)
   IvyStart(ivy_bus);
 
   // Create the main timers
-  printf_debug("Starting transmitting and sampling timeouts (transmitting frequency: %dHz, minimum velocity samples: %d)\n",
-               freq_transmit, min_velocity_samples);
+  printf_debug("Starting transmitting and sampling timeouts (transmitting frequency: %dHz)\n", freq_transmit);
   g_timeout_add(1000 / freq_transmit_log, timeout_transmit_callback, NULL);
   g_timeout_add(1000 / freq_transmit, timeout_send_ivy_callback, NULL);
 

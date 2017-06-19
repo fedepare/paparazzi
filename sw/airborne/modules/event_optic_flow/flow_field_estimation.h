@@ -114,7 +114,7 @@ void flowStatsUpdate(struct flowStats* s, struct flowEvent e, struct FloatRates 
  * Recomputation of the flow field using the latest statistics.
  */
 enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* s,
-    float filterFactor, float kfFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
+    float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
     float minR2, float power, struct cameraIntrinsicParameters intrinsics);
 
 /**

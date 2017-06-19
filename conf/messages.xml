@@ -1734,6 +1734,7 @@
     <field name="update_status"		type="uint8" values="SUCCESS|NONE|STATS|SINGULAR|RATE|SPREAD"/>
     <field name="update_confidence"  	type="float" unit="-"/>
     <field name="event_rate"  		type="float" unit="1/s"/>
+    <field name="nNew"  		type="uint32"/>
     <field name="ventral_flow_x"    	type="float" unit="1/s"/>
     <field name="ventral_flow_y"    	type="float" unit="1/s"/>
     <field name="divergence"    	type="float" unit="1/s"/>

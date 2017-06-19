@@ -51,7 +51,11 @@
     </module>
     <module name="event_optic_flow">
       <define name="DVS_PORT" value="uart3"/>
-      <define name="EOF_DIVERGENCE_CONTROL_PGAIN" value="0.1"/>
+      <define name="EOF_FILTER_TIME_CONSTANT" value="0.02"/>
+      <define name="EOF_FILTER_RETENTION_TIME_CONST" value="0.04"/>
+    	<define name="EOF_MIN_EVENT_RATE" value="1000"/>
+      <define name="EOF_MIN_POSITION_VARIANCE" value="500"/>
+      <define name="EOF_MIN_R2" value="0.01"/>
     </module>
     <module name="optical_flow_landing">
       <define name="OPTICAL_FLOW_LANDING_PGAIN" value="0.2"/>
@@ -92,8 +96,8 @@
   </command_laws>
 
   <section name="MISC">
-    <define name="NAV_CLIMB_VSPEED" value="1.5"/>
-    <define name="NAV_DESCEND_VSPEED" value="-1.0"/>
+    <define name="NAV_CLIMB_VSPEED" value="0.5"/>
+    <define name="NAV_DESCEND_VSPEED" value="-0.5"/>
     <define name="NO_RC_THRUST_LIMIT" value="FALSE"/>
   </section>
 
@@ -152,8 +156,8 @@
     <!-- Use GPS altitude measurments and set the R gain -->
     <define name="USE_GPS_ALT" value="1"/>
     <define name="USE_GPS_ALT_SPEED" value="1"/>
-    <define name="VFF_R_GPS" value="1."/>
-    <define name="VFF_VZ_R_GPS" value="1."/>
+    <define name="VFF_R_GPS" value=".5"/>
+    <define name="VFF_VZ_R_GPS" value=".5"/>
   </section>
 
   <section name="STABILIZATION_ATTITUDE" prefix="STABILIZATION_ATTITUDE_">
@@ -226,10 +230,10 @@
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-    <define name="HOVER_KP"    value="300"/>
+    <define name="HOVER_KP"    value="250"/>
     <define name="HOVER_KD"    value="150"/>
     <define name="HOVER_KI"    value="0"/>
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.6"/>
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.65"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="TRUE"/>
   </section>
 
@@ -249,9 +253,9 @@
   </section>
 
   <section name="BAT">
-    <define name="CATASTROPHIC_BAT_LEVEL" value="9.3" unit="V"/>
-    <define name="CRITIC_BAT_LEVEL" value="9.6" unit="V"/>
-    <define name="LOW_BAT_LEVEL" value="10.1" unit="V"/>
+    <define name="CATASTROPHIC_BAT_LEVEL" value="9.8" unit="V"/>
+    <define name="CRITIC_BAT_LEVEL" value="10.3" unit="V"/>
+    <define name="LOW_BAT_LEVEL" value="10.5" unit="V"/>
     <define name="MAX_BAT_LEVEL" value="12.4" unit="V"/>
   </section>
 
