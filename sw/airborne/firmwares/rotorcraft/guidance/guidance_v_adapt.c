@@ -95,10 +95,10 @@ PRINT_CONFIG_VAR(GUIDANCE_V_ADAPT_MAX_HOVER_THROTTLE)
 #endif
 
 
-
 int32_t gv_adapt_X;
 int32_t gv_adapt_P;
 int32_t gv_adapt_Xmeas;
+float guidance_v_adapt_nominal_throttle;
 
 /* System  noises */
 #ifndef GV_ADAPT_SYS_NOISE_F
@@ -115,12 +115,13 @@ int32_t gv_adapt_Xmeas;
 #define GV_ADAPT_P0_F 0.1
 static const int32_t gv_adapt_P0 = BFP_OF_REAL(GV_ADAPT_P0_F, GV_ADAPT_P_FRAC);
 static const int32_t gv_adapt_X0 = BFP_OF_REAL(9.81, GV_ADAPT_X_FRAC) /
-                                   (GUIDANCE_V_ADAPT_INITIAL_HOVER_THROTTLE *MAX_PPRZ);
+                                   (GUIDANCE_V_ADAPT_INITIAL_HOVER_THROTTLE * MAX_PPRZ);
 
 void gv_adapt_init(void)
 {
   gv_adapt_X = gv_adapt_X0;
   gv_adapt_P = gv_adapt_P0;
+  guidance_v_adapt_nominal_throttle = GUIDANCE_V_ADAPT_INITIAL_HOVER_THROTTLE;
 }
 
 #define K_FRAC 12
@@ -188,4 +189,5 @@ void gv_adapt_run(int32_t zdd_meas, int32_t thrust_applied, int32_t zd_ref)
   static const int32_t min_out = BFP_OF_REAL(9.81, GV_ADAPT_X_FRAC) /
                                  (GUIDANCE_V_ADAPT_MAX_HOVER_THROTTLE * MAX_PPRZ);
   Bound(gv_adapt_X, min_out, max_out);
+  guidance_v_adapt_nominal_throttle = 9.81f / (FLOAT_OF_BFP(gv_adapt_X, GV_ADAPT_X_FRAC) * MAX_PPRZ);
 }

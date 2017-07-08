@@ -51,17 +51,22 @@
     </module>
     <module name="event_optic_flow">
       <define name="DVS_PORT" value="uart3"/>
-      <define name="EOF_FILTER_TIME_CONSTANT" value="0.02"/>
-      <define name="EOF_FILTER_RETENTION_TIME_CONST" value="0.04"/>
-    	<define name="EOF_MIN_EVENT_RATE" value="1000"/>
+      <define name="EOF_FILTER_TIME_CONST" value="0.04"/>
+      <define name="EOF_FILTER_RETENTION_TIME_CONST" value="0.02"/>
+    	<define name="EOF_MIN_EVENT_RATE" value="1500"/>
       <define name="EOF_MIN_POSITION_VARIANCE" value="500"/>
-      <define name="EOF_MIN_R2" value="0.01"/>
+      <define name="EOF_MIN_R2" value="0.8"/>
     </module>
     <module name="optical_flow_landing">
-      <define name="OPTICAL_FLOW_LANDING_PGAIN" value="0.2"/>
-      <define name="OPTICAL_FLOW_LANDING_IGAIN" value="0.0"/>
-      <define name="OPTICAL_FLOW_LANDING_DGAIN" value="0.0"/>
-      <define name="OPTICAL_FLOW_LANDING_CONTROL_METHOD" value="0"/>
+      <define name="OFL_PGAIN" value="0.25"/>
+      <define name="OFL_IGAIN" value="0.0"/>
+      <define name="OFL_DGAIN" value="0.0"/>
+      <define name="OFL_CONTROL_METHOD" value="0"/>
+      <define name="OFL_COV_WINDOW_SIZE" value="100"/>
+      <define name="OFL_COV_LANDING_LIMIT" value="6"/>
+      <define name="OFL_COV_SETPOINT" value="-4"/>
+      <define name="OFL_P_LAND_THRESHOLD" value="0.02"/>
+      <define name="OFL_ELC_OSCILLATE" value="0"/>
     </module>
   </modules>
 
@@ -130,7 +135,9 @@
     <define name="H_X" value="0.3770441"/>
     <define name="H_Y" value="0.0193986"/>
     <define name="H_Z" value="0.9259921"/>
+    <define name="GRAVITY_HEURISTIC_FACTOR" value="0"/>
     <define name="USE_GPS_HEADING" value="1"/>
+    <define name="HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
   </section>
 
   <section name="STABILIZATION_RATE" prefix="STABILIZATION_RATE_">

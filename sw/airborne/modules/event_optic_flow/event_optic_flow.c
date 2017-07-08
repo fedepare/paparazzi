@@ -39,6 +39,7 @@
 #include "subsystems/datalink/telemetry.h"
 #include "math/pprz_algebra_float.h"
 #include "state.h"
+#include "autopilot.h"
 
 #include "paparazzi.h"
 #include "firmwares/rotorcraft/stabilization.h"
@@ -128,6 +129,8 @@ static const float UART_INT16_TO_FLOAT = 10.0f;
 //static const float LENS_DISTANCE_TO_CENTER = 0.13f; // approximate distance of lens focal length to center of OptiTrack markers
 static const uint16_t EVENT_BYTE_SIZE = 13; // +1 for separator
 static const float power = 1;
+static uint16_t mode;
+static bool mode_switched;
 
 // SWITCH THIS ON TO ENABLE CONTROL THROTTLE
 //static const bool ASSIGN_CONTROL = false; //TODO Strange, had to rename this to make code compatible with optical_flow_landing
@@ -172,9 +175,20 @@ void event_optic_flow_start(void) {
   eofState.field = field;
   flowStatsInit(&eofState.stats);
   eofState.NNew = 0;
+
+  mode = autopilot_get_mode();
+  mode_switched = false;
 }
 
 void event_optic_flow_periodic(void) {
+  if (mode != autopilot_get_mode()){
+    // reset parameters when changing modes
+    eofState.field.wx = 0.;
+    eofState.field.wy = 0.;
+    eofState.field.D  = 0.;
+    mode_switched = true;
+    mode = autopilot_get_mode();
+  }
   // Timing bookkeeping, do this after the most uncertain computations,
   // but before operations where timing info is necessary
   float currentTime = get_sys_time_float();
@@ -226,15 +240,15 @@ void event_optic_flow_periodic(void) {
   }
 
   // If no update has been performed, decay flow field parameters towards zero
-  if (status != UPDATE_SUCCESS) {
+/*  if (status != UPDATE_SUCCESS) {
     eofState.field.confidence = 0;
+
   }
   else {
     // Assign timestamp to last update
     eofState.field.t = currentTime;
     // Allow controller to update
-    uint32_t now_ts = get_sys_time_usec();
-    AbiSendMsgOPTICAL_FLOW(OPTICFLOW_SENDER_ID, now_ts,
+    AbiSendMsgOPTICAL_FLOW(OPTICFLOW_SENDER_ID, get_sys_time_usec(),
         0,//FIXME only divergence is sent now
         0,
         0,
@@ -242,7 +256,16 @@ void event_optic_flow_periodic(void) {
         0,
         -eofState.field.D,  // control divergence in strange axis system
         0.0);
-  }
+  }*/
+  AbiSendMsgOPTICAL_FLOW(OPTICFLOW_SENDER_ID, get_sys_time_usec(),
+        0,//FIXME only divergence is sent now
+        0,
+        0,
+        0,
+        0,
+        -eofState.field.D,  // control divergence in strange axis system
+        0.0);
+
   // Set  status globally
   eofState.status = status;
 

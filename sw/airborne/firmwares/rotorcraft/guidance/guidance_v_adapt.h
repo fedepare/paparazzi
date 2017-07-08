@@ -49,6 +49,10 @@ extern int32_t gv_adapt_P;
 /** Measurement */
 extern int32_t gv_adapt_Xmeas;
 
+/** nominal throttle for hover estimated in flight.
+ * Unit: factor of #MAX_PPRZ with range [0, 1]
+ */
+extern float guidance_v_adapt_nominal_throttle;
 
 extern void gv_adapt_init(void);
 extern void gv_adapt_run(int32_t zdd_meas, int32_t thrust_applied, int32_t zd_ref);
