@@ -21,9 +21,9 @@
  * all received events are assumed to be valid.
  */
 struct flowEvent {
-  float x,y;
+  float x, y;
   int32_t t;
-  float u,v;
+  float u, v;
 };
 
 /**
@@ -107,15 +107,15 @@ void flowStatsInit(struct flowStats *s);
 /**
  * Performs an update of all flow field statistics with a new event.
  */
-void flowStatsUpdate(struct flowStats* s, struct flowEvent e, struct FloatRates rates,
-    bool enableDerotation, struct cameraIntrinsicParameters intrinsics);
+void flowStatsUpdate(struct flowStats *s, struct flowEvent e, struct FloatRates rates,
+                     bool enableDerotation, struct cameraIntrinsicParameters intrinsics);
 
 /**
  * Recomputation of the flow field using the latest statistics.
  */
-enum updateStatus recomputeFlowField(struct flowField* field, struct flowStats* s,
-    float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
-    float minR2, float power, struct cameraIntrinsicParameters intrinsics);
+enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s,
+                                     float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
+                                     float minR2, float power, struct cameraIntrinsicParameters intrinsics);
 
 /**
  * Simple derotation of the optic flow field parameters.
