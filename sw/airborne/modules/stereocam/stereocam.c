@@ -355,67 +355,70 @@ void nus_state_machine(void)
 
     nus_gate_heading = 0.f;
     nus_state = ROOM_EXPLORATION;
+    droplet_active = 1;
 
     nus_switch = 1;
   }
 
-  switch(nus_state)
-  {
-    case WINDOW_TRACKING:
-      if (gate.valid && gate.quality > 15)
-      {
-        /* simple filter */
-        // todo add dt here...
-        nus_gate_heading = (1 - nus_filter_factor) * nus_gate_heading
-            + gate.bearing.psi * nus_filter_factor;
+  
 
-        /* add the gate heading to the current heading */
-        stab_att_sp_euler.psi = ANGLE_BFP_OF_REAL(nus_gate_heading) + stabilization_attitude_get_heading_i();
-        INT32_ANGLE_NORMALIZE(stab_att_sp_euler.psi);
-        gate_time = get_sys_time_float();
-      } else if (get_sys_time_float() > gate_time + redroplet_wait)
-      {
-        stab_att_sp_euler.psi += ANGLE_BFP_OF_REAL(RadOfDeg((float)droplet_turn_direction * 60.f));
-        INT32_ANGLE_NORMALIZE(stab_att_sp_euler.psi);
-        gate_time = get_sys_time_float();
-        nus_state = WINDOW_FLY_THROUGH;
-      }
-      break;
-    case WINDOW_FLY_THROUGH:
-      // wait to fly-through window
-      if (get_sys_time_float() > gate_time + 2.f)
-      {
-        droplet_turn_direction = -droplet_turn_direction;         // reverse droplet direction
-        gate_count = 0;                           // reset gate counter
+  // switch(nus_state)
+  // {
+  //   case WINDOW_TRACKING:
+  //     if (gate.valid && gate.quality > 15)
+  //     {
+  //       /* simple filter */
+  //       // todo add dt here...
+  //       nus_gate_heading = (1 - nus_filter_factor) * nus_gate_heading
+  //           + gate.bearing.psi * nus_filter_factor;
 
-        nus_climb_cmd = 0;
-        nus_gate_heading = 0.f;
+  //       /* add the gate heading to the current heading */
+  //       stab_att_sp_euler.psi = ANGLE_BFP_OF_REAL(nus_gate_heading) + stabilization_attitude_get_heading_i();
+  //       INT32_ANGLE_NORMALIZE(stab_att_sp_euler.psi);
+  //       gate_time = get_sys_time_float();
+  //     } else if (get_sys_time_float() > gate_time + redroplet_wait)
+  //     {
+  //       stab_att_sp_euler.psi += ANGLE_BFP_OF_REAL(RadOfDeg((float)droplet_turn_direction * 60.f));
+  //       INT32_ANGLE_NORMALIZE(stab_att_sp_euler.psi);
+  //       gate_time = get_sys_time_float();
+  //       nus_state = WINDOW_FLY_THROUGH;
+  //     }
+  //     break;
+  //   case WINDOW_FLY_THROUGH:
+  //     // wait to fly-through window
+  //     if (get_sys_time_float() > gate_time + 2.f)
+  //     {
+  //       droplet_turn_direction = -droplet_turn_direction;         // reverse droplet direction
+  //       gate_count = 0;                           // reset gate counter
 
-        nus_state = ROOM_EXPLORATION;
-      }
-      break;
-    case ROOM_EXPLORATION:
-      droplet_active = 1;
-      if (gate.valid){
-        if (gate.quality > fit_thresh) // valid gate detection
-        {
-          stab_att_sp_euler.psi = ANGLE_BFP_OF_REAL(gate.bearing.psi) + stabilization_attitude_get_heading_i();
-          if(++gate_count >= gate_count_thresh)
-          {
-            // temporarily deactivate droplet
-            droplet_active = 0;
-            nus_turn_cmd = 0;
-            gate_time = get_sys_time_float();
-            nus_state = WINDOW_TRACKING;
-          }
-        } else if(gate_count > 0){
-          gate_count--;
-        }
-        gate.valid = false;
-      }
-      break;
+  //       nus_climb_cmd = 0;
+  //       nus_gate_heading = 0.f;
 
-    default:
-      break;
-  }
+  //       nus_state = ROOM_EXPLORATION;
+  //     }
+  //     break;
+  //   case ROOM_EXPLORATION:
+  //     droplet_active = 1;
+  //     if (gate.valid){
+  //       if (gate.quality > fit_thresh) // valid gate detection
+  //       {
+  //         stab_att_sp_euler.psi = ANGLE_BFP_OF_REAL(gate.bearing.psi) + stabilization_attitude_get_heading_i();
+  //         if(++gate_count >= gate_count_thresh)
+  //         {
+  //           // temporarily deactivate droplet
+  //           droplet_active = 0;
+  //           nus_turn_cmd = 0;
+  //           gate_time = get_sys_time_float();
+  //           nus_state = WINDOW_TRACKING;
+  //         }
+  //       } else if(gate_count > 0){
+  //         gate_count--;
+  //       }
+  //       gate.valid = false;
+  //     }
+  //     break;
+
+  //   default:
+  //     break;
+  // }
 }

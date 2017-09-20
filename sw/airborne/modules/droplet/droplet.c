@@ -61,6 +61,8 @@ static float obst_time;          // timer for phase 2 and 4
 static uint8_t droplet_state;
 static uint32_t prev_time;
 
+static uint8_t first_droplet;
+
 // settings and controls
 float wall_following_trim;   // yaw rate trim to force vehicle to follow wall
 int16_t droplet_turn_direction;
@@ -91,6 +93,8 @@ void droplet_init(void)
   wall_following_trim = 0;   // yaw rate trim to force vehicle to follow wall
   droplet_turn_direction = INIT_TURN_DIR;
   droplet_active = 1;
+
+  first_droplet = 1;
 }
 
 /* Set turn command based on current droplet state
@@ -119,6 +123,7 @@ void droplet_periodic(void){
     case DROPLET_UNDEFINED:
       // go straight until we are sure there are no obstacles
       nus_turn_cmd = 0;
+
       break;
     default:
       break;
@@ -236,6 +241,9 @@ void run_droplet_low_texture(uint32_t disparities_high, uint32_t disparities_tot
         droplet_state = DROPLET_UNDEFINED;
         obst_free_3 = 0; // set zero for later
         obst_time = get_sys_time_float();
+
+        // reverse turn direction
+        droplet_turn_direction=-droplet_turn_direction;
       }
       break;
     case DROPLET_UNDEFINED: // fly straight, but be aware of undetected obstacles
@@ -248,6 +256,16 @@ void run_droplet_low_texture(uint32_t disparities_high, uint32_t disparities_tot
       if (obst_dect_4 > obst_cons_5) { // if true, obstacle is consistent
         droplet_state = DROPLET_AVOID; // go back to phase 3
         obst_dect_4 = 0; // set zero for later
+        if (first_droplet){
+        // decide whether the first droplet should be CW or CCW
+        if (count_disps_left > count_disps_right) {
+          droplet_turn_direction=1;
+          }
+        else {
+          droplet_turn_direction=-1;
+          }
+        first_droplet=0;
+        }
       } else if (1000*(get_sys_time_float() - obst_time) > obst_wait_4) {
         droplet_state = DROPLET_UNOBSTRUCTED;
         obst_dect_4 = 0;
