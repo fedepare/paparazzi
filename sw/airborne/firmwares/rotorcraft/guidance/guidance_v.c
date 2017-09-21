@@ -216,7 +216,7 @@ void guidance_v_read_rc(void)
   rc_climb_cmd=(int32_t)radio_control.values[RADIO_THROTTLE_CLIMB];
   DeadBand(rc_climb_cmd, GUIDANCE_V_CLIMB_RC_DEADBAND);
 
-  guidance_v_rc_zd_sp = rc_climb_cmd - nus_climb_cmd;
+  guidance_v_rc_zd_sp = rc_climb_cmd; // - nus_climb_cmd;
   Bound(guidance_v_rc_zd_sp, MIN_PPRZ, MAX_PPRZ);
 
   static const int32_t climb_scale = ABS(SPEED_BFP_OF_REAL(GUIDANCE_V_MAX_RC_CLIMB_SPEED) /
@@ -246,7 +246,8 @@ void guidance_v_mode_changed(uint8_t new_mode)
 
     case GUIDANCE_V_MODE_RC_CLIMB:
     case GUIDANCE_V_MODE_CLIMB:
-      guidance_v_zd_sp = 0;
+      guidance_v_z_enter();
+      break;
     case GUIDANCE_V_MODE_NAV:
       guidance_v_z_sum_err = 0;
       GuidanceVSetRef(stateGetPositionNed_i()->z, stateGetSpeedNed_i()->z, 0);

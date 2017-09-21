@@ -7,13 +7,13 @@
       <message name="AUTOPILOT_VERSION"      period="11.1"/>
       <message name="DL_VALUE"               period="1.1"/>
       <message name="ROTORCRAFT_STATUS"      period="1.2"/>
-<!--      <message name="ROTORCRAFT_FP"          period="0.1"/-->
+      <message name="ROTORCRAFT_FP"          period="0.2"/>
       <message name="ALIVE"                  period="2.1"/>
       <message name="INS_REF"                period="5.1"/>
       <message name="ROTORCRAFT_NAV_STATUS"  period="1.6"/>
       <message name="WP_MOVED"               period="2.3"/>
       <message name="ROTORCRAFT_CAM"         period="1."/>
-<!--      <message name="GPS_INT"                period=".25"/-->
+      <message name="GPS_INT"                period=".25"/>
       <message name="INS"                    period=".25"/>
       <message name="I2C_ERRORS"             period="4.1"/>
       <message name="UART_ERRORS"            period="3.1"/>

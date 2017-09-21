@@ -64,7 +64,7 @@
 	  </module>
 	  <module name="ins">
 		  <!-- Check what is this setting? -->
-  <!--			<define name="INS_INT_GPS_ID" value="ABI_DISABLE"/-->
+      <define name="INS_INT_GPS_ID" value="ABI_DISABLE"/>
 	  </module>
 	  
 	  <!-- Modules -->
@@ -149,7 +149,7 @@
 			
   <!--		<define name="USE_THROTTLE_FOR_MOTOR_ARMING" value="TRUE"/-->
 	  <define name="USE_KILL_SWITCH_FOR_MOTOR_ARMING" value="TRUE"/>
-      	<define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
+    <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
   </section>
 
   <section name="STABILIZATION_ATTITUDE" prefix="STABILIZATION_ATTITUDE_">
@@ -190,7 +190,7 @@
 	  <define name="THETA_IGAIN" value="0"/>
 	
 	  <define name="PSI_PGAIN" value="900"/> <!--was 5000-->
-	  <define name="PSI_DGAIN" value="450"/> <!--was 4000-->
+	  <define name="PSI_DGAIN" value="400"/> <!--was 4000-->
 	  <define name="PSI_IGAIN" value="50"/> <!--was 400-->
 	
 	  <!-- feedforward -->
@@ -206,19 +206,18 @@
   <section name="INS" prefix="INS_">
 	  <define name="USE_GPS_ALT" value="0"/>
 	  <define name="USE_GPS_ALT_SPEED" value="0"/>
+	  <define name="VFF_ACCEL_NOISE" value="5"/>
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-	  <define name="HOVER_KP" value="276"/>
-	  <define name="HOVER_KD" value="300"/>
-	  <define name="HOVER_KI" value="100"/>
-	  <!--define name="NOMINAL_HOVER_THROTTLE" value="0.77"/-->
-	  <define name="NOMINAL_HOVER_THROTTLE" value="0.9"/>
+	  <define name="HOVER_KP" value="350"/>
+	  <define name="HOVER_KD" value="1"/>
+	  <define name="HOVER_KI" value="70"/>
+	  <define name="NOMINAL_HOVER_THROTTLE" value="0.77"/>
 	  <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
 	  <define name="MAX_RC_CLIMB_SPEED" value="0.5"/>
 	  <define name="MAX_RC_DESCENT_SPEED" value="0.5"/>
   </section>
-
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
 	  <define name="PGAIN" value="120"/>
