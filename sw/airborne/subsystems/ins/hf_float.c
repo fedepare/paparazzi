@@ -536,7 +536,7 @@ void hff_propagate(void)
   hff_ps_counter++;
 }
 
-void hff_update_gps(struct FloatVect2 *pos_ned, struct FloatVect2 *speed_ned)
+void hff_update_gps(struct FloatVect2 *pos_ned, struct FloatVect2 *speed_ned __attribute__((unused)))
 {
   hff_lost_counter = 0;
 

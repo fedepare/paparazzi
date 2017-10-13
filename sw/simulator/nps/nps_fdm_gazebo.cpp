@@ -43,6 +43,7 @@ namespace plt = matplotlibcpp;
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <sys/time.h>
 
 #include <gazebo/gazebo.hh>
 #include <gazebo/common/common.hh>
@@ -51,18 +52,17 @@ namespace plt = matplotlibcpp;
 #include <gazebo/gazebo_config.h>
 
 extern "C" {
-#include <sys/time.h>
-
 #include "nps_fdm.h"
-#include "math/pprz_algebra_double.h"
 
 #include "generated/airframe.h"
-#include "autopilot.h"
 
+#include "autopilot.h"
 
 #include "subsystems/abi.h"
 #include "subsystems/datalink/telemetry.h"
+
 #include "math/pprz_isa.h"
+#include "math/pprz_algebra_double.h"
 
 #include "modules/imav2017/imav2017.h"
 }
@@ -152,7 +152,7 @@ static gazebo::sensors::ContactSensorPtr ct;
 // Helper functions
 static void init_gazebo(void);
 static void gazebo_read(void);
-static void gazebo_write(double commands[], int commands_nb);
+static void gazebo_write(double act_commands[], int commands_nb);
 
 // Conversion routines
 inline struct EcefCoor_d to_pprz_ecef(ignition::math::Vector3d ecef_i)
@@ -234,12 +234,12 @@ void nps_fdm_init(double dt)
 /**
  * Update the simulation state.
  * @param launch
- * @param commands
+ * @param act_commands
  * @param commands_nb
  */
 void nps_fdm_run_step(
   bool launch __attribute__((unused)),
-  double *commands,
+  double *act_commands,
   int commands_nb)
 {
   // Initialize Gazebo if req'd.
@@ -253,16 +253,15 @@ void nps_fdm_run_step(
     gazebo_read();
 #ifdef NPS_SIMULATE_VIDEO
     init_gazebo_video();
-    cout << "video_init" << endl;
-
+    cout << "video initiated" << endl;
 #endif
 #ifdef NPS_SIMULATE_RANGE_SENSORS
     gazebo_init_range_sensors();
-    cout << "range_sensor_init" << endl;
+    cout << "laser range sensor ring initiated" << endl;
 #endif
 #ifdef NPS_SIMULATE_EXTERNAL_STEREO_CAMERA
     gazebo_init_stereo_camera();
-    cout << "stereocamera_init" << endl;
+    cout << "stereo camera initiated" << endl;
 #endif
     gazebo_initialized = true;
   }
@@ -270,7 +269,7 @@ void nps_fdm_run_step(
   // Update the simulation for a single timestep.
   gazebo::runWorld(model->GetWorld(), 1);
   gazebo::sensors::run_once();
-  gazebo_write(commands, commands_nb);
+  gazebo_write(act_commands, commands_nb);
   gazebo_read();
 #ifdef NPS_SIMULATE_VIDEO
   gazebo_read_video();
@@ -515,23 +514,21 @@ static void gazebo_read(void)
  * NPS_ACTUATOR_NAMES. See conf/simulator/gazebo/models/ardrone/ardrone.sdf
  * for an example.
  *
- * @param commands
+ * @param act_commands
  * @param commands_nb
  */
-static void gazebo_write(double commands[], int commands_nb)
+static void gazebo_write(double act_commands[], int commands_nb)
 {
   const string names[] = NPS_ACTUATOR_NAMES;
   const double thrusts[] = { NPS_ACTUATOR_THRUSTS };
   const double torques[] = { NPS_ACTUATOR_TORQUES };
 
   for (int i = 0; i < commands_nb; ++i) {
-    double thrust = autopilot.motors_on ? thrusts[i] * commands[i] : 0.0;
-    double torque = autopilot.motors_on ? torques[i] * commands[i] : 0.0;
+    double thrust = autopilot.motors_on ? thrusts[i] * act_commands[i] : 0.0;
+    double torque = autopilot.motors_on ? torques[i] * act_commands[i] : 0.0;
     gazebo::physics::LinkPtr link = model->GetLink(names[i]);
     link->AddRelativeForce(gazebo::math::Vector3(0, 0, thrust));
     link->AddRelativeTorque(gazebo::math::Vector3(0, 0, torque));
-    // cout << "Motor '" << link->GetName() << "': thrust = " << thrust
-    //    << " N, torque = " << torque << " Nm" << endl;
   }
 }
 
@@ -613,7 +610,7 @@ static void gazebo_read_video(void)
     if (cam == NULL) { continue; }
     // Skip if not updated
     // Also skip when LastMeasurementTime() is zero (workaround)
-    if (cam->LastMeasurementTime() == gazebo_cams[i].last_measurement_time
+    if ((cam->LastMeasurementTime() - gazebo_cams[i].last_measurement_time).Float() < 0.005
         || cam->LastMeasurementTime() == 0) { continue; }
     // Grab image, convert and send to video thread
     struct image_t img;
@@ -777,7 +774,7 @@ static void gazebo_init_stereo_camera(void)
   gazebo_stereocam.last_measurement_time = gazebo_stereocam.stereocam->LastMeasurementTime();
 
   /******************************EDGEFLOW  INIT****************************/
-  edgeflow_init(cam->ImageWidth(), cam->ImageHeight(), 0);
+  edgeflow_init(gazebo_stereocam.stereocam->ImageWidth(0), gazebo_stereocam.stereocam->ImageHeight(0), 0);
 
 #ifdef STEREO_BODY_TO_STEREO_PHI
   struct FloatEulers euler = {STEREO_BODY_TO_STEREO_PHI, STEREO_BODY_TO_STEREO_THETA, STEREO_BODY_TO_STEREO_PSI};
@@ -792,16 +789,15 @@ static void gazebo_init_stereo_camera(void)
 static void gazebo_read_stereo_camera(void)
 {
   gazebo::sensors::MultiCameraSensorPtr &stereocam = gazebo_stereocam.stereocam;
+  if ((stereocam->LastMeasurementTime() - gazebo_stereocam.last_measurement_time).Float() < 0.005
+      || stereocam->LastMeasurementTime() == 0) { return; }
 
-  if (stereocam->LastMeasurementTime() == gazebo_stereocam.last_measurement_time
-      || gazebo_stereocam.last_measurement_time == 0 ) { return; }
-
-  struct image_t img;
+  static struct image_t img;
   read_stereoimage(&img, stereocam);
 
 #ifdef NPS_DEBUG_STEREOCAM
-  cv::Mat RGB_left(cam->ImageHeight(),cam->ImageWidth(),CV_8UC3,(uint8_t *)stereocam->ImageData(0));
-  cv::Mat RGB_right(cam->ImageHeight(),cam->ImageWidth(),CV_8UC3,(uint8_t *)stereocam->ImageData(1));
+  cv::Mat RGB_left(stereocam->ImageHeight(0),stereocam->ImageWidth(0),CV_8UC3,(uint8_t *)stereocam->ImageData(0));
+  cv::Mat RGB_right(stereocam->ImageHeight(1),stereocam->ImageWidth(1),CV_8UC3,(uint8_t *)stereocam->ImageData(1));
 
   cv::cvtColor(RGB_left, RGB_left, cv::COLOR_RGB2BGR);
   cv::cvtColor(RGB_right, RGB_right, cv::COLOR_RGB2BGR);
@@ -857,7 +853,7 @@ static void gazebo_read_stereo_camera(void)
   gate_detected = snake_gate_detection(&gradient, &gate, false, NULL, NULL, NULL);
 
 #ifdef NPS_DEBUG_STEREOCAM
-  cv::Mat gradient_cv(cam->ImageHeight(),cam->ImageWidth(),CV_8UC1,(uint8_t *)gradient.buf);
+  cv::Mat gradient_cv(stereocam->ImageHeight(0),stereocam->ImageWidth(0),CV_8UC1,(uint8_t *)gradient.buf);
   cv::imshow("gradient", gradient_cv);
   cv::waitKey(1);
 #endif

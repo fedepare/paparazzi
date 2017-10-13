@@ -183,12 +183,12 @@ namespace matplotlibcpp {
 	}
 
 	// must be called before the first regular call to matplotlib to have any effect
-	void backend(const std::string& name)
+	inline void backend(const std::string& name)
 	{
 		detail::s_backend = name;
 	}
   
-	bool annotate(std::string annotation, double x, double y)
+	inline bool annotate(std::string annotation, double x, double y)
 	{
 		PyObject * xy = PyTuple_New(2);
 		PyObject * str = PyString_FromString(annotation.c_str());
@@ -228,7 +228,7 @@ namespace matplotlibcpp {
 	template <> struct select_npy_type<uint64_t> { const static NPY_TYPES type = NPY_UINT64; };
 
 	template<typename Numeric>
-	PyObject* get_array(const std::vector<Numeric>& v)
+	inline PyObject* get_array(const std::vector<Numeric>& v)
 	{
 		detail::_interpreter::get();	//interpreter needs to be initialized for the numpy commands to work
 		NPY_TYPES type = select_npy_type<Numeric>::type; 
@@ -249,7 +249,7 @@ namespace matplotlibcpp {
 #else // fallback if we don't have numpy: copy every element of the given vector
 
 	template<typename Numeric>
-	PyObject* get_array(const std::vector<Numeric>& v)
+	inline PyObject* get_array(const std::vector<Numeric>& v)
 	{
 		PyObject* list = PyList_New(v.size());
 		for(size_t i = 0; i < v.size(); ++i) {
@@ -261,7 +261,7 @@ namespace matplotlibcpp {
 #endif // WITHOUT_NUMPY
 
 	template<typename Numeric>
-	bool plot(const std::vector<Numeric> &x, const std::vector<Numeric> &y, const std::map<std::string, std::string>& keywords)
+	inline bool plot(const std::vector<Numeric> &x, const std::vector<Numeric> &y, const std::map<std::string, std::string>& keywords)
 	{
 		assert(x.size() == y.size());
 
@@ -291,7 +291,7 @@ namespace matplotlibcpp {
 	}
 
 	template< typename Numeric >
-	bool fill_between(const std::vector<Numeric>& x, const std::vector<Numeric>& y1, const std::vector<Numeric>& y2, const std::map<std::string, std::string>& keywords)
+	inline bool fill_between(const std::vector<Numeric>& x, const std::vector<Numeric>& y1, const std::vector<Numeric>& y2, const std::map<std::string, std::string>& keywords)
 	{
 		assert(x.size() == y1.size());
 		assert(x.size() == y2.size());
@@ -324,7 +324,7 @@ namespace matplotlibcpp {
 	}
 
 	template< typename Numeric>
-	bool hist(const std::vector<Numeric>& y, long bins=10,std::string color="b", double alpha=1.0)
+	inline bool hist(const std::vector<Numeric>& y, long bins=10,std::string color="b", double alpha=1.0)
 	{
 
 		PyObject* yarray = get_array(y);
@@ -351,7 +351,7 @@ namespace matplotlibcpp {
 	}
 
 	template< typename Numeric>
-	bool named_hist(std::string label,const std::vector<Numeric>& y, long bins=10, std::string color="b", double alpha=1.0)
+	inline bool named_hist(std::string label,const std::vector<Numeric>& y, long bins=10, std::string color="b", double alpha=1.0)
 	{
 		PyObject* yarray = get_array(y);
 
@@ -375,7 +375,7 @@ namespace matplotlibcpp {
 	}
 	
 	template<typename NumericX, typename NumericY>
-	bool plot(const std::vector<NumericX>& x, const std::vector<NumericY>& y, const std::string& s = "")
+	inline bool plot(const std::vector<NumericX>& x, const std::vector<NumericY>& y, const std::string& s = "")
 	{
 		assert(x.size() == y.size());
 
@@ -398,7 +398,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename NumericX, typename NumericY>
-	bool errorbar(const std::vector<NumericX> &x, const std::vector<NumericY> &y, const std::vector<NumericX> &yerr, const std::string &s = "")
+	inline bool errorbar(const std::vector<NumericX> &x, const std::vector<NumericY> &y, const std::vector<NumericX> &yerr, const std::string &s = "")
 	{
 		assert(x.size() == y.size());
 
@@ -430,7 +430,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename Numeric>
-	bool named_plot(const std::string& name, const std::vector<Numeric>& y, const std::string& format = "")
+	inline bool named_plot(const std::string& name, const std::vector<Numeric>& y, const std::string& format = "")
 	{
 		PyObject* kwargs = PyDict_New();
 		PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
@@ -454,7 +454,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename Numeric>
-	bool named_plot(const std::string& name, const std::vector<Numeric>& x, const std::vector<Numeric>& y, const std::string& format = "")
+	inline bool named_plot(const std::string& name, const std::vector<Numeric>& x, const std::vector<Numeric>& y, const std::string& format = "")
 	{
 		PyObject* kwargs = PyDict_New();
 		PyDict_SetItemString(kwargs, "label", PyString_FromString(name.c_str()));
@@ -479,7 +479,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename Numeric>
-	bool plot(const std::vector<Numeric>& y, const std::string& format = "")
+	inline bool plot(const std::vector<Numeric>& y, const std::string& format = "")
 	{
 		std::vector<Numeric> x(y.size());
 		for(size_t i=0; i<x.size(); ++i) x.at(i) = i;
@@ -503,7 +503,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename Numeric>
-	void ylim(Numeric left, Numeric right)
+	inline void ylim(Numeric left, Numeric right)
 	{
 		PyObject* list = PyList_New(2);
 		PyList_SetItem(list, 0, PyFloat_FromDouble(left));
@@ -520,7 +520,7 @@ namespace matplotlibcpp {
 	}
 
 	template<typename Numeric>
-	void xlim(Numeric left, Numeric right)
+	inline void xlim(Numeric left, Numeric right)
 	{
 		PyObject* list = PyList_New(2);
 		PyList_SetItem(list, 0, PyFloat_FromDouble(left));
@@ -824,10 +824,10 @@ namespace matplotlibcpp {
 
 	// recursion stop for the above
 	template<typename... Args>
-	bool plot() { return true; }
+	inline bool plot() { return true; }
 
 	template<typename A, typename B, typename... Args>
-	bool plot(const A& a, const B& b, const std::string& format, Args... args)
+	inline bool plot(const A& a, const B& b, const std::string& format, Args... args)
 	{
 		return detail::plot_impl<typename detail::is_callable<B>::type>()(a,b,format) && plot(args...);
 	}
@@ -836,19 +836,19 @@ namespace matplotlibcpp {
 	 * This group of plot() functions is needed to support initializer lists, i.e. calling
 	 *    plot( {1,2,3,4} )
 	 */
-	bool plot(const std::vector<double>& x, const std::vector<double>& y, const std::string& format = "") {
+	inline bool plot(const std::vector<double>& x, const std::vector<double>& y, const std::string& format = "") {
 		return plot<double,double>(x,y,format);
 	}
 
-	bool plot(const std::vector<double>& y, const std::string& format = "") {
+	inline bool plot(const std::vector<double>& y, const std::string& format = "") {
 		return plot<double>(y,format);
 	}
 
-	bool plot(const std::vector<double>& x, const std::vector<double>& y, const std::map<std::string, std::string>& keywords) {
+	inline bool plot(const std::vector<double>& x, const std::vector<double>& y, const std::map<std::string, std::string>& keywords) {
 		return plot<double>(x,y,keywords);
 	}
 
-	bool named_plot(const std::string& name, const std::vector<double>& x, const std::vector<double>& y, const std::string& format = "") {
+	inline bool named_plot(const std::string& name, const std::vector<double>& x, const std::vector<double>& y, const std::string& format = "") {
 		return named_plot<double>(name,x,y,format);
 	}
 

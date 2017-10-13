@@ -45,11 +45,6 @@
 #include "linear_flow_fit.h"
 #include "modules/sonar/agl_dist.h"
 
-// Kalman filter
-#include "lib/filters/kalman_filter_vision.h"
-#include "subsystems/imu.h"
-
-
 // whether to show the flow and corners:
 #define OPTICFLOW_SHOW_FLOW 0
 #define OPTICFLOW_SHOW_CORNERS 0
@@ -73,11 +68,13 @@ PRINT_CONFIG_VAR(OPTICFLOW_FOV_W)
 PRINT_CONFIG_VAR(OPTICFLOW_FOV_H)
 
 #ifndef OPTICFLOW_FX
+// This can be estimated by total possible image width / total Field of view
 #define OPTICFLOW_FX 343.1211
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FX)
 
 #ifndef OPTICFLOW_FY
+// This can be estimated by total possible image height / total Field of view
 #define OPTICFLOW_FY 348.5053
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FY)
@@ -176,16 +173,6 @@ PRINT_CONFIG_VAR(OPTICFLOW_DEROTATION_CORRECTION_FACTOR_Y)
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_MEDIAN_FILTER)
 
-#ifndef OPTICFLOW_KALMAN_FILTER
-#define OPTICFLOW_KALMAN_FILTER TRUE
-#endif
-PRINT_CONFIG_VAR(OPTICFLOW_KALMAN_FILTER)
-
-#ifndef OPTICFLOW_KALMAN_FILTER_PROCESS_NOISE
-#define OPTICFLOW_KALMAN_FILTER_PROCESS_NOISE 0.01
-#endif
-PRINT_CONFIG_VAR(OPTICFLOW_KALMAN_FILTER_PROCESS_NOISE)
-
 #ifndef OPTICFLOW_FEATURE_MANAGEMENT
 #define OPTICFLOW_FEATURE_MANAGEMENT 1
 #endif
@@ -201,15 +188,28 @@ PRINT_CONFIG_VAR(OPTICFLOW_FAST9_REGION_DETECT)
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FAST9_NUM_REGIONS)
 
+
+#ifndef OPTICFLOW_BODY_TO_CAM_PHI
+#define OPTICFLOW_BODY_TO_CAM_PHI 0
+#endif
+#ifndef OPTICFLOW_BODY_TO_CAM_THETA
+#define OPTICFLOW_BODY_TO_CAM_THETA 0
+#endif
+#ifndef OPTICFLOW_BODY_TO_CAM_PSI
+#define OPTICFLOW_BODY_TO_CAM_PSI -1.571428571
+#endif
+
 //Include median filter
 #include "filters/median_filter.h"
-struct MedianFilterFloat vel_x_filt, vel_y_filt;
+struct MedianFilter3Float vel_filt;
+struct FloatRMat body_to_cam;
 
 /* Functions only used here */
 static uint32_t timeval_diff(struct timeval *starttime, struct timeval *finishtime);
 static int cmp_flow(const void *a, const void *b);
 static int cmp_array(const void *a, const void *b);
-
+static void manage_flow_features(struct image_t *img, struct opticflow_t *opticflow,
+    struct opticflow_result_t *result);
 
 /**
  * Initialize the opticflow calculator
@@ -236,8 +236,6 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
   opticflow->threshold_vec = OPTICFLOW_THRESHOLD_VEC;
   opticflow->pyramid_level = OPTICFLOW_PYRAMID_LEVEL;
   opticflow->median_filter = OPTICFLOW_MEDIAN_FILTER;
-  opticflow->kalman_filter = OPTICFLOW_KALMAN_FILTER;
-  opticflow->kalman_filter_process_noise = OPTICFLOW_KALMAN_FILTER_PROCESS_NOISE;
   opticflow->feature_management = OPTICFLOW_FEATURE_MANAGEMENT;
   opticflow->fast9_region_detect = OPTICFLOW_FAST9_REGION_DETECT;
   opticflow->fast9_num_regions = OPTICFLOW_FAST9_NUM_REGIONS;
@@ -248,6 +246,9 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
   opticflow->fast9_padding = OPTICFLOW_FAST9_PADDING;
   opticflow->fast9_rsize = 512;
   opticflow->fast9_ret_corners = malloc(sizeof(struct point_t) * opticflow->fast9_rsize);
+
+  struct FloatEulers euler = {OPTICFLOW_BODY_TO_CAM_PHI, OPTICFLOW_BODY_TO_CAM_THETA, OPTICFLOW_BODY_TO_CAM_PSI};
+  float_rmat_of_eulers(&body_to_cam, &euler);
 }
 /**
  * Run the optical flow with fast9 and lukaskanade on a new image frame
@@ -269,20 +270,8 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     opticflow->got_first_img = false;
 
     // Init median filters with zeros
-    init_median_filter_f(&vel_x_filt, MEDIAN_DEFAULT_SIZE);
-    init_median_filter_f(&vel_y_filt, MEDIAN_DEFAULT_SIZE);
+    InitMedianFilterVect3Float(vel_filt, MEDIAN_DEFAULT_SIZE);
   }
-
-  // variables for size_divergence:
-  float size_divergence; int n_samples;
-
-  // variables for linear flow fit:
-  float error_threshold;
-  int n_iterations_RANSAC, n_samples_RANSAC, success_fit;
-  struct linear_flow_fit_info fit_info;
-
-  // Update FPS for information
-  result->fps = 1 / (timeval_diff(&(opticflow->prev_img_gray.ts), &(img->ts)) / 1000.);
 
   // Convert image to grayscale
   image_to_grayscale(img, &opticflow->img_gray);
@@ -294,6 +283,21 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   if (!opticflow->got_first_img) {
     image_copy(&opticflow->img_gray, &opticflow->prev_img_gray);
     opticflow->got_first_img = true;
+    return false;
+  }
+
+  // variables for linear flow fit:
+  float error_threshold;
+  int n_iterations_RANSAC, n_samples_RANSAC, success_fit;
+  struct linear_flow_fit_info fit_info;
+
+  // Update FPS for information
+  float dt = timeval_diff(&(opticflow->prev_img_gray.ts), &(img->ts)) / 1000.f;
+  if (dt > 1e-5)
+  {
+    result->fps = 1 / dt;
+  } else {
+    return false;
   }
 
   // *************************************************************************************
@@ -302,106 +306,7 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
 
   // if feature_management is selected and tracked corners drop below a threshold, redetect
   if ((opticflow->feature_management) && (result->corner_cnt < opticflow->max_track_corners / 2)) {
-
-      // first check if corners have not moved too close together due to flow:
-      uint16_t c1 = 0;
-      while(c1 < result->corner_cnt) {
-        int exists = 0;
-        for(uint16_t k = c1+1; k < result->corner_cnt; k++) {
-          if(abs((int16_t)opticflow->fast9_ret_corners[c1].x - (int16_t)opticflow->fast9_ret_corners[k].x) <= 1
-              && abs((int16_t)opticflow->fast9_ret_corners[c1].y - (int16_t)opticflow->fast9_ret_corners[k].y) <= 1 )
-          {
-              // if too close, replace the corner with the last one in the list:
-              opticflow->fast9_ret_corners[c1].x = opticflow->fast9_ret_corners[result->corner_cnt-1].x;
-              opticflow->fast9_ret_corners[c1].y = opticflow->fast9_ret_corners[result->corner_cnt-1].y;
-              opticflow->fast9_ret_corners[c1].count = opticflow->fast9_ret_corners[result->corner_cnt-1].count;
-              opticflow->fast9_ret_corners[c1].x_sub = opticflow->fast9_ret_corners[result->corner_cnt-1].x_sub;
-              opticflow->fast9_ret_corners[c1].y_sub = opticflow->fast9_ret_corners[result->corner_cnt-1].y_sub;
-
-              // decrease the number of corners:
-              result->corner_cnt--;
-              exists = 1;
-              // no further checking required for the removed corner
-              break;
-          }
-        }
-        // if the corner has been replaced, the new corner in position c1 has to be checked again:
-        if(!exists) c1++;
-      }
-
-    // no need for "per region" re-detection when there are no previous corners
-    if ((!opticflow->fast9_region_detect) || (result->corner_cnt == 0)) {
-      fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                   opticflow->fast9_padding, opticflow->fast9_padding, &result->corner_cnt,
-                   &opticflow->fast9_rsize,
-                   &opticflow->fast9_ret_corners,
-                   NULL);
-    } else {
-      // allocating memory and initializing the 2d array that holds the number of corners per region and its index (for the sorting)
-      uint16_t **region_count = malloc(opticflow->fast9_num_regions * sizeof(uint16_t *));
-      for (uint16_t i = 0; i < opticflow->fast9_num_regions ; i++) {
-        region_count[i] = malloc(sizeof(uint16_t) * 2);
-        region_count[i][0] = 0;
-        region_count[i][1] = i;
-      }
-      for (uint16_t i = 0; i < result->corner_cnt; i++) {
-        region_count[(opticflow->fast9_ret_corners[i].x / (img->w / (uint8_t)sqrt(opticflow->fast9_num_regions))
-                      + opticflow->fast9_ret_corners[i].y / (img->h / (uint8_t)sqrt(opticflow->fast9_num_regions)) * (uint8_t)sqrt(opticflow->fast9_num_regions))][0]++;
-      }
-
-      //sorting region_count array according to first column (number of corners).
-      qsort(region_count, opticflow->fast9_num_regions, sizeof(region_count[0]), cmp_array);
-
-      uint16_t roi[4];
-      // Detecting corners from the region with the less to the one with the most, until a desired total is reached.
-      for (uint16_t i = 0; i < opticflow->fast9_num_regions && result->corner_cnt < 2 * opticflow->max_track_corners ; i++) {
-        // Find the boundaries of the region of interest
-        roi[0] = (region_count[i][1] % (uint8_t)sqrt(opticflow->fast9_num_regions)) * (img->w / (uint8_t)sqrt(opticflow->fast9_num_regions));
-        roi[1] = (region_count[i][1] / (uint8_t)sqrt(opticflow->fast9_num_regions)) * (img->h / (uint8_t)sqrt(opticflow->fast9_num_regions));
-        roi[2] = roi[0] + (img->w / (uint8_t)sqrt(opticflow->fast9_num_regions));
-        roi[3] = roi[1] + (img->h / (uint8_t)sqrt(opticflow->fast9_num_regions));
-
-        struct point_t* new_corners = malloc(sizeof(struct point_t) * opticflow->fast9_rsize);
-        uint16_t new_count = 0;
-
-        fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                     opticflow->fast9_padding, opticflow->fast9_padding, &new_count,
-                     &opticflow->fast9_rsize,
-                     &new_corners,
-                     roi);
-
-        for(uint16_t j = 0; j < new_count; j++) {
-          bool exists = false;
-          for(uint16_t k = 0; k < result->corner_cnt; k++) {
-            if(abs((int16_t)new_corners[j].x - (int16_t)opticflow->fast9_ret_corners[k].x) < (int16_t)opticflow->fast9_min_distance
-                && abs((int16_t)new_corners[j].y - (int16_t)opticflow->fast9_ret_corners[k].y) < (int16_t)opticflow->fast9_min_distance )
-            {
-              exists = true;
-              break;
-            }
-          }
-          if(!exists) {
-            opticflow->fast9_ret_corners[result->corner_cnt].x = new_corners[j].x;
-            opticflow->fast9_ret_corners[result->corner_cnt].y = new_corners[j].y;
-            opticflow->fast9_ret_corners[result->corner_cnt].count = 0;
-            opticflow->fast9_ret_corners[result->corner_cnt].x_sub = 0;
-            opticflow->fast9_ret_corners[result->corner_cnt].y_sub = 0;
-            result->corner_cnt++;
-
-            if(result->corner_cnt >= opticflow->fast9_rsize)
-            {
-              break;
-            }
-          }
-        }
-
-        free(new_corners);
-      }
-      for (uint16_t i = 0; i < opticflow->fast9_num_regions; i++) {
-        free(region_count[i]);
-      }
-      free(region_count);
-    }
+    manage_flow_features(img, opticflow, result);
   } else if (!opticflow->feature_management) {
     // needs to be set to 0 because result is now static
     result->corner_cnt = 0;
@@ -433,16 +338,14 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   // Check if we found some corners to track
   if (result->corner_cnt < 1) {
     // Clear the result otherwise the previous values will be returned for this frame too
-    ///memset(result, 0, sizeof(struct opticflow_result_t));
-    result->vel_x = 0; result->vel_y = 0;
-    result->vel_body_x = 0; result->vel_body_y = 0;
+    VECT3_ASSIGN(result->vel_cam,0,0,0);
+    VECT3_ASSIGN(result->vel_body,0,0,0);
     result->div_size = 0; result->divergence = 0;
     result->noise_measurement = 5.0;
 
     image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
     return false;
   }
-
 
   // *************************************************************************************
   // Corner Tracking
@@ -460,39 +363,12 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
 #endif
 
   // Estimate size divergence:
-    n_samples = 100;
   if (SIZE_DIV) {
-      // check for doubles:
-      /*printf("post-flow check:\n");
-      for(uint16_t j = 0; j < result->corner_cnt; j++) {
-        int exists = 0;
-        //printf("Corner count = %d\n", result->corner_cnt);
-        for(uint16_t k = j+1; k < result->corner_cnt; k++) {
-          if(abs((int16_t)opticflow->fast9_ret_corners[j].x - (int16_t)opticflow->fast9_ret_corners[k].x) <= 1
-              && abs((int16_t)opticflow->fast9_ret_corners[j].y - (int16_t)opticflow->fast9_ret_corners[k].y) <= 1 )
-          {
-             printf("Exists: nx = %d, ny = %d, x = %d, y = %d\n", opticflow->fast9_ret_corners[j].x, opticflow->fast9_ret_corners[j].y,
-                     opticflow->fast9_ret_corners[k].x, opticflow->fast9_ret_corners[k].y);
-            exists = 1;
-            break;
-          }
-        }
-      }
-      */
-
-    size_divergence = get_size_divergence(vectors, result->tracked_cnt, n_samples);
-
-    /*
-    if(isnan(size_divergence)) {
-      for(int i = 0; i < result->corner_cnt; i++) {
-          printf("%d: (%d, %d)\n", i, opticflow->fast9_ret_corners[i].x, opticflow->fast9_ret_corners[i].y);
-      }
-    }*/
-
-    result->div_size = size_divergence * result->fps;
+    result->div_size = get_size_divergence(vectors, result->tracked_cnt, 100);// * result->fps;
   } else {
     result->div_size = 0.0f;
   }
+
   if (LINEAR_FIT) {
     // Linear flow fit (normally derotation should be performed before):
     error_threshold = 10.0f;
@@ -523,35 +399,30 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     free(vectors);
     image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
     return false;
-  } else if (result->tracked_cnt > 3) {
-    // Take the average of the 3 median points
-    result->flow_x = vectors[result->tracked_cnt / 2 - 1].flow_x;
-    result->flow_y = vectors[result->tracked_cnt / 2 - 1].flow_y;
-    result->flow_x += vectors[result->tracked_cnt / 2].flow_x;
-    result->flow_y += vectors[result->tracked_cnt / 2].flow_y;
-    result->flow_x += vectors[result->tracked_cnt / 2 + 1].flow_x;
-    result->flow_y += vectors[result->tracked_cnt / 2 + 1].flow_y;
-    result->flow_x /= 3;
-    result->flow_y /= 3;
-  } else {
+  } else if (result->tracked_cnt % 2) {
     // Take the median point
-    result->flow_x = vectors[result->tracked_cnt / 2].flow_x;
-    result->flow_y = vectors[result->tracked_cnt / 2].flow_y;
+    result->flow_x = vectors[result->tracked_cnt/2].flow_x;
+    result->flow_y = vectors[result->tracked_cnt/2].flow_y;
+  } else {
+    // Take the average of the 2 median points
+    result->flow_x = (vectors[result->tracked_cnt/2 - 1].flow_x + vectors[result->tracked_cnt/2].flow_x)/2.f;
+    result->flow_y = (vectors[result->tracked_cnt/2 - 1].flow_y + vectors[result->tracked_cnt/2].flow_y)/2.f;
   }
+
+  // TODO scale flow to rad/s here
 
   // Flow Derotation
   float diff_flow_x = 0.f;
   float diff_flow_y = 0.f;
 
   if (opticflow->derotation && result->tracked_cnt > 5) {
-    diff_flow_x = (opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi) * img->w / OPTICFLOW_FOV_W;
-    diff_flow_y = (opticflow->img_gray.eulers.theta - opticflow->prev_img_gray.eulers.theta) * img->h / OPTICFLOW_FOV_H;
+    diff_flow_x = (opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi) * OPTICFLOW_FX;
+    diff_flow_y = (opticflow->img_gray.eulers.theta - opticflow->prev_img_gray.eulers.theta) * OPTICFLOW_FY;
     /*diff_flow_x = (cam_state->rates.p)  / result->fps * img->w /
                   OPTICFLOW_FOV_W;// * img->w / OPTICFLOW_FOV_W;
     diff_flow_y = (cam_state->rates.q) / result->fps * img->h /
                   OPTICFLOW_FOV_H;// * img->h / OPTICFLOW_FOV_H;*/
   }
-
   
   float rotation_threshold = M_PI / 180.0f; 
   if(fabs(opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi) > rotation_threshold)
@@ -570,21 +441,14 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   // Velocity calculation
   // Right now this formula is under assumption that the flow only exist in the center axis of the camera.
   // TODO Calculate the velocity more sophisticated, taking into account the drone's angle and the slope of the ground plane.
-  float vel_x = (float)result->flow_der_x * result->fps * agl_dist_value_filtered / (opticflow->subpixel_factor * OPTICFLOW_FX);
-  float vel_y = (float)result->flow_der_y * result->fps * agl_dist_value_filtered / (opticflow->subpixel_factor * OPTICFLOW_FY);
+  result->vel_cam.x = (float)result->flow_der_x * result->fps * agl_dist_value_filtered / (opticflow->subpixel_factor * OPTICFLOW_FX);
+  result->vel_cam.y = (float)result->flow_der_y * result->fps * agl_dist_value_filtered / (opticflow->subpixel_factor * OPTICFLOW_FY);
+  result->vel_cam.z = result->divergence * result->fps * agl_dist_value_filtered;
 
   //Apply a  median filter to the velocity if wanted
   if (opticflow->median_filter == true) {
-    result->vel_x = update_median_filter_f(&vel_x_filt, vel_x);
-    result->vel_y = update_median_filter_f(&vel_y_filt, vel_y);
-  } else {
-    result->vel_x = vel_x;
-    result->vel_y = vel_y;
+    UpdateMedianFilterVect3Float(vel_filt, result->vel_cam);
   }
-
-  // Velocity calculation: uncomment if focal length of the camera is not known or incorrect.
-  //  result->vel_x =  - result->flow_der_x * result->fps * cam_state->agl / opticflow->subpixel_factor * OPTICFLOW_FOV_W / img->w
-  //  result->vel_y =  result->flow_der_y * result->fps * cam_state->agl / opticflow->subpixel_factor * OPTICFLOW_FOV_H / img->h
 
   // Determine quality of noise measurement for state filter
   //TODO develop a noise model based on groundtruth
@@ -611,6 +475,114 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   return true;
 }
 
+/* manage_flow_features - Update list of corners to be tracked by LK
+ * Remembers previous points and tries to find new points in less dense
+ * areas of the image first.
+ *
+ */
+static void manage_flow_features(struct image_t *img, struct opticflow_t *opticflow, struct opticflow_result_t *result)
+{
+  // first check if corners have not moved too close together due to flow:
+  uint16_t c1 = 0;
+  while(c1 < result->corner_cnt - 1) {
+    bool exists = false;
+    for(uint16_t i = c1+1; i < result->corner_cnt; i++) {
+      if(abs((int16_t)opticflow->fast9_ret_corners[c1].x - (int16_t)opticflow->fast9_ret_corners[i].x) < opticflow->fast9_min_distance/2
+          && abs((int16_t)opticflow->fast9_ret_corners[c1].y - (int16_t)opticflow->fast9_ret_corners[i].y) < opticflow->fast9_min_distance/2 )
+      {
+          // if too close, replace the corner with the last one in the list:
+          opticflow->fast9_ret_corners[c1].x = opticflow->fast9_ret_corners[result->corner_cnt-1].x;
+          opticflow->fast9_ret_corners[c1].y = opticflow->fast9_ret_corners[result->corner_cnt-1].y;
+          opticflow->fast9_ret_corners[c1].count = opticflow->fast9_ret_corners[result->corner_cnt-1].count;
+          opticflow->fast9_ret_corners[c1].x_sub = opticflow->fast9_ret_corners[result->corner_cnt-1].x_sub;
+          opticflow->fast9_ret_corners[c1].y_sub = opticflow->fast9_ret_corners[result->corner_cnt-1].y_sub;
+
+          // decrease the number of corners:
+          result->corner_cnt--;
+          exists = true;
+          // no further checking required for the removed corner
+          break;
+      }
+    }
+    // if the corner has been replaced, the new corner in position c1 has to be checked again:
+    if(!exists) c1++;
+  }
+
+  // no need for "per region" re-detection when there are no previous corners
+  if ((!opticflow->fast9_region_detect) || (result->corner_cnt == 0)) {
+    fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
+                 opticflow->fast9_padding, opticflow->fast9_padding, &result->corner_cnt,
+                 &opticflow->fast9_rsize,
+                 &opticflow->fast9_ret_corners,
+                 NULL);
+  } else {
+    // allocating memory and initializing the 2d array that holds the number of corners per region and its index (for the sorting)
+    uint16_t **region_count = malloc(opticflow->fast9_num_regions * sizeof(uint16_t *));
+    for (uint16_t i = 0; i < opticflow->fast9_num_regions ; i++) {
+      region_count[i] = malloc(sizeof(uint16_t) * 2);
+      region_count[i][0] = 0;
+      region_count[i][1] = i;
+    }
+    uint16_t root_regions = (uint16_t)sqrtf((float)opticflow->fast9_num_regions);
+    for (uint16_t i = 0; i < result->corner_cnt; i++) {
+      region_count[(opticflow->fast9_ret_corners[i].x * root_regions / img->w
+                    + opticflow->fast9_ret_corners[i].y * opticflow->fast9_num_regions / img->h )][0]++;
+    }
+
+    //sorting region_count array according to first column (number of corners).
+    qsort(region_count, opticflow->fast9_num_regions, sizeof(region_count[0]), cmp_array);
+
+    uint16_t roi[4];
+    // Detecting corners from the region with the less to the one with the most, until a desired total is reached.
+    for (uint16_t i = 0; i < opticflow->fast9_num_regions && result->corner_cnt < 2 * opticflow->max_track_corners ; i++) {
+      // Find the boundaries of the region of interest
+      roi[0] = (region_count[i][1] % (uint8_t)sqrt(opticflow->fast9_num_regions)) * (img->w / (uint8_t)sqrt(opticflow->fast9_num_regions));
+      roi[1] = (region_count[i][1] / (uint8_t)sqrt(opticflow->fast9_num_regions)) * (img->h / (uint8_t)sqrt(opticflow->fast9_num_regions));
+      roi[2] = roi[0] + (img->w / (uint8_t)sqrt(opticflow->fast9_num_regions));
+      roi[3] = roi[1] + (img->h / (uint8_t)sqrt(opticflow->fast9_num_regions));
+
+      struct point_t* new_corners = malloc(sizeof(struct point_t) * opticflow->fast9_rsize);
+      uint16_t new_count = 0;
+
+      fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
+                   opticflow->fast9_padding, opticflow->fast9_padding, &new_count,
+                   &opticflow->fast9_rsize, &new_corners, roi);
+
+      // check that no identified points already exist in list
+      for(uint16_t j = 0; j < new_count; j++) {
+        bool exists = false;
+        for(uint16_t k = 0; k < result->corner_cnt; k++) {
+          if(abs((int16_t)new_corners[j].x - (int16_t)opticflow->fast9_ret_corners[k].x) < (int16_t)opticflow->fast9_min_distance
+              && abs((int16_t)new_corners[j].y - (int16_t)opticflow->fast9_ret_corners[k].y) < (int16_t)opticflow->fast9_min_distance )
+          {
+            exists = true;
+            break;
+          }
+        }
+        if(!exists) {
+          opticflow->fast9_ret_corners[result->corner_cnt].x = new_corners[j].x;
+          opticflow->fast9_ret_corners[result->corner_cnt].y = new_corners[j].y;
+          opticflow->fast9_ret_corners[result->corner_cnt].count = 0;
+          opticflow->fast9_ret_corners[result->corner_cnt].x_sub = 0;
+          opticflow->fast9_ret_corners[result->corner_cnt].y_sub = 0;
+          result->corner_cnt++;
+
+          if(result->corner_cnt >= opticflow->fast9_rsize)
+          {
+            break;
+          }
+        }
+      }
+
+      free(new_corners);
+    }
+    for (uint16_t i = 0; i < opticflow->fast9_num_regions; i++) {
+      free(region_count[i]);
+    }
+    free(region_count);
+  }
+}
+
 /**
  * Run the optical flow with EDGEFLOW on a new image frame
  * @param[in] *opticflow The opticalflow structure that keeps track of previous images
@@ -635,7 +607,7 @@ bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img,
 
   // If the methods just switched to this one, reintialize the
   // array of edge_hist structure.
-  if (opticflow->just_switched_method == 1) {
+  if (opticflow->just_switched_method == 1 && edge_hist[0].x == NULL) {
     int i;
     for (i = 0; i < MAX_HORIZON; i++) {
       edge_hist[i].x = malloc(sizeof(int32_t) * img->w);
@@ -753,17 +725,16 @@ bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img,
 
   result->fps = fps_x;
 
+  // TODO sclae flow to rad/s here
+
   // Calculate velocity
-  float vel_x = edgeflow.flow_x * fps_x * agl_dist_value_filtered * OPTICFLOW_FOV_W / (img->w * RES);
-  float vel_y = edgeflow.flow_y * fps_y * agl_dist_value_filtered * OPTICFLOW_FOV_H / (img->h * RES);
+  result->vel_cam.x = edgeflow.flow_x * fps_x * agl_dist_value_filtered * OPTICFLOW_FX / RES;
+  result->vel_cam.y = edgeflow.flow_y * fps_y * agl_dist_value_filtered * OPTICFLOW_FY / RES;
+  result->vel_cam.z = result->divergence * fps_y * agl_dist_value_filtered;
 
   //Apply a  median filter to the velocity if wanted
   if (opticflow->median_filter == true) {
-    result->vel_x = update_median_filter_f(&vel_x_filt, vel_x);
-    result->vel_y = update_median_filter_f(&vel_y_filt, vel_y);
-  } else {
-    result->vel_x = vel_x;
-    result->vel_y = vel_y;
+    UpdateMedianFilterVect3Float(vel_filt, result->vel_cam);
   }
 
   result->noise_measurement = 0.2;
@@ -789,6 +760,7 @@ bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img,
  * @param[in] *img The image frame to calculate the optical flow from
  * @param[out] *result The optical flow result
  */
+#include <sys/time.h>
 bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img,
                           struct opticflow_result_t *result)
 {
@@ -805,6 +777,7 @@ bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img,
     opticflow->just_switched_method = false;
   }
 
+  struct timeval tv, tv2;
   // Switch between methods (0 = fast9/lukas-kanade, 1 = EdgeFlow)
   if (opticflow->method == 0) {
     flow_successful = calc_fast9_lukas_kanade(opticflow, img, result);
@@ -817,107 +790,9 @@ bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img,
   * ARdrone and Bebop, however this can be different for other quadcopters
   * ALWAYS double check!
   */
-  result->vel_body_x = result->vel_y;
-  result->vel_body_y = - result->vel_x;
+  float_rmat_transp_vmult(&result->vel_body, &body_to_cam, &result->vel_cam);
 
-  // KALMAN filter on velocity
-  float measurement_noise[2] = {result->noise_measurement, 1.0f};
-  static bool reinitialize_kalman = true;
-
-  static uint8_t wait_filter_counter =
-    0; // When starting up the opticalflow module, or switching between methods, wait for a bit to prevent bias
-
-/* TODO fix
-  if (opticflow->kalman_filter == true && flow_successful) {
-    if (opticflow->just_switched_method == true) {
-      wait_filter_counter = 0;
-      reinitialize_kalman = true;
-    }
-
-    if (wait_filter_counter > 50) {
-      // Get accelerometer values rotated to body axis
-      // TODO: use acceleration from the state ?
-      struct FloatVect3 accel_imu_f;
-      ACCELS_FLOAT_OF_BFP(accel_imu_f, cam_state->accel_imu_meas);
-      struct FloatVect3 accel_meas_body;
-      float_quat_vmult(&accel_meas_body, &cam_state->imu_to_body_quat, &accel_imu_f);
-
-      float acceleration_measurement[2];
-      acceleration_measurement[0] = accel_meas_body.x;
-      acceleration_measurement[1] = accel_meas_body.y;
-
-      kalman_filter_opticflow_velocity(&result->vel_body_x, &result->vel_body_y, acceleration_measurement, result->fps,
-                                       measurement_noise, opticflow->kalman_filter_process_noise, reinitialize_kalman);
-      if (reinitialize_kalman) {
-        reinitialize_kalman = false;
-      }
-
-    } else {
-      wait_filter_counter++;
-    }
-  } else {
-    reinitialize_kalman = true;
-  }
-*/
   return flow_successful;
-}
-
-/**
- * Filter the velocity with a simple linear kalman filter, together with the accelerometers
- * @param[in] *velocity_x  Velocity in x direction of body fixed coordinates
- * @param[in] *velocity_y  Belocity in y direction of body fixed coordinates
- * @param[in] *acceleration_measurement  Measurements of the accelerometers
- * @param[in] fps  Frames per second
- * @param[in] *measurement_noise  Expected variance of the noise of the measurements
- * @param[in] *measurement_noise  Expected variance of the noise of the model prediction
- * @param[in] reinitialize_kalman  Boolean to reinitialize the kalman filter
- */
-void kalman_filter_opticflow_velocity(float *velocity_x, float *velocity_y, float *acceleration_measurement, float fps,
-                                      float *measurement_noise, float kalman_process_noise, bool reinitialize_kalman)
-{
-  // Initialize variables
-  static float covariance_x[4], covariance_y[4], state_estimate_x[2], state_estimate_y[2];
-  float measurements_x[2], measurements_y[2];
-
-  if (reinitialize_kalman) {
-    state_estimate_x[0] = 0.0f;
-    state_estimate_x[1] = 0.0f;
-    covariance_x[0] = 1.0f;
-    covariance_x[1] = 1.0f;
-    covariance_x[2] = 1.0f;
-    covariance_x[3] = 1.0f;
-
-    state_estimate_y[0] = 0.0f;
-    state_estimate_y[1] = 0.0f;
-    covariance_y[0] = 1.0f;
-    covariance_y[1] = 1.0f;
-    covariance_y[2] = 1.0f;
-    covariance_y[3] = 1.0f;
-  }
-
-  /*Model for velocity estimation
-   * state = [ velocity; acceleration]
-   * Velocity_prediction = last_velocity_estimate + acceleration * dt
-   * Acceleration_prediction = last_acceleration
-   * model = Jacobian([vel_prediction; accel_prediction],state)
-   *       = [1 dt ; 0 1];
-   * */
-  float model[4] =  {1.0f, 1.0f / fps , 0.0f , 1.0f};
-  float process_noise[2] = {kalman_process_noise, kalman_process_noise};
-
-  // Measurements from velocity_x of optical flow and acceleration directly from scaled accelerometers
-  measurements_x[0] = *velocity_x;
-  measurements_x[1] = acceleration_measurement[0];
-
-  measurements_y[0] = *velocity_y;
-  measurements_y[1] = acceleration_measurement[1];
-
-  // 2D linear kalman filter
-  kalman_filter_linear_2D_float(model, measurements_x, covariance_x, state_estimate_x, process_noise, measurement_noise);
-  kalman_filter_linear_2D_float(model, measurements_y, covariance_y, state_estimate_y, process_noise, measurement_noise);
-
-  *velocity_x = state_estimate_x[0];
-  *velocity_y = state_estimate_y[0];
 }
 
 /**
@@ -962,4 +837,3 @@ static int cmp_array(const void *a, const void *b)
   const uint16_t *pb = *(const uint16_t **)b;
   return pa[0] - pb[0];
 }
-

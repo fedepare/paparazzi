@@ -48,8 +48,6 @@ struct opticflow_t {
   uint16_t search_distance;           ///< Search distance for blockmatching alg.
   bool derotation;                    ///< Derotation switched on or off (depended on the quality of the gyroscope measurement)
   bool median_filter;                 ///< Decides to use a median filter on the velocity
-  bool kalman_filter;                       ///< Decide to use Kalman filter to filter velocity with accelerometers
-  float kalman_filter_process_noise;        ///< Process noise of the model used in the kalman filter
 
   float derotation_correction_factor_x;     ///< Correction factor for derotation in x axis, determined from a fit from the gyros and flow rotation. (wrong FOV, camera not in center)
   float derotation_correction_factor_y;     ///< Correction factor for derotation in Y axis, determined from a fit from the gyros and flow rotation. (wrong FOV, camera not in center)

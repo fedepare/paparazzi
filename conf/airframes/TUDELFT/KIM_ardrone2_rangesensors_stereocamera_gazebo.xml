@@ -10,7 +10,6 @@
     </target>
 
     <define name="USE_SONAR" value="TRUE"/>
-    <configure name="STEREO_PATH" value="/home/kirk/mavlab/stereoboard"/>
 
 	<!-- Subsystem section -->
     <module name="telemetry" type="transparent_udp"/>
@@ -32,6 +31,7 @@
 	
     <!--module name="stereocam">
      <configure name="STEREO_UART" value="UART2"/>
+     <configure name="STEREO_PATH" value="/home/kirk/mavlab/stereoboard"/>
     </module-->
     
     <module name="video_thread"/>
@@ -253,9 +253,10 @@
     <define name="BYPASS_AHRS" value="1"/>
     <define name="SIMULATE_VIDEO" value="1"/>
     <define name="SIMULATE_RANGE_SENSORS" value="1"/>
-    <!--define name="SIMULATE_EXTERNAL_STEREO_CAMERA" value="0"/-->
+    <!--define name="SIMULATE_EXTERNAL_STEREO_CAMERA" value="1"/-->
     <define name="GAZEBO_WORLD" value="imav_indoor.world" type="string"/>
     <define name="DEBUG_VIDEO" value="1"/>
+    <define name="DEBUG_STEREOCAM" value="1"/>
     <define name="NO_GPS" value="1"/>
   </section>
 

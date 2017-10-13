@@ -94,13 +94,13 @@ void calculate_edge_histogram(struct image_t *img, int32_t edge_histogram[],
   int32_t sobel_sum = 0;
   int32_t Sobel[3] = { -1, 0, 1};
 
-  uint32_t y = 0, x = 0;
+  int32_t y = 0, x = 0;
   int32_t c = 0;
 
   uint32_t idx = 0;
 
-  uint16_t image_width = img->w;
-  uint16_t image_height = img->h;
+  int16_t image_width = (int16_t)img->w;
+  int16_t image_height = (int16_t)img->h;
   uint32_t interlace;
   if (img->type == IMAGE_GRAYSCALE) {
     interlace = 1;
@@ -170,7 +170,7 @@ void calculate_edge_displacement(int32_t *edge_histogram, int32_t *edge_histogra
                                  uint8_t window, uint8_t disp_range, int32_t der_shift)
 {
   int32_t c = 0, r = 0;
-  uint32_t x = 0;
+  int32_t x = 0;
   uint32_t SAD_temp[2 * DISP_RANGE_MAX + 1]; // size must be at least 2*D + 1
 
   int32_t W = window;
@@ -271,7 +271,7 @@ void line_fit(int32_t *displacement, int32_t *divergence, int32_t *flow, uint32_
   xMean = (size_int - 1) / 2;
   count = size_int - 2 * border_int;
 
-  for (x = border_int; x < size - border_int; x++) {
+  for (x = border_int; x < size_int - border_int; x++) {
     sumY += displacement[x];
     sumXY += x * displacement[x];
   }
@@ -282,7 +282,7 @@ void line_fit(int32_t *displacement, int32_t *divergence, int32_t *flow, uint32_
   *divergence = divergence_int;
   *flow = yMean - *divergence * xMean;  // compute b (or y) intercept of line ax + b
 
-  for (x = border_int; x < size - border_int; x++) {
+  for (x = border_int; x < size_int - border_int; x++) {
     total_error += abs(RES * displacement[x] - divergence_int * x + yMean);
   }
 }
@@ -334,10 +334,10 @@ void draw_edgeflow_img(struct image_t *img, struct edge_flow_t edgeflow, int32_t
  * @param[in] size  Size of the array
  * @param[return] amount of peaks
  */
-uint32_t getAmountPeaks(int32_t *edgehist, uint32_t thres, int32_t size)
+uint32_t getAmountPeaks(int32_t *edgehist, int32_t thres, int32_t size)
 {
   uint32_t  amountPeaks = 0;
-  uint32_t i = 0;
+  int32_t i = 0;
 
   for (i = 1; i < size + 1;  i ++) {
     if (edgehist[i - 1] < edgehist[i] && edgehist[i] > edgehist[i + 1] && edgehist[i] > thres) {

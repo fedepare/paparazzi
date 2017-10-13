@@ -147,7 +147,7 @@ static void gps_cb(uint8_t sender_id, uint32_t stamp, struct GpsState *gps_s);
 #define INS_INT_VEL_ID ABI_BROADCAST
 #endif
 static abi_event vel_est_ev;
-static void vel_est_cb(uint8_t __attribute__((unused)) sender_id,
+static void vel_est_cb(uint8_t sender_id,
                        uint32_t stamp,
                        float x, float y, float z,
                        float noise);
@@ -155,7 +155,7 @@ static void vel_est_cb(uint8_t __attribute__((unused)) sender_id,
 #define INS_INT_POS_ID ABI_BROADCAST
 #endif
 static abi_event pos_est_ev;
-static void pos_est_cb(uint8_t __attribute__((unused)) sender_id,
+static void pos_est_cb(uint8_t sender_id,
                        uint32_t stamp,
                        float x, float y, float z,
                        float noise);
@@ -539,7 +539,7 @@ static void gps_cb(uint8_t sender_id __attribute__((unused)),
  *
  */
 static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
-                       uint32_t stamp,
+                       uint32_t stamp __attribute__((unused)),
                        float x, float y, float z,
                        float noise)
 {
@@ -581,7 +581,7 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
 /* NED position estimate relative to ltp origin
  */
 static void pos_est_cb(uint8_t sender_id __attribute__((unused)),
-                       uint32_t stamp,
+                       uint32_t stamp __attribute__((unused)),
                        float x, float y, float z,
                        float noise)
 {

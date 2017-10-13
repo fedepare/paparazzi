@@ -150,7 +150,7 @@ void stereocam_parse_vel(struct FloatVect3 vel_camera, float R2)
 static struct NedCoor_f prevPos = {0};
 void stereocam_parse_pos(struct FloatVect3 pos_camera, float R2, bool new_keyframe)
 {
-  if (!stateIsLocalCoordinateValid)
+  if (!stateIsLocalCoordinateValid())
   {
     return;
   }
@@ -189,8 +189,6 @@ void stereocam_parse_pos(struct FloatVect3 pos_camera, float R2, bool new_keyfra
 /* Parse the InterMCU message */
 static void stereocam_parse_msg(void)
 {
-  uint32_t now_ts = get_sys_time_usec();
-
   /* Parse the mag-pitot message */
   uint8_t msg_id = stereocam_msg_buf[1];
   switch (msg_id) {
@@ -219,14 +217,12 @@ static void stereocam_parse_msg(void)
     struct FloatVect3 flow_body;
     float_rmat_transp_vmult(&flow_body, &body_to_stereocam, &flow_camera);
 
-    AbiSendMsgOPTICAL_FLOW(STEREOCAM2STATE_SENDER_ID, now_ts,
+    AbiSendMsgOPTICAL_FLOW(STEREOCAM2STATE_SENDER_ID, get_sys_time_usec(),
                                 body_flow.x,
                                 body_flow.y,
                                 body_flow.z,
                                 quality,
-                                body_flow.z,
-                                (float)DL_STEREOCAM_VELOCITY_avg_dist(stereocam_msg_buf)/res
-                               );
+                                body_flow.z);
     */
 
     break;
@@ -249,12 +245,13 @@ static void stereocam_parse_msg(void)
   }
 
   case DL_STEREOCAM_ARRAY: {
-	    uint8_t type = DL_STEREOCAM_ARRAY_type(stereocam_msg_buf);
-	    uint8_t w = DL_STEREOCAM_ARRAY_width(stereocam_msg_buf);
-	    uint8_t h = DL_STEREOCAM_ARRAY_height(stereocam_msg_buf);
-	    uint8_t nb = DL_STEREOCAM_ARRAY_package_nb(stereocam_msg_buf);
-	    uint8_t l = DL_STEREOCAM_ARRAY_image_data_length(stereocam_msg_buf);
+    uint8_t w = DL_STEREOCAM_ARRAY_width(stereocam_msg_buf);
 #if FORWARD_IMAGE_DATA
+    uint8_t type = DL_STEREOCAM_ARRAY_type(stereocam_msg_buf);
+    uint8_t w = DL_STEREOCAM_ARRAY_width(stereocam_msg_buf);
+    uint8_t h = DL_STEREOCAM_ARRAY_height(stereocam_msg_buf);
+    uint8_t nb = DL_STEREOCAM_ARRAY_package_nb(stereocam_msg_buf);
+    uint8_t l = DL_STEREOCAM_ARRAY_image_data_length(stereocam_msg_buf);
     // forward image to ground station
     DOWNLINK_SEND_STEREO_IMG(DefaultChannel, DefaultDevice, &type, &w, &h, &nb,
         l, DL_STEREOCAM_ARRAY_image_data(stereocam_msg_buf));
@@ -267,17 +264,14 @@ static void stereocam_parse_msg(void)
 
     //TODO: do this for each stereo image column
     imav2017_histogram_obstacle_detection(DL_STEREOCAM_ARRAY_image_data(stereocam_msg_buf), stereo_distance_filtered,
-    		&closest_average_distance, &pixel_location_of_closest_object, 128);
-
-    /*DOWNLINK_SEND_STEREO_IMG(DefaultChannel, DefaultDevice, &type, &w, &h, &nb,
-         100, DL_STEREOCAM_ARRAY_image_data(stereocam_msg_buf));*/
+    		&closest_average_distance, &pixel_location_of_closest_object, w);
 
     // TODO: automatically get FOV
     float pxtorad=(float)RadOfDeg(59) / 128;
     float heading = (float)(pixel_location_of_closest_object-54)*pxtorad;
     float distance = (float)(closest_average_distance)/100;
 
-    float x_offset_collision = tanf(heading) * distance;
+    //float x_offset_collision = tanf(heading) * distance;
 
     float vel_x_FF = 0, vel_y_FF = 0;
     if(pixel_location_of_closest_object !=0&&distance<1.5)

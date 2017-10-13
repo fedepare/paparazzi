@@ -1,3 +1,5 @@
+#include "nps_radio_control_spektrum.h"
+
 #include "nps_radio_control.h"
 
 #include <glib.h>
@@ -129,6 +131,9 @@ static void parse_data(char *buf, int len)
           status = STA_UNINIT;
           handle_frame();
         }
+        break;
+      default:
+        status = STA_UNINIT;
         break;
     }
   }

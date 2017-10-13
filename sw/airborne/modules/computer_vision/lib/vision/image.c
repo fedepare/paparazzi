@@ -333,7 +333,7 @@ void pyramid_next_level(struct image_t *input, struct image_t *output, uint8_t b
  * @param[in]  border_size  - amount of padding around image. Padding is made by reflecting image elements at the edge
  *                  Example: f e d c b a | a b c d e f | f e d c b a
  */
-void pyramid_build(struct image_t *input, struct image_t *output_array, uint8_t pyr_level, uint8_t border_size)
+void pyramid_build(struct image_t *input, struct image_t *output_array, uint8_t pyr_level, uint16_t border_size)
 {
   // Pad input image and save it as '0' pyramid level
   image_add_border(input, &output_array[0], border_size);
@@ -703,11 +703,17 @@ void image_show_flow(struct image_t *img, struct flow_t *vectors, uint16_t point
     // Draw a line from the original position with the flow vector
     struct point_t from = {
       vectors[i].pos.x / subpixel_factor,
-      vectors[i].pos.y / subpixel_factor
+      vectors[i].pos.y / subpixel_factor,
+      0,
+      vectors[i].pos.x % subpixel_factor,
+      vectors[i].pos.y % subpixel_factor
     };
     struct point_t to = {
       (vectors[i].pos.x + vectors[i].flow_x) / subpixel_factor,
-      (vectors[i].pos.y + vectors[i].flow_y) / subpixel_factor
+      (vectors[i].pos.y + vectors[i].flow_y) / subpixel_factor,
+      0,
+      (vectors[i].pos.x + vectors[i].flow_x) % subpixel_factor,
+      (vectors[i].pos.y + vectors[i].flow_y) % subpixel_factor
     };
     image_draw_line(img, &from, &to);
   }

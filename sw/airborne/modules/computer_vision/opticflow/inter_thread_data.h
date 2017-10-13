@@ -44,11 +44,8 @@ struct opticflow_result_t {
   int16_t flow_der_x;     ///< The derotated flow calculation in the x direction (in subpixels)
   int16_t flow_der_y;     ///< The derotated flow calculation in the y direction (in subpixels)
 
-  float vel_x;            ///< The velocity in the x direction (image coordinates)
-  float vel_y;            ///< The velocity in the y direction (image coordinates)
-
-  float vel_body_x;     ///< The velocity in the x direction (body fixed coordinates)
-  float vel_body_y;     ///< The velocity in the y direction (body fixed coordinates)
+  struct FloatVect3 vel_cam;      ///< The velocity in camera frame (m/s)
+  struct FloatVect3 vel_body;     ///< The velocity in body frame (m/s)
 
   float div_size;         ///< Divergence as determined with the size_divergence script
 
@@ -64,7 +61,6 @@ struct opticflow_state_t {
   struct FloatEulers eulers;   ///< Body euler angles
   float agl;                 ///< height above ground [m]
   struct FloatQuat imu_to_body_quat;   ///< imu to body quaternion
-  struct Int32Vect3 accel_imu_meas;    ///< imu acceleration in imu's coordinates
 };
 
 #endif
