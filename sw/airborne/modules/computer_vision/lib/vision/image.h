@@ -103,6 +103,12 @@ void image_show_points(struct image_t *img, struct point_t *points, uint16_t poi
 void image_show_flow(struct image_t *img, struct flow_t *vectors, uint16_t points_cnt, uint8_t subpixel_factor);
 void image_draw_line(struct image_t *img, struct point_t *from, struct point_t *to);
 void image_draw_line_color(struct image_t *img, struct point_t *from, struct point_t *to, uint8_t *color);
+void image_draw_circle(struct image_t *img, struct point_t *center, uint16_t radius, uint8_t *color);
+
+uint8_t sqrti(int32_t num);
+void image_2d_gradients(struct image_t *input, struct image_t *d);
+void image_2d_sobel(struct image_t *input, struct image_t *d);
+
 void pyramid_next_level(struct image_t *input, struct image_t *output, uint8_t border_size);
 void pyramid_build(struct image_t *input, struct image_t *output_array, uint8_t pyr_level, uint16_t border_size);
 

@@ -41,9 +41,9 @@ extern bool settings_clear_flag;
 #define settings_ClearSettings(_v) { settings_clear_flag = _v; settings_clear(); }
 
 /* implemented in arch dependant code */
-int32_t persistent_write(void *ptr, uint32_t size);
-int32_t persistent_read(void *ptr, uint32_t size);
-int32_t persistent_clear(void);
+extern int32_t persistent_write(void *ptr, uint32_t size);
+extern int32_t persistent_read(void *ptr, uint32_t size);
+extern int32_t persistent_clear(void);
 
 
 #endif /* SUBSYSTEMS_SETTINGS_H */

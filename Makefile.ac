@@ -71,6 +71,8 @@ MODULES_DIR=$(PAPARAZZI_HOME)/conf/modules/
 AUTOPILOT_DIR=$(AC_GENERATED)/
 AIRCRAFT_MD5=$(AIRCRAFT_CONF_DIR)/aircraft.md5
 
+export AUTOPILOT_DIR
+
 UNAME = $(shell uname -s)
 ifeq ("$(UNAME)","Darwin")
 	MKTEMP = gmktemp

@@ -560,8 +560,8 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
   static uint32_t last_stamp = 0;
   if (last_stamp > 0) {
     float dt = (float)(stamp - last_stamp) * 1e-6;
-    ins_int.ltp_pos.x = ins_int.ltp_pos.x + POS_BFP_OF_REAL(dt * vel_ned.x);
-    ins_int.ltp_pos.y = ins_int.ltp_pos.y + POS_BFP_OF_REAL(dt * vel_ned.y);
+    ins_int.ltp_pos.x += POS_BFP_OF_REAL(dt * vel_ned.x);
+    ins_int.ltp_pos.y += POS_BFP_OF_REAL(dt * vel_ned.y);
   }
   last_stamp = stamp;
 #endif

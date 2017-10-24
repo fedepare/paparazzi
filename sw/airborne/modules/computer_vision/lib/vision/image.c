@@ -416,25 +416,162 @@ void image_subpixel_window(struct image_t *input, struct image_t *output, struct
 
 /**
  * Calculate the  gradients using the following matrix:
- * [0 -1 0; -1 0 1; 0 1 0]
+ * dx = [0 0 0; -1 0 1; 0 0 0] and dy = [0 -1 0; 0 0 0; 0 1 0]
  * @param[in] *input Input grayscale image
- * @param[out] *dx Output gradient in the X direction (dx->w = input->w-2, dx->h = input->h-2)
- * @param[out] *dy Output gradient in the Y direction (dx->w = input->w-2, dx->h = input->h-2)
+ * @param[out] *dx Output gradient in the X direction
+ * @param[out] *dy Output gradient in the Y direction
  */
 void image_gradients(struct image_t *input, struct image_t *dx, struct image_t *dy)
 {
+  if (dx->buf_size < input->buf_size || dy->buf_size < input->buf_size){
+    return;
+  }
+
   // Fetch the buffers in the correct format
   uint8_t *input_buf = (uint8_t *)input->buf;
-  int16_t *dx_buf = (int16_t *)dx->buf;
-  int16_t *dy_buf = (int16_t *)dy->buf;
+  uint8_t *dx_buf = (uint8_t *)dx->buf;
+  uint8_t *dy_buf = (uint8_t *)dy->buf;
 
-  // Go trough all pixels except the borders
-  for (uint16_t x = 1; x < input->w - 1; x++) {
-    for (uint16_t y = 1; y < input->h - 1; y++) {
-      dx_buf[(y - 1)*dx->w + (x - 1)] = (int16_t)input_buf[y * input->w + x + 1] - (int16_t)input_buf[y * input->w + x - 1];
-      dy_buf[(y - 1)*dy->w + (x - 1)] = (int16_t)input_buf[(y + 1) * input->w + x] - (int16_t)
-                                        input_buf[(y - 1) * input->w + x];
+  uint32_t idx;
+  uint32_t size = input->w * input->h;
+
+  // Go through all pixels except the borders
+  // split computation of x and y to two loops to optimize run time performance
+  for (idx = 1; idx < size - 1; idx++) {
+    dx_buf[idx] = (int16_t)input_buf[idx + 1] - (int16_t)input_buf[idx - 1];
+  }
+
+  // overwrite incorrect pixels
+  for (idx = dx->w-1; idx < size; idx+=dx->w) {
+    dx_buf[idx] = 0;
+    dx_buf[idx + 1] = 0;
+  }
+
+  for (idx = dy->w; idx < size - input->w; idx++) {
+    dy_buf[idx] = (int16_t)input_buf[idx + input->w] - (int16_t)input_buf[idx - input->w];
+  }
+}
+
+/* Integer implementation of square root using Netwon's method
+ * Can only compute squares of numbers below 65536, ie result is always uint8_t
+ */
+uint8_t sqrti(int32_t num)
+{
+#ifdef LINUX
+  uint32_t root = (uint32_t)sqrtf(float(num));
+#else
+
+  static const uint8_t max_iter = 100;
+  int32_t root = num/2, prev_root = root;
+
+  if(num <= 0){
+    return 0;
+  } else if (num >= 65025){ // 255 * 255 = 65025
+    return 255;
+  } else if (num == 1){
+    return 1;
+  } else {
+    for(uint16_t i = 0; i < max_iter; i++){
+      root = root - (root*root - num)/(root*2);
+      if (root == prev_root){
+        break;
+      } else {
+        prev_root = root;
+      }
     }
+  }
+
+  // round result to nearest
+  if (10*(root*root - num)/(root*2)>5){
+    root -= 1;
+  }
+#endif
+  return (uint8_t)root;
+}
+
+/**
+ * Calculate the  gradients using the following matrix:
+ * d = |[0 -1 0; -1 0 1; 0 1 0] * IMG|
+ * @param[in] *input Input grayscale image
+ * @param[out] *d Output mean gradient
+ */
+void image_2d_gradients(struct image_t *input, struct image_t *d)
+{
+  if (d->buf_size < input->buf_size){
+    return;
+  }
+
+  // Fetch the buffers in the correct format
+  uint8_t *input_buf = (uint8_t *)input->buf;
+  uint8_t *d_buf = (uint8_t *)d->buf;
+
+  uint32_t idx, idx1;
+  uint32_t size = input->w * input->h;
+  int32_t temp1, temp2;
+
+  // Go through all pixels except the borders
+  for (idx = d->w + 1; idx < size - d->w - 1; idx++) {
+    temp1 = (int32_t)input_buf[idx + 1] - (int32_t)input_buf[idx - 1];
+    temp2 = (int32_t)input_buf[idx + input->w] - (int32_t)input_buf[idx - input->w];
+    d_buf[idx] = sqrti(temp1*temp1 + temp2*temp2);
+  }
+
+  // set x gradient for first and last row
+  for (idx = 1, idx1 = size - d->w + 1; idx1 < size - 1; idx++, idx1++) {
+    d_buf[idx] = (uint8_t)abs((int16_t)input_buf[idx + 1] - (int16_t)input_buf[idx - 1]);
+    d_buf[idx1] = (uint8_t)abs((int16_t)input_buf[idx1 + 1] - (int16_t)input_buf[idx1 - 1]);
+  }
+
+  // set y gradient for first and last col
+  for (idx = d->w, idx1 = 2*d->w-1; idx1 < size - input->w; idx+=input->w, idx1+=input->w) {
+    d_buf[idx] = (uint8_t)abs((int16_t)input_buf[idx + input->w] - (int16_t)input_buf[idx - input->w]);
+    d_buf[idx1] = (uint8_t)abs((int16_t)input_buf[idx1 + input->w] - (int16_t)input_buf[idx1 - input->w]);
+  }
+}
+
+/**
+ * Calculate the  gradients using the following matrix:
+ * dx = [-1 0 1; -2 0 2; -1 0 1] * IMG
+ * dy = [-1 -2 -1; 0 0 0; 1 2 1] * IMG
+ * d = sqrt(dx*dx + dy*dy)
+ * @param[in] *input Input grayscale image
+ * @param[out] *d Output mean gradient
+ */
+void image_2d_sobel(struct image_t *input, struct image_t *d)
+{
+  if (d->buf_size < input->buf_size){
+    return;
+  }
+
+  // Fetch the buffers in the correct format
+  uint8_t *input_buf = (uint8_t *)input->buf;
+  uint8_t *d_buf = (uint8_t *)d->buf;
+
+  uint32_t idx, idx1;
+  uint32_t size = input->w * input->h;
+  int32_t temp1, temp2;
+
+  // Go through all pixels except the borders
+  for (idx = d->w + 1; idx < size - d->w - 1; idx++) {
+    temp1 = 2*((int32_t)input_buf[idx + 1] - (int32_t)input_buf[idx - 1])
+         + (int32_t)input_buf[idx + 1 - input->w] - (int32_t)input_buf[idx - 1 - input->w]
+         + (int32_t)input_buf[idx + 1 + input->w] - (int32_t)input_buf[idx - 1 + input->w];
+    temp2 = 2*((int32_t)input_buf[idx + input->w] - (int32_t)input_buf[idx - input->w])
+        + (int32_t)input_buf[idx - 1 + input->w] - (int32_t)input_buf[idx - 1 - input->w]
+        + (int32_t)input_buf[idx + 1 + input->w] - (int32_t)input_buf[idx + 1 - input->w];
+    d_buf[idx] = sqrti(temp1*temp1 + temp2*temp2);
+  }
+
+  // set x gradient for first and last row
+  for (idx = 1, idx1 = size - d->w + 1; idx1 < size - 1; idx++, idx1++) {
+    d_buf[idx] = (uint8_t)abs((int16_t)input_buf[idx + 1] - (int16_t)input_buf[idx - 1]);
+    d_buf[idx1] = (uint8_t)abs((int16_t)input_buf[idx1 + 1] - (int16_t)input_buf[idx1 - 1]);
+  }
+
+  // set y gradient for first and last col
+  for (idx = d->w, idx1 = 2*d->w-1; idx1 < size - input->w; idx+=input->w, idx1+=input->w) {
+    d_buf[idx] = (uint8_t)abs((int16_t)input_buf[idx + input->w] - (int16_t)input_buf[idx - input->w]);
+    d_buf[idx1] = (uint8_t)abs((int16_t)input_buf[idx1 + input->w] - (int16_t)input_buf[idx1 - input->w]);
   }
 }
 
@@ -664,6 +801,8 @@ void image_draw_line_color(struct image_t *img, struct point_t *from, struct poi
         img_buf[buf_loc + 2] = (t <= 3) ? 0 : color[2]; // v
         img_buf[buf_loc + 3] = color[3]; // y2
       }
+    } else if (img->type == IMAGE_GRAYSCALE){
+      img_buf[img->w  * starty + startx] = 255;
     }
 
     xerr += delta_x;
@@ -677,4 +816,28 @@ void image_draw_line_color(struct image_t *img, struct point_t *from, struct poi
       starty += incy;
     }
   }
+}
+
+#include "math.h"
+void image_draw_circle(struct image_t *img, struct point_t *center, uint16_t radius, uint8_t *color)
+{
+  uint8_t *dest = img->buf;
+  float t_step = 0.05; // TODO, should depend on radius
+  int x, y;
+  float t;
+  for (t = 0.0f; t < (float)(2 * M_PI); t += t_step) {
+    x = center->x + (int)(cosf(t) * radius);
+    y = center->y + (int)(sinf(t) * radius);
+    if (x >= 0 && x < img->w - 1 && y >= 0 && y < img->h) {
+      if (img->type == IMAGE_YUV422){
+        dest[y * img->w * 2 + x * 2    ] = color[1];
+        dest[y * img->w * 2 + x * 2 + 1] = color[0];
+        dest[y * img->w * 2 + x * 2 + 2] = color[2];
+        dest[y * img->w * 2 + x * 2 + 3] = color[0];
+      } else if (img->type == IMAGE_GRAYSCALE) {
+        dest[y * img->w + x] = color[0];
+      }
+    }
+  }
+  return;
 }

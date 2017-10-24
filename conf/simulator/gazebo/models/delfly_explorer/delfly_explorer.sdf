@@ -1,0 +1,111 @@
+<?xml version='1.0'?>
+<sdf version='1.4'>
+	<model name="paparazzi_uav">
+		<pose>0 0 .1 0 0 0</pose>
+
+		<link name="chassis">
+			<velocity_decay>
+				<linear>0.001</linear>
+			</velocity_decay>
+			<inertial><!-- Converted to SI from Paparazzi's ARDrone model for JSBsim -->
+				<mass>0.03</mass>
+				<inertia>
+					<ixx> 0.0000134 </ixx>
+					<iyy> 0.0000658 </iyy>
+					<izz> 0.0000695 </izz>
+					<ixy> 0. </ixy>
+					<ixz> 0. </ixz>
+					<iyz> 0. </iyz>
+				</inertia>
+			</inertial>
+
+			<collision name="collision">
+				<geometry>
+					<box>
+						<size>0.3 0.3 0.05</size>
+					</box>
+				</geometry>
+			</collision>
+
+			<visual name="visual">
+				<geometry>
+					<box>
+						<size>0.01 0.01 0.005</size>
+					</box>
+				</geometry>
+			</visual>
+			
+			<sensor name="contactsensor" type="contact">
+				<contact>
+					<collision>collision</collision>
+				</contact>
+			</sensor>
+		</link>
+
+		<!-- MOTORS -->
+		<link name="thrust">
+			<pose>0 0 0 0 0 0</pose>
+			<inertial>
+				<mass>0.01</mass>
+				<inertia>
+					<ixx>0.000001</ixx>
+					<iyy>0.000001</iyy>
+					<izz>0.000001</izz>
+					<ixy>0</ixy>
+					<iyz>0</iyz>
+					<ixz>0</ixz>
+				</inertia>
+			</inertial>
+			<visual name="visual">
+				<geometry>
+					<cylinder>
+						<radius>0.03</radius>
+						<length>0.01</length>
+					</cylinder>
+				</geometry>
+			</visual>
+		</link>
+
+		<joint type="fixed" name="thrust_joint">
+			<parent>chassis</parent>
+			<child>thrust</child>
+		</joint>
+
+		<link name="rudder">
+			<pose>0 0 -0.15 0 0 0</pose>
+			<inertial>
+				<mass>0.001</mass>
+				<inertia>
+					<ixx>0.000001</ixx>
+					<iyy>0.000001</iyy>
+					<izz>0.000001</izz>
+					<ixy>0</ixy>
+					<iyz>0</iyz>
+					<ixz>0</ixz>
+				</inertia>
+			</inertial>
+			<visual name="visual">
+				<geometry>
+					<box>
+						<size>0.001 0.005 0.005</size>
+					</box>
+				</geometry>
+			</visual>
+		</link>
+
+		<joint type="fixed" name="rudder_joint">
+			<parent>chassis</parent>
+			<child>rudder</child>
+		</joint>
+
+    <!-- STEREOCAMERA -->
+    <include>
+      <uri>model://stereo_camera</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+		<joint name="stereo_camera_joint" type="fixed">
+			<parent>chassis</parent>
+			<child>stereo_camera::base</child>
+		</joint>
+	</model>
+</sdf>

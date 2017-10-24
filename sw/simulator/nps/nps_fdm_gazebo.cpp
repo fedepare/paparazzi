@@ -32,13 +32,6 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 
-#ifdef NPS_DEBUG_VIDEO
-// Opencv tools
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#endif
-
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -47,19 +40,31 @@
 
 #include <gazebo/gazebo.hh>
 #include <gazebo/common/common.hh>
+#include <gazebo/math/gzmath.hh>
 #include <gazebo/physics/physics.hh>
 #include <gazebo/sensors/sensors.hh>
 #include <gazebo/gazebo_config.h>
+#include <sdf/sdf.hh>
 
 extern "C" {
 #include "nps_fdm.h"
+#include "nps_autopilot.h"
 
 #include "generated/airframe.h"
 #include "autopilot.h"
 
 #include "math/pprz_isa.h"
 #include "math/pprz_algebra_double.h"
+
+#include "subsystems/actuators/motor_mixing_types.h"
 }
+
+#if defined(NPS_DEBUG_VIDEO) || defined(NPS_DEBUG_STEREOCAM)
+// Opencv tools
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#endif
 
 using namespace std;
 
@@ -67,7 +72,7 @@ using namespace std;
 #define NPS_GAZEBO_WORLD "ardrone.world"
 #endif
 #ifndef NPS_GAZEBO_AC_NAME
-#define NPS_GAZEBO_AC_NAME "paparazzi_uav"
+#define NPS_GAZEBO_AC_NAME "ardrone"
 #endif
 
 // Add video handling functions if req'd.
@@ -91,6 +96,43 @@ struct gazebocam_t {
 static struct gazebocam_t gazebo_cams[VIDEO_THREAD_MAX_CAMERAS] =
 { { NULL, 0 } };
 #endif
+
+#ifdef NPS_SIMULATE_EXTERNAL_STEREO_CAMERA
+extern "C" {
+#include "stereoboard/stereo_image.h"
+#include "stereoboard/math/stereo_math.h"
+#include "stereoboard/camera_type.h"
+#include "stereoboard/edgeflow.h"
+#include "stereoboard/gate_detection.h"
+
+#include "modules/stereocam/stereocam.h"
+}
+
+#ifdef NPS_DEBUG_STEREOCAM
+#include "matplotlibcpp.h"
+#endif
+
+static void gazebo_init_stereo_camera(void);
+static void gazebo_read_stereo_camera(void);
+static void read_stereoimage(
+  struct image_t *img,
+  gazebo::sensors::MultiCameraSensorPtr  cam);
+struct gazebostereocam_t {
+  gazebo::sensors::MultiCameraSensorPtr stereocam;
+  gazebo::common::Time last_measurement_time;
+};
+static struct gazebostereocam_t gazebo_stereocam;
+
+#endif
+
+struct gazebo_actuators_t
+{
+  string names[NPS_COMMANDS_NB];
+  double thrusts[NPS_COMMANDS_NB];
+  double torques[NPS_COMMANDS_NB];
+};
+
+struct gazebo_actuators_t gazebo_actuators = {NPS_ACTUATOR_NAMES, {NPS_ACTUATOR_THRUSTS}, {NPS_ACTUATOR_THRUSTS}};
 
 /// Holds all necessary NPS FDM state information
 struct NpsFdm fdm;
@@ -207,6 +249,10 @@ void nps_fdm_run_step(
 #ifdef NPS_SIMULATE_VIDEO
     init_gazebo_video();
 #endif
+#ifdef NPS_SIMULATE_EXTERNAL_STEREO_CAMERA
+    gazebo_init_stereo_camera();
+    cout << "stereo camera initiated" << endl;
+#endif
     gazebo_initialized = true;
   }
 
@@ -217,6 +263,9 @@ void nps_fdm_run_step(
   gazebo_read();
 #ifdef NPS_SIMULATE_VIDEO
   gazebo_read_video();
+#endif
+#ifdef NPS_SIMULATE_EXTERNAL_STEREO_CAMERA
+  gazebo_read_stereo_camera();
 #endif
 }
 
@@ -277,8 +326,19 @@ static void init_gazebo(void)
     gazebodir + "models/");
 
   cout << "Load world: " << gazebodir + "world/" + NPS_GAZEBO_WORLD << endl;
-  gazebo::physics::WorldPtr world = gazebo::loadWorld(
-                                      gazebodir + "world/" + NPS_GAZEBO_WORLD);
+
+  //string model_path = gazebodir + "models/" + NPS_GAZEBO_AC_NAME + "/" + NPS_GAZEBO_AC_NAME + ".sdf";
+
+  sdf::SDFPtr world_sdf(new sdf::SDF());
+  sdf::init(world_sdf);
+  sdf::readFile(gazebodir + "world/" + NPS_GAZEBO_WORLD, world_sdf);
+
+  world_sdf->Root()->GetFirstElement()->AddElement("include")->GetElement("uri")->Set((string)"model://" + NPS_GAZEBO_AC_NAME);
+  world_sdf->Write(pprz_home + "/var/gazebo.world");
+
+  // TODO add sensors to the gazebo model in the same way as the vehicle.
+
+  gazebo::physics::WorldPtr world = gazebo::loadWorld(pprz_home + "/var/gazebo.world");
   if (!world) {
     cout << "Failed to open world, exiting." << endl;
     std::exit(-1);
@@ -296,13 +356,23 @@ static void init_gazebo(void)
   gazebo::sensors::run_once(true);
   gazebo::sensors::run_threads();
   gazebo::runWorld(world, 1);
-  cout << "Sensors initialized..." << endl;
 
   // activate collision sensor
   gazebo::sensors::SensorManager *mgr = gazebo::sensors::SensorManager::Instance();
   ct = static_pointer_cast < gazebo::sensors::ContactSensor > (mgr->GetSensor("contactsensor"));
   ct->SetActive(true);
 
+  cout << "Sensors initialized..." << endl;
+
+  // Overwrite motor directions as defined by motor_mixing
+#ifdef MOTOR_MIXING_YAW_COEF
+  const double yaw_coef[] = MOTOR_MIXING_YAW_COEF;
+
+  for (uint8_t i = 0; i < NPS_COMMANDS_NB; i++)
+  {
+    gazebo_actuators.torques[i] = -fabs(gazebo_actuators.torques[i]) * yaw_coef[i] / fabs(yaw_coef[i]);
+  }
+#endif
   cout << "Gazebo initialized successfully!" << endl;
 }
 
@@ -428,7 +498,7 @@ static void gazebo_read(void)
 #else
   // Gazebo versions < 8 do not have atmosphere or wind support
   // Use placeholder values. Valid for low altitude, low speed flights.
-  fdm.wind = {.x = 0, .y = 0, .z = 0};
+  fdm.wind = (struct DoubleVect3){0, 0, 0};
   fdm.pressure_sl = 101325; // Pa
 
   fdm.airspeed = 0;
@@ -467,14 +537,11 @@ static void gazebo_read(void)
  */
 static void gazebo_write(double act_commands[], int commands_nb)
 {
-  const string names[] = NPS_ACTUATOR_NAMES;
-  const double thrusts[] = { NPS_ACTUATOR_THRUSTS };
-  const double torques[] = { NPS_ACTUATOR_TORQUES };
-
+  // TODO simulte actuator dynamics so indi can work
   for (int i = 0; i < commands_nb; ++i) {
-    double thrust = autopilot.motors_on ? thrusts[i] * act_commands[i] : 0.0;
-    double torque = autopilot.motors_on ? torques[i] * act_commands[i] : 0.0;
-    gazebo::physics::LinkPtr link = model->GetLink(names[i]);
+    double thrust = autopilot.motors_on ? gazebo_actuators.thrusts[i] * act_commands[i] : 0.0;
+    double torque = autopilot.motors_on ? gazebo_actuators.torques[i] * act_commands[i] : 0.0;
+    gazebo::physics::LinkPtr link = model->GetLink(gazebo_actuators.names[i]);
     link->AddRelativeForce(gazebo::math::Vector3(0, 0, thrust));
     link->AddRelativeTorque(gazebo::math::Vector3(0, 0, torque));
   }
@@ -624,6 +691,204 @@ static void read_image(
   img->pprz_ts = ts.Double() * 1e6;
   img->buf_idx = 0; // unused
 }
+#endif
+
+#ifdef NPS_SIMULATE_EXTERNAL_STEREO_CAMERA
+/******************************EDGEFLOW****************************/
+
+struct FloatRMat body_to_cam;
+struct FloatEulers cam_angles;
+
+/******************************************************************/
+#ifdef NPS_DEBUG_STEREOCAM
+///////PLOTTING FUNCTION/////
+static void plot_matlab(int32_t *array, uint16_t size, double scale,char* name )
+{
+  std::vector<double> X;
+  std::vector<double> Y;
+
+  int x;
+  for (x = 0; x < size; x++) {
+    X.push_back((double)x);
+    Y.push_back((double)array[x]*scale);
+  }
+
+  matplotlibcpp::plot(X,Y);
+	matplotlibcpp::named_plot(name, X, Y);
+}
+#endif
+////////////////////////////////////
+
+static void gazebo_init_stereo_camera(void)
+{
+  gazebo::sensors::SensorManager *mgr =
+    gazebo::sensors::SensorManager::Instance();
+
+  gazebo_stereocam.stereocam = static_pointer_cast
+                               < gazebo::sensors::MultiCameraSensor > (mgr->GetSensor("stereo_camera::stereo_camera"));
+
+  if (!gazebo_stereocam.stereocam) {
+    cout << "ERROR: Could not get pointer to stereocam!" << endl;
+  }
+  gazebo_stereocam.stereocam->SetActive(true);
+
+  gazebo_stereocam.last_measurement_time = gazebo_stereocam.stereocam->LastMeasurementTime();
+
+  /******************************EDGEFLOW  INIT****************************/
+  edgeflow_init(gazebo_stereocam.stereocam->ImageWidth(0), gazebo_stereocam.stereocam->ImageHeight(0), 0);
+
+#ifdef STEREO_BODY_TO_STEREO_PHI
+  struct FloatEulers euler = {STEREO_BODY_TO_STEREO_PHI, STEREO_BODY_TO_STEREO_THETA, STEREO_BODY_TO_STEREO_PSI};
+#else
+  struct FloatEulers euler = {0, 0, 0};
+#endif
+  float_rmat_of_eulers(&body_to_cam, &euler);
+
+  /******************************************************************/
+}
+
+static void gazebo_read_stereo_camera(void)
+{
+  gazebo::sensors::MultiCameraSensorPtr &stereocam = gazebo_stereocam.stereocam;
+  if ((stereocam->LastMeasurementTime() - gazebo_stereocam.last_measurement_time).Float() < 0.005
+      || stereocam->LastMeasurementTime() == 0) { return; }
+
+  static struct image_t img;
+  read_stereoimage(&img, stereocam);
+
+#ifdef NPS_DEBUG_STEREOCAM
+  cv::Mat RGB_left(stereocam->ImageHeight(0),stereocam->ImageWidth(0),CV_8UC3,(uint8_t *)stereocam->ImageData(0));
+  cv::Mat RGB_right(stereocam->ImageHeight(1),stereocam->ImageWidth(1),CV_8UC3,(uint8_t *)stereocam->ImageData(1));
+
+  cv::cvtColor(RGB_left, RGB_left, cv::COLOR_RGB2BGR);
+  cv::cvtColor(RGB_right, RGB_right, cv::COLOR_RGB2BGR);
+
+  cv::namedWindow("left", cv::WINDOW_AUTOSIZE);  // Create a window for display.
+  cv::imshow("left", RGB_left);
+  cv::namedWindow("right", cv::WINDOW_AUTOSIZE);  // Create a window for display.
+  cv::imshow("right", RGB_right);
+  cv::waitKey(1);
+#endif
+
+  /******************************************EDGEFLOW*******************************/
+  // set angles for derotation
+  float_rmat_mult(&cam_angles, &body_to_cam, stateGetNedToBodyEulers_f());
+  img.eulers = cam_angles;
+
+  edgeflow_total(&img, 0);
+
+  static struct FloatVect3 vel, dist;
+
+  float res = (float)(edgeflow_params.RES);
+
+  vel.x = (float)edgeflow.vel.x / res;
+  vel.y = (float)edgeflow.vel.y / res;
+  vel.z = (float)edgeflow.vel.z / res;
+
+  float R2 = (float)edgeflow.flow_quality / res;
+
+  stereocam_parse_vel(vel, R2);
+
+/*  dist.x = (float)edgeflow_snapshot.dist.x / res;
+  dist.y = (float)edgeflow_snapshot.dist.y / res;
+  dist.z = (float)edgeflow_snapshot.dist.z / res;
+
+  R2 = (float)edgeflow_snapshot.quality / res;
+
+  stereocam_parse_pos(dist, R2, edgeflow_snapshot.new_keyframe);*/
+
+  //////Gate Detector//////
+  struct image_t left_img, gradient;
+  image_create(&left_img, img.w, img.h, IMAGE_GRAYSCALE);
+  image_create(&gradient, img.w, img.h, IMAGE_GRAYSCALE);
+
+  getLeftFromStereo(&left_img, &img);
+  image_2d_gradients(&left_img, &gradient);
+  //image_2d_sobel(&left_img, &gradient);
+
+  gate_set_intensity(50,250);
+  static struct gate_t gate;
+  bool gate_detected = false;
+
+  //For debugging gate detection
+  gate_detected = snake_gate_detection(&gradient, &gate, false, NULL, NULL, NULL);
+
+#ifdef NPS_DEBUG_STEREOCAM
+  cv::Mat gradient_cv(stereocam->ImageHeight(0),stereocam->ImageWidth(0),CV_8UC1,(uint8_t *)gradient.buf);
+  cv::imshow("gradient", gradient_cv);
+  cv::waitKey(1);
+#endif
+
+  if (gate.q > 15)
+  {
+    float w = 2.f * gate.sz * FOVX / IMAGE_WIDTH;
+    float h = 2.f * (float)(gate.sz_left > gate.sz_right ? gate.sz_left : gate.sz_right)
+        * FOVY / IMAGE_HEIGHT;
+
+    static struct FloatEulers camera_bearing;
+    camera_bearing.theta = pix2angle((gate.x - IMAGE_WIDTH/2), 0);
+    camera_bearing.phi = -pix2angle((gate.y - IMAGE_HEIGHT/2), 1); // positive y, causes negative phi
+    camera_bearing.psi = 0;
+
+    static struct FloatEulers body_bearing;
+    float_rmat_transp_mult(&body_bearing, &body_to_cam, &camera_bearing);
+  }
+
+  image_free(&left_img);
+  image_free(&gradient);
+
+  ///PLOT STUFF
+  /*   plt::clf();
+  plot_matlab(edgeflow.stereo_distance_per_column,128,1, "edge_histogram");
+  plot_matlab(edgeflow.edge_hist[edgeflow.prev_frame_x].x,128,1, "edge_histogram");
+  plot_matlab(edgeflow.disp.x,128,10, "edge_histogram");
+  plot_matlab((int32_t*)stereo_distance_filtered_int32,128,100, "edge_histogram");
+  plt::pause(0.0001);*/
+  /////
+
+/*********************************************************************************/
+
+  image_free(&img);
+  gazebo_stereocam.last_measurement_time = stereocam->LastMeasurementTime();
+}
+
+
+static void read_stereoimage(
+  struct image_t *img,
+  gazebo::sensors::MultiCameraSensorPtr cam)
+{
+  image_create(img, cam->ImageWidth(0), cam->ImageHeight(0), IMAGE_YUV422);
+
+  // Convert Gazebo's *RGB888* image to stereo pixel muxtexed image
+  const uint8_t *data_rgb_left = cam->ImageData(0);
+  const uint8_t *data_rgb_right = cam->ImageData(1);
+
+  uint8_t *data = (uint8_t *)(img->buf);
+
+  for (int x = 0; x < img->w; ++x) {
+    for (int y = 0; y < img->h; ++y) {
+      int idx_rgb = 3 * (img->w * y + x);
+      int idx_pix_mux = 2 * (img->w * y + x);
+
+      data[idx_pix_mux] =  0.257 * data_rgb_left[idx_rgb]
+                           + 0.504 * data_rgb_left[idx_rgb + 1]
+                           + 0.098 * data_rgb_left[idx_rgb + 2] + 16; // Y
+
+      data[idx_pix_mux + 1] = 0.257 * data_rgb_right[idx_rgb]
+                              + 0.504 * data_rgb_right[idx_rgb + 1]
+                              + 0.098 * data_rgb_right[idx_rgb + 2] + 16; // Y
+
+    }
+  }
+
+  // Fill miscellaneous fields
+  gazebo::common::Time ts = cam->LastMeasurementTime();
+  img->ts.tv_sec = ts.sec;
+  img->ts.tv_usec = ts.nsec / 1000.0;
+  img->pprz_ts = ts.Double() * 1e6;
+  img->buf_idx = 0; // unused*/
+}
+
 #endif
 
 #pragma GCC diagnostic pop // Ignore -Wdeprecated-declarations

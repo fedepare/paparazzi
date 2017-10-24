@@ -87,11 +87,15 @@
           nps.LDFLAGS  += $(shell pkg-config gazebo --libs)
   	</raw>
     <file name="nps_fdm_gazebo.cpp" dir="nps"/>
-
+    
+    <include name="modules/computer_vision"/>
+    
     <!--OPENCV-->
-    <flag name="LDFLAGS" value="lopencv_imgproc" />
-    <flag name="LDFLAGS" value="lopencv_highgui" />
-    <flag name="LDFLAGS" value="lopencv_core" />
+    <flag name="LDFLAGS" value="lopencv_imgproc"/>
+    <flag name="LDFLAGS" value="lopencv_highgui"/>
+    <flag name="LDFLAGS" value="lopencv_core"/>
+    <include name="/usr/include/python2.7"/>
+    <flag name="LDFLAGS" value="lpython2.7"/>
   </makefile>
 </module>
 
