@@ -2,7 +2,7 @@
 <!DOCTYPE protocol SYSTEM "messages.dtd">
 <protocol>
   <!-- messages from modem or sim to server -->
-  <msg_class name="telemetry">
+  <msg_class name="telemetry" id="1">
 
     <message name="AUTOPILOT_VERSION" id="1">
       <field name="version" type="uint32">version encoded as: MAJOR * 10000 + MINOR * 100 + PATCH</field>
@@ -1959,7 +1959,7 @@
 
   </msg_class>
 
-  <msg_class name="datalink">
+  <msg_class name="datalink"  id="2">
     <message name="ACINFO" id="1" link="broadcasted">
       <field name="course"    type="int16"  unit="decideg" alt_unit="deg"/>
       <field name="utm_east"  type="int32"  unit="cm"      alt_unit="m"/>
@@ -2420,7 +2420,7 @@
   </msg_class>
 
 
-  <msg_class name="ground">
+  <msg_class name="ground"  id="3">
     <message name="NEW_AIRCRAFT" id="1">
       <field name="ac_id" type="string"/>
     </message>
@@ -2767,7 +2767,7 @@
     </message>
   </msg_class>
 
-  <msg_class name="alert">
+  <msg_class name="alert"  id="4">
     <message name="BAT_LOW" id="1">
       <field name="ac_id" type="string"/>
       <field name="level" type="string" values="CATASTROPHIC|CRITIC|WARNING"/>
@@ -2779,7 +2779,7 @@
     </message>
   </msg_class>
 
-  <msg_class name="intermcu">
+  <msg_class name="intermcu"  id="5">
 
 	<!-- KEEP INTERMCU MESSAGES BELOW 8 BYTES PER MESSAGES
 		 TO ALLOW TRANSFER OVER CAN BUS -->
