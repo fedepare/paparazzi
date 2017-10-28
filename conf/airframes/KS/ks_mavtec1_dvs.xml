@@ -58,14 +58,14 @@
       <define name="EOF_MIN_R2" value="0.8"/>
     </module>
     <module name="optical_flow_landing">
-      <define name="OFL_PGAIN" value="0.25"/>
+      <define name="OFL_PGAIN" value="0.22"/>
       <define name="OFL_IGAIN" value="0.0"/>
       <define name="OFL_DGAIN" value="0.0"/>
       <define name="OFL_CONTROL_METHOD" value="0"/>
       <define name="OFL_COV_WINDOW_SIZE" value="100"/>
       <define name="OFL_COV_LANDING_LIMIT" value="6"/>
       <define name="OFL_COV_SETPOINT" value="-4"/>
-      <define name="OFL_P_LAND_THRESHOLD" value="0.02"/>
+      <define name="OFL_P_LAND_THRESHOLD" value="0.01"/>
       <define name="OFL_ELC_OSCILLATE" value="0"/>
     </module>
   </modules>
