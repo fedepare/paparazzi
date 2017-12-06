@@ -46,6 +46,7 @@ from time import time, sleep
 import numpy as np
 from collections import deque
 import argparse
+import math
 
 # import NatNet client
 from NatNetClient import NatNetClient
@@ -70,6 +71,7 @@ parser.add_argument('-cp', '--command_port', dest='command_port', type=int, defa
 parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="display debug messages")
 parser.add_argument('-f', '--freq', dest='freq', default=10, type=int, help="transmit frequency")
 parser.add_argument('-vs', '--vel_samples', dest='vel_samples', default=4, type=int, help="amount of samples to compute velocity (should be greater than 2)")
+parser.add_argument('-r', '--rotation', dest='rotation', default=0., type=float, help="Rotation angle to align y axis with north [deg]")
 args = parser.parse_args()
 
 if args.ac is None:
@@ -91,6 +93,9 @@ if args.ivy_bus is not None:
     ivy = IvyMessagesInterface("natnet2ivy", ivy_bus=args.ivy_bus)
 else:
     ivy = IvyMessagesInterface("natnet2ivy")
+
+# convert rotation to rad
+rotation = args.rotation * (22/7) / 180
 
 # store track function
 def store_track(ac_id, pos, t):
@@ -128,27 +133,30 @@ def compute_velocity(ac_id):
 def receiveRigidBodyFrame( ac_id, pos, quat ):
     t = time()
     i = str(ac_id)
+    if i not in id_dict.keys():
+      return
+
     store_track(i, pos, t)
     if abs(t - timestamp[i]) < period:
         return # too early for next message
     timestamp[i] = t
-    if i in id_dict.keys():
-        msg = PprzMessage("datalink", "REMOTE_GPS_LOCAL")
-        msg['ac_id'] = id_dict[i]
-        msg['pad'] = 0
-        msg['enu_x'] = pos[0]
-        msg['enu_y'] = pos[1]
-        msg['enu_z'] = pos[2]
-        vel = compute_velocity(i)
-        msg['enu_xd'] = vel[0]
-        msg['enu_yd'] = vel[1]
-        msg['enu_zd'] = vel[2]
-        msg['tow'] = int(timestamp[i]) # TODO convert to GPS itow ?
-        # convert quaternion to psi euler angle
-        dcm_0_0 = 1.0 - 2.0 * (quat[1] * quat[1] + quat[2] * quat[2])
-        dcm_1_0 = 2.0 * (quat[0] * quat[1] - quat[3] * quat[2])
-        msg['course'] = 180. * np.arctan2(dcm_1_0, dcm_0_0) / 3.14
-        ivy.send(msg)
+
+    msg = PprzMessage("datalink", "REMOTE_GPS_LOCAL")
+    msg['ac_id'] = id_dict[i]
+    msg['pad'] = 0
+    msg['enu_x'] = (math.cos(rotation) * pos[2] - math.sin(rotation) * pos[0])
+    msg['enu_y'] = (math.sin(rotation) * pos[2] + math.cos(rotation) * pos[0])
+    msg['enu_z'] = pos[1]
+    vel = compute_velocity(i)
+    msg['enu_xd'] = (math.cos(rotation) * vel[2] - math.sin(rotation) * vel[0])
+    msg['enu_yd'] = (math.sin(rotation) * vel[2] + math.cos(rotation) * vel[0])
+    msg['enu_zd'] = vel[1]
+    msg['tow'] = int(timestamp[i]) # TODO convert to GPS itow ?
+    # convert quaternion to psi euler angle
+    dcm_0_0 = 1.0 - 2.0 * (quat[1] * quat[1] + quat[2] * quat[2])
+    dcm_1_0 = 2.0 * (quat[0] * quat[1] - quat[3] * quat[2])
+    msg['course'] = 180. * (np.arctan2(dcm_1_0, dcm_0_0) - rotation) / 3.14 + + 90.0
+    ivy.send(msg)
 
 
 # start natnet interface

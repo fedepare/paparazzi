@@ -5,6 +5,7 @@
 import socket
 import struct
 from threading import Thread
+import numpy as np
 
 # Create structs for reading various object types to speed up parsing.
 Vector3 = struct.Struct( '<fff' )
@@ -33,7 +34,7 @@ class NatNetClient:
         self.newFrameListener = newFrameListener
         
         # NatNet stream version. This will be updated to the actual version the server is using during initialization.
-        self.__natNetStreamVersion = (3,0,0,0)
+        self.__natNetStreamVersion = (2,10,0,0)
 
         # Trace verbose level
         self.verbose = verbose
@@ -128,7 +129,8 @@ class NatNetClient:
                     self.__trace( "\tMarker Size", i, ":", size[0] )
                     
         # Skip padding inserted by the server
-        offset += 4
+        if( self.__natNetStreamVersion[0] > 2 ):
+            offset += 4
 
         if( self.__natNetStreamVersion[0] >= 2 ):
             markerError, = FloatValue.unpack( data[offset:offset+4] )
@@ -235,7 +237,7 @@ class NatNetClient:
                 offset += 4
 
                 # Version 2.6 and later
-                if( ( self.__natNetStreamVersion[0] == 2 and self.__natNetStreamVersion[1] >= 6 ) or self.__natNetStreamVersion[0] > 2 or major == 0 ):
+                if( ( self.__natNetStreamVersion[0] == 2 and self.__natNetStreamVersion[1] >= 6 ) or self.__natNetStreamVersion[0] > 2):
                     param, = struct.unpack( 'h', data[offset:offset+2] )
                     offset += 2
                     occluded = ( param & 0x01 ) != 0
@@ -243,7 +245,7 @@ class NatNetClient:
                     modelSolved = ( param & 0x04 ) != 0
 
                 # Version 3.0 and later
-                if( ( self.__natNetStreamVersion[0] >= 3 ) or  major == 0 ):
+                if( self.__natNetStreamVersion[0] >= 3 ):
                     residual, = FloatValue.unpack( data[offset:offset+4] )
                     offset += 4
                     self.__trace( "Residual:", residual )
@@ -313,7 +315,7 @@ class NatNetClient:
             offset += 4
 
         # Hires Timestamp (Version 3.0 and later)
-        if( ( self.__natNetStreamVersion[0] >= 3 ) or  major == 0 ):
+        if( self.__natNetStreamVersion[0] >= 3 ):
             stampCameraExposure = int.from_bytes( data[offset:offset+8], byteorder='little' )
             offset += 8
             stampDataReceived = int.from_bytes( data[offset:offset+8], byteorder='little' )
@@ -412,7 +414,7 @@ class NatNetClient:
             # Block for input
             try:
                 data, addr = sock.recvfrom( 32768 ) # 32k byte buffer size
-                if( len( data ) > 0 ):
+                if( len( data ) >= 4):
                     self.__processMessage( data )
             except socket.timeout:
                 pass
@@ -425,17 +427,29 @@ class NatNetClient:
         
         packetSize = int.from_bytes( data[2:4], byteorder='little' )
         self.__trace( "Packet Size:", packetSize )
+        
+        if not len( data ) - 4 >= packetSize:
+          # Not enough data
+          return
 
         offset = 4
-        if( messageID == self.NAT_FRAMEOFDATA ):
-            self.__unpackMocapData( data[offset:] )
-        elif( messageID == self.NAT_MODELDEF ):
-            self.__unpackDataDescriptions( data[offset:] )
-        elif( messageID == self.NAT_PINGRESPONSE ):
+        if( messageID == self.NAT_PINGRESPONSE ):
+            print("We did it!!!!!!")
             offset += 256   # Skip the sending app's Name field
             offset += 4     # Skip the sending app's Version info
             self.__natNetStreamVersion = struct.unpack( 'BBBB', data[offset:offset+4] )
             offset += 4
+            
+        if self.__natNetStreamVersion is None:
+            print("haven't recieved version number yet")
+            # haven't recieved version number yet
+            self.sendCommand( self.NAT_PING, "", self.commandSocket, (self.serverIPAddress, self.commandPort) )
+            return
+        
+        if( messageID == self.NAT_FRAMEOFDATA ):
+            self.__unpackMocapData( data[offset:] )
+        elif( messageID == self.NAT_MODELDEF ):
+            self.__unpackDataDescriptions( data[offset:] )
         elif( messageID == self.NAT_RESPONSE ):
             if( packetSize == 4 ):
                 commandResponse = int.from_bytes( data[offset:offset+4], byteorder='little' )
