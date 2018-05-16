@@ -227,7 +227,7 @@ void ins_int_init(void)
   /* init vertical and horizontal filters */
   vff_init_zero();
 #if USE_HFF
-  hff_init(0., 0., 0., 0.);
+  hff_init(0.f, 0.f, 0.f, 0.f);
 #endif
 
   INT32_VECT3_ZERO(ins_int.ltp_pos);
@@ -299,15 +299,13 @@ void ins_int_propagate(struct Int32Vect3 *accel, float dt)
   struct Int32Vect3 accel_meas_ltp;
   int32_rmat_transp_vmult(&accel_meas_ltp, stateGetNedToBodyRMat_i(), &accel_meas_body);
 
-  float z_accel_meas_float = ACCEL_FLOAT_OF_BFP(accel_meas_ltp.z);
-
   /* Propagate only if we got any measurement during the last INS_MAX_PROPAGATION_STEPS.
    * Otherwise halt the propagation to not diverge and only set the acceleration.
    * This should only be relevant in the startup phase when the baro is not yet initialized
    * and there is no gps fix yet...
    */
   if (ins_int.propagation_cnt < INS_MAX_PROPAGATION_STEPS) {
-    vff_propagate(z_accel_meas_float, dt);
+    vff_propagate(ACCEL_FLOAT_OF_BFP(accel_meas_ltp.z), dt);
     ins_update_from_vff();
   } else {
     // feed accel from the sensors
@@ -451,9 +449,6 @@ void ins_int_update_gps(struct GpsState *gps_s)
   }
   // run horizontal filter
   hff_update_gps(&gps_pos_m_ned, &gps_speed_m_s_ned);
-  // convert and copy result to ins_int
-  ins_update_from_hff();
-
 #else  /* hff not used */
   /* simply copy horizontal pos/speed from gps */
   INT32_VECT2_SCALE_2(ins_int.ltp_pos, gps_pos_cm_ned,
@@ -589,7 +584,6 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
   struct FloatVect2 Rvel = {noise_x, noise_y};
 
   hff_update_vel(vel,  Rvel);
-  ins_update_from_hff();
 #else
   if (noise_x >= 0.f)
   {
@@ -624,8 +618,6 @@ static void vel_est_cb(uint8_t sender_id __attribute__((unused)),
   // abi message contains an update to the vertical velocity estimate
   vff_update_vz_conf(vel_ned.z, noise_z);
 
-  ins_ned_to_state();
-
   /* reset the counter to indicate we just had a measurement update */
   ins_int.propagation_cnt = 0;
 }
@@ -643,7 +635,6 @@ static void pos_est_cb(uint8_t sender_id __attribute__((unused)),
   struct FloatVect2 Rpos = {noise_x, noise_y};
 
   hff_update_pos(pos, Rpos);
-  ins_update_from_hff();
 #else
   if (noise_x >= 0.f)
   {
@@ -656,8 +647,6 @@ static void pos_est_cb(uint8_t sender_id __attribute__((unused)),
 #endif
 
   vff_update_z_conf(z, noise_z);
-
-  ins_ned_to_state();
 
   /* reset the counter to indicate we just had a measurement update */
   ins_int.propagation_cnt = 0;

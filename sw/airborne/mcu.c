@@ -229,6 +229,10 @@ void mcu_init(void)
   rng_init();
 #endif
 
+#if USE_PIPE0_WRITER || USE_PIPE0_READER || USE_PIPE1_WRITER || USE_PIPE1_READER || USE_PIPE2_WRITER || USE_PIPE2_READER
+  pipe_arch_init();
+#endif
+
 #else
   INFO("PERIPHERALS_AUTO_INIT not enabled! Peripherals (including sys_time) need explicit initialization.")
 #endif /* PERIPHERALS_AUTO_INIT */

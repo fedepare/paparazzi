@@ -1,0 +1,33 @@
+<!DOCTYPE module SYSTEM "module.dtd">
+
+<module name="event_optic_flow">
+  <doc>
+    <description>Event based optic flow using DVS camera</description>
+  </doc>
+
+  <settings>
+    <dl_settings>
+      <dl_settings NAME="Event-based Optic Flow">
+        <dl_setting var="enableDerotation" min="0" step="1" max="1" shortname="derotation" values="NO|YES" param="EOF_ENABLE_DEROTATION"/>
+        <dl_setting var="filterTimeConstant" min="0.005" step="0.0025" max="0.2" shortname="filter_time_constant" param="EOF_FILTER_TIME_CONSTANT"/>
+        <dl_setting var="kfTimeConst" min="0.005" step="0.0025" max="0.2" shortname="retention_filter_time_constant" param="EOF_FILTER_RETENTION_TIME_CONST"/>
+        <dl_setting var="inlierMaxDiff" min="0.05" step="0.05" max="2.0" shortname="flow_speed_threshold" param="EOF_INLIER_MAX_DIFF"/>
+      	<dl_setting var="minEventRate" min="100" step="100" max="100000" shortname="event_rate" param="EOF_MIN_EVENT_RATE"/>
+        <dl_setting var="minPosVariance" min="0.1" step="0.1" max="10" shortname="position_variance" param="EOF_MIN_POSITION_VARIANCE"/>
+        <dl_setting var="minR2" min="0.05" step="0.05" max="2" shortname="min_R2" param="EOF_MIN_R2"/>
+        <dl_setting var="irLedSwitch" min="0" step="1" max="1" shortname="led setting" values="OFF|ON" param="IR_LEDS_SWITCH"/>
+        <dl_setting var="record_switch" min="0" step="1" max="1" shortname="record" values="OFF|ON" param="RECORD_SWITCH"/>
+      </dl_settings>
+    </dl_settings>
+  </settings>
+  <header>
+    <file name="event_optic_flow.h"/>
+  </header>
+  <init fun="event_optic_flow_init()"/>
+  <periodic fun="event_optic_flow_periodic()" start="event_optic_flow_start()" stop="event_optic_flow_stop()" freq="100" autorun="TRUE"/>
+  <event fun="event_optic_flow_event()"/>
+  <makefile target="ap">
+    <file name="event_optic_flow.c"/>
+    <file name="flow_field_estimation.c"/>
+  </makefile>
+</module>

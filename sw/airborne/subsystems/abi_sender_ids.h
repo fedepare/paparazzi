@@ -310,6 +310,10 @@
 #define FLOW_OPTICFLOW_ID 1
 #endif
 
+#ifndef FLOW_DVS_ID
+#define FLOW_DVS_ID 2
+#endif
+
 /*
  * IDs of VELOCITY estimates (message 12)
  */
@@ -327,6 +331,10 @@
 
 #ifndef VEL_STEREOCAM_ID
 #define VEL_STEREOCAM_ID 4
+#endif
+
+#ifndef VEL_DVS_ID
+#define VEL_DVS_ID 5
 #endif
 
 /*

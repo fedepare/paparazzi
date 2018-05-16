@@ -60,6 +60,7 @@ extern int32_t nav_heading; ///< with #INT32_ANGLE_FRAC
 extern int32_t nav_cmd_roll, nav_cmd_pitch, nav_cmd_yaw;
 extern float nav_radius;
 extern float nav_climb_vspeed, nav_descend_vspeed;
+extern int32_t nav_carrot_dist;   ///< with #INT32_POS_FRAC
 
 extern int32_t nav_leg_progress;
 extern uint32_t nav_leg_length;

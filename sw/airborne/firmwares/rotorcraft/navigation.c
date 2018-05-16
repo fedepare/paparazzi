@@ -73,8 +73,10 @@
 #define FAILSAFE_MODE_DISTANCE (1.5*MAX_DIST_FROM_HOME)
 #endif
 
-#define CLOSE_TO_WAYPOINT (15 << INT32_POS_FRAC)
-#define CARROT_DIST (12 << INT32_POS_FRAC)
+#define CLOSE_TO_WAYPOINT (int32_t)POS_BFP_OF_REAL(15)
+#ifndef CARROT_DIST
+#define CARROT_DIST (int32_t)POS_BFP_OF_REAL(0.6)
+#endif
 
 const float max_dist_from_home = MAX_DIST_FROM_HOME;
 const float max_dist2_from_home = MAX_DIST_FROM_HOME * MAX_DIST_FROM_HOME;
@@ -105,6 +107,7 @@ int32_t nav_heading;
 int32_t nav_cmd_roll, nav_cmd_pitch, nav_cmd_yaw;
 float nav_radius;
 float nav_climb_vspeed, nav_descend_vspeed;
+int32_t nav_carrot_dist;
 
 uint8_t vertical_mode;
 uint32_t nav_throttle;
@@ -198,6 +201,7 @@ void nav_init(void)
   nav_cmd_pitch = 0;
   nav_cmd_yaw = 0;
   nav_radius = DEFAULT_CIRCLE_RADIUS;
+  nav_carrot_dist = CARROT_DIST;
   nav_climb_vspeed = NAV_CLIMB_VSPEED;
   nav_descend_vspeed = NAV_DESCEND_VSPEED;
   nav_throttle = 0;
@@ -234,7 +238,7 @@ static inline void UNUSED nav_advance_carrot(void)
     VECT2_COPY(navigation_carrot, navigation_target);
   } else {
     struct Int32Vect2 path_to_carrot;
-    VECT2_SMUL(path_to_carrot, path_to_waypoint, CARROT_DIST);
+    VECT2_SMUL(path_to_carrot, path_to_waypoint, nav_carrot_dist);
     VECT2_SDIV(path_to_carrot, path_to_carrot, dist_to_waypoint);
     VECT2_SUM(navigation_carrot, path_to_carrot, *pos);
   }
@@ -564,7 +568,7 @@ void nav_circle(struct EnuCoor_i *wp_center, int32_t radius)
     // absolute radius
     int32_t abs_radius = abs(radius);
     // carrot_angle
-    int32_t carrot_angle = ((CARROT_DIST << INT32_ANGLE_FRAC) / abs_radius);
+    int32_t carrot_angle = ((nav_carrot_dist << INT32_ANGLE_FRAC) / abs_radius);
     Bound(carrot_angle, (INT32_ANGLE_PI / 16), INT32_ANGLE_PI_4);
     carrot_angle = nav_circle_qdr - sign_radius * carrot_angle;
     int32_t s_carrot, c_carrot;
@@ -593,7 +597,7 @@ void nav_route(struct EnuCoor_i *wp_start, struct EnuCoor_i *wp_end)
   uint32_t leg_length2 = Max((wp_diff.x * wp_diff.x + wp_diff.y * wp_diff.y), 1);
   nav_leg_length = int32_sqrt(leg_length2);
   nav_leg_progress = (pos_diff.x * wp_diff.x + pos_diff.y * wp_diff.y) / nav_leg_length;
-  int32_t progress = Max((CARROT_DIST >> INT32_POS_FRAC), 0);
+  int32_t progress = Max((nav_carrot_dist >> INT32_POS_FRAC), 0);
   nav_leg_progress += progress;
   int32_t prog_2 = nav_leg_length;
   Bound(nav_leg_progress, 0, prog_2);

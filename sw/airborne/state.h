@@ -92,6 +92,8 @@
 #define SPEED_ENU_F   7
 #define SPEED_HNORM_F 8
 #define SPEED_HDIR_F  9
+#define SPEED_BODY_I  10
+#define SPEED_BODY_F  11
 #define SPEED_LOCAL_COORD ((1<<SPEED_NED_I)|(1<<SPEED_ENU_I)|(1<<SPEED_NED_F)|(1<<SPEED_ENU_F))
 /**@}*/
 
@@ -279,6 +281,12 @@ struct State {
   struct EnuCoor_i enu_speed_i;
 
   /**
+   * Velocity in body coordinates.
+   * Units: m/s in BFP with #INT32_SPEED_FRAC
+   */
+  struct Int32Vect3 body_speed_i;
+
+  /**
    * Norm of horizontal ground speed.
    * Unit: m/s in BFP with #INT32_SPEED_FRAC
    */
@@ -307,6 +315,12 @@ struct State {
    * Units: m/s
    */
   struct EnuCoor_f enu_speed_f;
+
+  /**
+   * Velocity in body coordinates.
+   * Units: m/s
+   */
+  struct FloatVect3 body_speed_f;
 
   /**
    * Norm of horizontal ground speed.
@@ -749,11 +763,13 @@ static inline struct LlaCoor_f *stateGetPositionLla_f(void)
 extern void stateCalcSpeedNed_i(void);
 extern void stateCalcSpeedEnu_i(void);
 extern void stateCalcSpeedEcef_i(void);
+extern void stateCalcSpeedBody_i(void);
 extern void stateCalcHorizontalSpeedNorm_i(void);
 extern void stateCalcHorizontalSpeedDir_i(void);
 extern void stateCalcSpeedNed_f(void);
 extern void stateCalcSpeedEnu_f(void);
 extern void stateCalcSpeedEcef_f(void);
+extern void stateCalcSpeedBody_f(void);
 extern void stateCalcHorizontalSpeedNorm_f(void);
 extern void stateCalcHorizontalSpeedDir_f(void);
 
@@ -886,6 +902,15 @@ static inline struct EcefCoor_i *stateGetSpeedEcef_i(void)
   return &state.ecef_speed_i;
 }
 
+/// Get ground speed in body coordinates (int).
+static inline struct Int32Vect3 *stateGetSpeedBody_i(void)
+{
+  if (!bit_is_set(state.speed_status, SPEED_BODY_I)) {
+    stateCalcSpeedBody_i();
+  }
+  return &state.body_speed_i;
+}
+
 /// Get norm of horizontal ground speed (int).
 static inline uint32_t stateGetHorizontalSpeedNorm_i(void)
 {
@@ -929,6 +954,15 @@ static inline struct EcefCoor_f *stateGetSpeedEcef_f(void)
     stateCalcSpeedEcef_f();
   }
   return &state.ecef_speed_f;
+}
+
+/// Get ground speed in ECEF coordinates (float).
+static inline struct FloatVect3 *stateGetSpeedBody_f(void)
+{
+  if (!bit_is_set(state.speed_status, SPEED_BODY_F)) {
+    stateCalcSpeedBody_f();
+  }
+  return &state.body_speed_f;
 }
 
 /// Get norm of horizontal ground speed (float).

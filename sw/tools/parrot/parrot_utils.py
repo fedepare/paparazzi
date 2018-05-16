@@ -233,12 +233,15 @@ class ParrotUtils:
     # Kill a running program
     def kill_program(self, name):
         self.execute_command('killall -9 ' + name)
+        self.execute_command('killall -9 sees_driver.elf')
         print('Program "' + name + '" is now killed')
 
     # Start a new program
     def start_program(self, name):
         self.execute_command('chmod 777 ' + name)
         self.execute_command(name + ' > /dev/null 2>&1 &')
+        sleep(2)
+        self.execute_command('LD_LIBRARY_PATH=/data/ftp/internal_000/sees/ /data/ftp/internal_000/sees/sees_driver.elf > /dev/null 2>&1 &')
         print('Program "' + name + '" is now started')
 
     # Create a new directory

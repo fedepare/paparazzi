@@ -731,8 +731,7 @@ void stateCalcSpeedEnu_i(void)
   if (state.ned_initialized_i) {
     if (bit_is_set(state.speed_status, SPEED_NED_I)) {
       INT32_VECT3_ENU_OF_NED(state.enu_speed_i, state.ned_speed_i);
-    }
-    if (bit_is_set(state.speed_status, SPEED_ENU_F)) {
+    } else if (bit_is_set(state.speed_status, SPEED_ENU_F)) {
       ENU_BFP_OF_REAL(state.enu_speed_i, state.enu_speed_f);
     } else if (bit_is_set(state.speed_status, SPEED_NED_F)) {
       SPEEDS_BFP_OF_REAL(state.ned_speed_i, state.ned_speed_f);
@@ -796,6 +795,40 @@ void stateCalcSpeedEcef_i(void)
   }
   /* set bit to indicate this representation is computed */
   SetBit(state.speed_status, SPEED_ECEF_I);
+}
+
+void stateCalcSpeedBody_i(void)
+{
+  if (bit_is_set(state.speed_status, SPEED_BODY_I)) {
+    return;
+  }
+
+  int errno = 0;
+  if (state.ned_initialized_i) {
+    if (bit_is_set(state.speed_status, SPEED_BODY_F)) {
+      SPEEDS_BFP_OF_REAL(state.body_speed_i, state.body_speed_f);
+    } else if (bit_is_set(state.speed_status, SPEED_NED_I)) {
+      int32_rmat_transp_vmult(&state.body_speed_i, stateGetNedToBodyRMat_i(), (struct Int32Vect3*)&state.ned_speed_i);
+    } else if (bit_is_set(state.speed_status, SPEED_NED_F)) {
+      /* transform ned_f -> ned_i -> body_i , set status bits */
+      SPEEDS_BFP_OF_REAL(state.ned_speed_i, state.ned_speed_f);
+      SetBit(state.speed_status, SPEED_NED_I);
+      int32_rmat_transp_vmult(&state.body_speed_i, stateGetNedToBodyRMat_i(), (struct Int32Vect3*)&state.ned_speed_i);
+    } else {  /* could not get this representation,  set errno */
+      errno = 1;
+      //struct VectCoor_i _ecef_zero = {0};
+      //return _ecef_zero;
+    }
+  } else { /* ned coordinate system not initialized,  set errno */
+    errno = 2;
+  }
+  if (errno) {
+    //struct Int32Vect3 _body_zero = {0};
+    //return _body_zero;
+  }
+
+  /* set bit to indicate this representation is computed */
+  SetBit(state.speed_status, SPEED_BODY_I);
 }
 
 void stateCalcHorizontalSpeedNorm_i(void)
@@ -998,6 +1031,37 @@ void stateCalcSpeedEcef_f(void)
   }
   /* set bit to indicate this representation is computed */
   SetBit(state.speed_status, SPEED_ECEF_F);
+}
+
+void stateCalcSpeedBody_f(void)
+{
+  if (bit_is_set(state.speed_status, SPEED_BODY_F)) {
+    return;
+  }
+
+  int errno = 0;
+  if (state.ned_initialized_i) {
+    if (bit_is_set(state.speed_status, SPEED_BODY_I)) {
+      SPEEDS_FLOAT_OF_BFP(state.body_speed_f, state.body_speed_i);
+    } else if (bit_is_set(state.speed_status, SPEED_NED_F)) {
+      float_rmat_transp_vmult(&state.body_speed_f, stateGetNedToBodyRMat_f(), (struct FloatVect3*)&state.ned_speed_f);
+    } else if (bit_is_set(state.speed_status, SPEED_NED_I)) {
+      /* transform ned_i -> ned_f -> body_f , set status bits */
+      SPEEDS_FLOAT_OF_BFP(state.ned_speed_f, state.ned_speed_i);
+      SetBit(state.speed_status, SPEED_NED_F);
+      float_rmat_transp_vmult(&state.body_speed_f, stateGetNedToBodyRMat_f(), (struct FloatVect3*)&state.ned_speed_f);
+    } else {  /* could not get this representation,  set errno */
+      errno = 1;
+    }
+  } else {  /* ned coordinate system not initialized,  set errno */
+    errno = 2;
+  }
+  if (errno) {
+    //struct FloatVect3 _body_zero = {0};
+    //return _body_zero;
+  }
+  /* set bit to indicate this representation is computed */
+  SetBit(state.speed_status, SPEED_BODY_F);
 }
 
 void stateCalcHorizontalSpeedNorm_f(void)

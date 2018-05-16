@@ -7,9 +7,10 @@
   <waypoints>
     <waypoint name="HOME" x="0.0" y="0.0"/>
     <waypoint name="CLIMB" x="1.2" y="-0.6"/>
-    <waypoint name="GOAL" x="2.0" y="2.0"/>
-    <waypoint name="STDBY" x="-0.7" y="-0.8"/>
-    <waypoint name="TD" x="0.8" y="-1.7"/>
+    <waypoint name="STDBY" x="-0.7" y="0.8"/>
+    <waypoint name="GOAL" x="-0.7" y="-0.8"/>
+    <waypoint name="TD" x="-0.2" y="-1.7"/>
+    <waypoint x="0.2" y="-0.5" name="center"/>
     <waypoint lat="51.990630" lon="4.376823" name="p1"/>
     <waypoint lat="51.990614" lon="4.376779" name="p2"/>
     <waypoint lat="51.990636" lon="4.376759" name="p3"/>
@@ -48,6 +49,15 @@
     <block name="Standby" strip_button="Standby" strip_icon="home.png">
       <stay wp="STDBY"/>
     </block>
+    <block name="circle1">
+      <circle wp="center" radius="1"/>
+    </block>
+    <block name="circle2">
+      <circle wp="center" radius="2"/>
+    </block>
+    <block name="circle3">
+      <circle wp="center" radius="3"/>
+    </block>
     <block name="START" strip_button="Go" strip_icon="lookfore.png">
       <call_once fun="NavSetWaypointHere(WP_GOAL)"/>
     </block>
@@ -69,10 +79,8 @@
       <deroute block="stay_p1"/>
     </block>
     <block name="route">
-      <go from="p1" hmode="route" wp="p3"/>
-      <go from="p3" hmode="route" wp="p4"/>
-      <go from="p4" hmode="route" wp="p1"/>
-      <deroute block="stay_p1"/>
+      <go from="GOAL" hmode="route" wp="TD"/>
+      <go from="TD" hmode="route" wp="GOAL"/>
     </block>
     <block name="Oval">
       <oval p1="p1" p2="p2" radius="-1"/>
