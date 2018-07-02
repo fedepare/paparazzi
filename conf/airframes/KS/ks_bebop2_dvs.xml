@@ -43,10 +43,8 @@
     </module>
     
     <module name="pipe">
-      <define name="USE_PIPE0_READER"/>
-      <define name="USE_PIPE0_WRITER"/>
-      <define name="PIPE0_READ_NAME" value="/tmp/seesfifo_cs"/>
-      <define name="PIPE0_WRITE_NAME" value="/tmp/seesfifo_sc"/>
+      <define name="USE_PIPE0_READER" value="/tmp/seesfifo_cs"/>
+      <define name="USE_PIPE0_WRITER" value="/tmp/seesfifo_sc"/>
       <define name="PIPE_RX_BUFFER_SIZE" value="8192"/>
     </module>
     
