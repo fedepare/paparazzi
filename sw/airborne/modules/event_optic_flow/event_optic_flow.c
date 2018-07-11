@@ -313,6 +313,8 @@ void event_optic_flow_event(void) {
 
     GetMedianFilterRatesFloat(rate_filter, eofState.rates);
 
+    eofState.rates = old_rates[old_rates_read];
+
     new_gyro_meas = false;
   }
 }
@@ -326,6 +328,9 @@ void event_optic_flow_periodic(void) {
     eofState.field.wx = 0.f;
     eofState.field.wy = 0.f;
     eofState.field.D  = 0.f;
+    eofState.field.wx_filtered = 0.f;
+    eofState.field.wy_filtered = 0.f;
+    eofState.field.D_filtered  = 0.f;
     mode_switched = true;
     mode = autopilot_get_mode();
   }
@@ -370,25 +375,29 @@ void event_optic_flow_periodic(void) {
   }
 
   // run extra derotation due to camera offset
-  /*if (enableDerotation && agl > 0.3f && agl < 10.f){
+  if (enableDerotation && agl > 0.3f && agl < 10.f){
     eofState.field.wx -= -eofState.rates.q * DVS_BODY_TO_CAM_Z / agl;
     eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
-  }*/
+  }
 
-  struct FloatVect3 body_flow, cam_flow = {eofState.field.wx, eofState.field.wy, eofState.field.D};
+  struct FloatVect3 body_flow, body_flow_filtered;
+  struct FloatVect3 cam_flow_filtered = {eofState.field.wx_filtered, eofState.field.wy_filtered, eofState.field.D_filtered};
+  struct FloatVect3 cam_flow = {eofState.field.wx, eofState.field.wy, eofState.field.D};
   if(ROTATE_CAM_2_BODY){
     float_rmat_transp_vmult(&body_flow, &body_to_cam, &cam_flow);
+    float_rmat_transp_vmult(&body_flow_filtered, &body_to_cam, &cam_flow_filtered);
   } else {
     VECT3_COPY(body_flow, cam_flow);
+    VECT3_COPY(body_flow_filtered, cam_flow_filtered);
   }
 
   AbiSendMsgOPTICAL_FLOW(FLOW_DVS_ID, get_sys_time_usec(),
-      body_flow.x,
-      body_flow.y,
-      body_flow.x,
-      body_flow.y,
+      body_flow_filtered.x,
+      body_flow_filtered.y,
+      body_flow_filtered.x,
+      body_flow_filtered.y,
       eofState.field.confidence,
-      -body_flow.z);
+      -body_flow_filtered.z);
 
   // Set status globally
   eofState.status = status;
@@ -396,7 +405,7 @@ void event_optic_flow_periodic(void) {
   if (agl > 0.3f && agl < 10.f){
     AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
         agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
-        eofState.field.confidence, eofState.field.confidence, eofState.field.confidence);
+        eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
   }
 }
 
@@ -522,9 +531,9 @@ static void sendFlowFieldState(struct transport_tx *trans, struct link_device *d
   float confidence = eofState.field.confidence;
   float eventRate = eofState.stats.eventRate;
   uint32_t nNew = eofState.NNew;
-  float wx = eofState.field.wx;
-  float wy = eofState.field.wy;
-  float D  = eofState.field.D;
+  float wx = eofState.field.wx_filtered;
+  float wy = eofState.field.wy_filtered;
+  float D  = eofState.field.D_filtered;
   float p = eofState.rates.p;
   float q = eofState.rates.q;
   float wxTruth = eofState.wxTruth;

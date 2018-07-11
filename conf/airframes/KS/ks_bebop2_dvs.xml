@@ -11,13 +11,17 @@
       </module>
     
       <define name="LIMIT_EVENT_POLLING" value="true"/>
-      <define name="INS_INT_VEL_ID" value="ABI_DISABLE"/><!--VEL_DVS_ID"/-->
+      <define name="INS_INT_VEL_ID" value="VEL_DVS_ID"/>
       <define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/>
+      <define name="INS_INT_GPS_ID" value="ABI_DISABLE"/>
+      
       <define name="USE_SONAR" value="1"/>
       
-      <define name="VFF_EXTENDED_ACCEL_NOISE" value="4."/>
-      <define name="HFF_ACCEL_NOISE" value="1."/>
-      <define name="AUTOPILOT_IN_FLIGHT_MIN_THRUST" value="1000"/>
+      <define name="VFF_EXTENDED_ACCEL_NOISE" value="3."/>
+      <define name="VFF_EXTENDED_VEL_NOISE" value="0.3"/>
+      
+      <define name="HFF_ACCEL_NOISE" value="3."/>
+      <define name="HFF_VEL_NOISE" value="0.3"/>
     </target>
     
     <target name="nps" board="pc">
@@ -50,6 +54,19 @@
     
     <module name="video_thread">
       <define name="MT9V117_TARGET_FPS" value="23"/>
+    </module>
+    
+    <module name="optical_flow_landing">
+    <define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/><!--FLOW_DVS_ID-->
+      <define name="OFL_PGAIN" value="0.2"/>
+      <define name="OFL_IGAIN" value="0.0"/>
+      <define name="OFL_DGAIN" value="0.0"/>
+      <define name="OFL_CONTROL_METHOD" value="0"/>
+      <define name="OFL_COV_WINDOW_SIZE" value="100"/>
+      <define name="OFL_COV_LANDING_LIMIT" value="6"/>
+      <define name="OFL_COV_SETPOINT" value="-4"/>
+      <define name="OFL_P_LAND_THRESHOLD" value="0.01"/>
+      <define name="OFL_ELC_OSCILLATE" value="0"/>
     </module>
     
     <module name="video_rtp_stream">
@@ -118,8 +135,8 @@
     <define name="ACCEL_Y_SENS" value="2.451003012316027" integer="16"/>
     <define name="ACCEL_Z_SENS" value="2.423539033587872" integer="16"/>
     
-    <define name="BODY_TO_IMU_PHI" value="1.2" unit="deg"/>
-    <define name="BODY_TO_IMU_THETA" value="0.35" unit="deg"/>
+    <define name="BODY_TO_IMU_PHI" value="-0.79" unit="deg"/>
+    <define name="BODY_TO_IMU_THETA" value="0.105" unit="deg"/>
     <define name="BODY_TO_IMU_PSI" value="0." unit="deg"/>
   </section>
 
@@ -225,19 +242,19 @@
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-    <define name="HOVER_KP" value="400"/>
-    <define name="HOVER_KD" value="120"/>
-    <define name="HOVER_KI" value="20"/>
+    <define name="HOVER_KP" value="300"/> <!-- GPS: 400 no GPS: 300--> 
+    <define name="HOVER_KD" value="100"/> <!-- GPS: 120 no GPS: 100--> 
+    <define name="HOVER_KI" value="20"/> <!-- GPS: 20 no GPS: 20--> 
     <define name="NOMINAL_HOVER_THROTTLE" value="0.6"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="TRUE"/>
   </section>
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <define name="REF_MAX_SPEED" value="2" unit="m/s"/>
-    <define name="MAX_BANK" value="35" unit="deg"/>
-    <define name="PGAIN" value="250"/> <!-- GPS: 120 no GPS: 0--> 
-    <define name="DGAIN" value="200"/> <!-- GPS: 80 no GPS: 302-->
-    <define name="IGAIN" value="10"/> <!-- GPS: 30 no GPS: 0-->
+    <define name="MAX_BANK" value="30" unit="deg"/>
+    <define name="PGAIN" value="200"/> <!-- GPS: 250 no GPS: 200--> 
+    <define name="DGAIN" value="200"/> <!-- GPS: 200 no GPS: 200-->
+    <define name="IGAIN" value="10"/> <!-- GPS: 10 no GPS: 10-->
     <define name="GUIDANCE_H_VGAIN" value="75"/>
     <define name="GUIDANCE_H_AGAIN" value="35"/>
   </section>
@@ -264,7 +281,8 @@
     <define name="MODE_STARTUP" value="AP_MODE_NAV"/>
     <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
     <define name="MODE_AUTO1" value="AP_MODE_MODULE"/>
-    <define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/>
+    <!--define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/-->
+    <define name="MODE_AUTO2" value="AP_MODE_MODULE"/>
 
     <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
   </section>

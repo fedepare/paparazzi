@@ -171,10 +171,14 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
     }
   }
 
+  field->wx = p[0];
+  field->wy = p[1];
+  field->D = p[2];
+
   field->confidence = c_rate * c_var_max * c_R2;
-  lowPassFilterWithThreshold(&field->wx, p[0], field->confidence * filterFactor, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->wy, p[1], field->confidence * filterFactor, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->D, p[2], field->confidence * filterFactor, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->wx_filtered, p[0], field->confidence * filterFactor, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->wy_filtered, p[1], field->confidence * filterFactor, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->D_filtered, p[2], field->confidence * filterFactor, inlierMaxDiff);
 
   // If no problem was found, update is successful
   return UPDATE_SUCCESS;

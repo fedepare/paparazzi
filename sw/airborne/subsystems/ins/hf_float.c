@@ -77,8 +77,11 @@
 #ifndef HFF_ACCEL_NOISE
 #define HFF_ACCEL_NOISE 0.5
 #endif
+#ifndef HFF_VEL_NOISE
+#define HFF_VEL_NOISE HFF_ACCEL_NOISE
+#endif
 #define HFF_Q       HFF_ACCEL_NOISE
-#define HFF_Qdotdot HFF_ACCEL_NOISE
+#define HFF_Qdotdot HFF_VEL_NOISE
 
 //TODO: proper measurement noise
 #ifndef HFF_R_POS

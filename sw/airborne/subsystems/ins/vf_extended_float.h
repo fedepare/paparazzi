@@ -47,6 +47,7 @@ struct VffExtended {
   float P[VFF_STATE_SIZE][VFF_STATE_SIZE];  ///< covariance matrix
 
   float accel_noise;
+  float vel_noise;
   float r_baro;
   float r_alt;
   float r_obs_height;

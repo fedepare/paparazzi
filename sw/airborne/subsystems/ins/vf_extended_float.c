@@ -57,6 +57,10 @@ PRINT_CONFIG_VAR(DEBUG_VFF_EXTENDED)
 #define VFF_EXTENDED_ACCEL_NOISE 0.5f
 #endif
 
+#ifndef VFF_EXTENDED_VEL_NOISE
+#define VFF_EXTENDED_VEL_NOISE VFF_EXTENDED_ACCEL_NOISE
+#endif
+
 /** Barometer confidence **/
 #ifndef VFF_EXTENDED_R_BARO
 #define VFF_EXTENDED_R_BARO 2.f
@@ -144,6 +148,7 @@ void vff_init(float init_z, float init_zdot, float init_accel_bias, float init_o
 #endif
 
   vff.accel_noise = VFF_EXTENDED_ACCEL_NOISE;
+  vff.vel_noise = VFF_EXTENDED_VEL_NOISE;
   vff.r_baro = VFF_EXTENDED_R_BARO;
   vff.r_alt = R_ALT;
   vff.r_obs_height = R_OBS_HEIGHT;
@@ -202,7 +207,7 @@ void vff_propagate(float accel, float dt)
   vff.P[0][1] = FPF01;
   vff.P[0][2] = FPF02;
   vff.P[1][0] = FPF10;
-  vff.P[1][1] = FPF11 + vff.accel_noise * dt;
+  vff.P[1][1] = FPF11 + vff.vel_noise * dt;
   vff.P[1][2] = FPF12;
   vff.P[2][0] = FPF20;
   vff.P[2][1] = FPF21;

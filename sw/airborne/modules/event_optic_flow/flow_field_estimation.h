@@ -34,6 +34,9 @@ struct flowField {
   float wx;
   float wy;
   float D;
+  float wx_filtered;
+  float wy_filtered;
+  float D_filtered;
   float confidence;
   int32_t t;
 };
