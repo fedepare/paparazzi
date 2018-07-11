@@ -47,6 +47,8 @@
 #include "paparazzi.h"
 #include "firmwares/rotorcraft/stabilization.h"
 #include "generated/modules.h"
+
+#include <stdio.h>
 //#include "firmwares/rotorcraft/guidance/guidance_v.h"
 
 
@@ -179,12 +181,12 @@ struct MedianFilter3Float rate_filter;
 // SWITCH THIS ON TO ENABLE CONTROL THROTTLE
 //static const bool ASSIGN_CONTROL = false; //TODO Strange, had to rename this to make code compatible with optical_flow_landing
 
-struct flow_msg{
-  int16_t x;
-  int16_t y;
+struct __attribute__((aligned)) flow_msg{
+  int16_t xu;
+  int16_t yu;
   int16_t u;
   int16_t v;
-}; __attribute__((aligned))
+};
 
 // Internal function declarations (definitions below)
 enum updateStatus processInput(struct flowStats* s, int32_t *N);
@@ -199,7 +201,7 @@ static float agl = 0.f;
 static abi_event agl_ev; ///< The altitude ABI event
 static void agl_cb(__attribute__((unused)) uint8_t sender_id, float distance)
 {
-  agl = distance;
+  agl = distance - DVS_BODY_TO_CAM_Z;
 }
 
 static float gps_alt = 0.1f;
@@ -212,7 +214,7 @@ static void gps_cb(uint8_t sender_id,
     gps_alt = (float)gps_s->hmsl / 1000.f;
     eofState.z_NED = -gps_alt; // for downlink
 #ifndef USE_SONAR
-    agl = gps_alt;
+    agl = gps_alt - DVS_BODY_TO_CAM_Z;
 #endif
   }
 
@@ -398,10 +400,6 @@ void event_optic_flow_periodic(void) {
   }
 }
 
-void event_optic_flow_stop(void) {
-  //TODO is now present as dummy, may be removed if not required
-}
-
 /***********************
  * SUPPORTING FUNCTIONS
  ***********************/
@@ -476,17 +474,16 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N) {
   {
     data[i++] = pipe_getch(&DVS_PIPE);
   }
- 
+
   uint16_t nb_msgs = i / sizeof(struct flow_msg);
   struct flow_msg *flow_msgs = (struct flow_msg*)data;
   
   for (i=0; i<nb_msgs; i++)
   {
-    e.x = (float)flow_msgs[i].x * INT16_TO_FLOAT;
-    e.y = (float)flow_msgs[i].y * INT16_TO_FLOAT;
+    e.x = (float)flow_msgs[i].xu * INT16_TO_FLOAT;
+    e.y = (float)flow_msgs[i].yu * INT16_TO_FLOAT;
     e.u = (float)flow_msgs[i].u * INT16_TO_FLOAT;
     e.v = (float)flow_msgs[i].v * INT16_TO_FLOAT;
-    
     flowStatsUpdate(s, e, eofState.rates, enableDerotation);
     returnStatus = UPDATE_STATS;
     (*N)++;
@@ -533,19 +530,9 @@ static void sendFlowFieldState(struct transport_tx *trans, struct link_device *d
   float wxTruth = eofState.wxTruth;
   float wyTruth = eofState.wyTruth;
   float DTruth = eofState.DTruth;
-  int32_t controlThrottle = eofState.controlThrottleLast;
-  uint8_t controlMode = eofState.landing;
 
   pprz_msg_send_EVENT_OPTIC_FLOW_EST(trans, dev, AC_ID,
       &fps, &status, &confidence, &eventRate, &nNew, &wx, &wy, &D, &p, &q,
-      &wxTruth,&wyTruth,&DTruth,&controlThrottle,&controlMode);
-}
+      &wxTruth,&wyTruth,&DTruth);
 
-void divergenceControlReset(void) {
-  eofState.controlReset = true;
-  eofState.landing = false;
-  eofState.divergenceUpdated = false;
-  eofState.divergenceControlLast = 0.0f;
-  eofState.nominalThrottleEnter = stabilization_cmd[COMMAND_THRUST];
-  eofState.controlThrottleLast = eofState.nominalThrottleEnter; // set to nominal
 }

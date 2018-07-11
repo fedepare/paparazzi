@@ -53,13 +53,6 @@ struct module_state {
   enum    updateStatus status;
   bool    caerInputReceived;
   int32_t NNew;
-
-  bool    controlReset;
-  bool    landing;
-  bool    divergenceUpdated;
-  float   divergenceControlLast;
-  int32_t controlThrottleLast;
-  int32_t nominalThrottleEnter;
 };
 
 extern struct module_state eofState;
@@ -81,7 +74,6 @@ extern void event_optic_flow_init(void);
 extern void event_optic_flow_start(void);
 extern void event_optic_flow_event(void);
 extern void event_optic_flow_periodic(void);
-extern void event_optic_flow_stop(void);
 
 extern void set_record(void);
 

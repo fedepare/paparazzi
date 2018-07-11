@@ -1772,8 +1772,6 @@
     <field name="wx_T"    		type="float" unit="1/s"/>
     <field name="wy_T"    		type="float" unit="1/s"/>
     <field name="D_T"    		type="float" unit="1/s"/>
-    <field name="control_throttle"    	type="int32" unit="-"/>
-    <field name="control_mode"		type="uint8" values="DESCENDING|LANDING"/>
   </message>
 
     <message name="ROTORCRAFT_STATUS" id="231">

@@ -104,7 +104,7 @@ void pipe_arch_periph_init(struct pipe_periph *p, char *read_name, char* write_n
 uint16_t pipe_char_available(struct pipe_periph *p)
 {
   pthread_mutex_lock(&pipe_mutex);
-  int16_t available = p->rx_insert_idx - p->rx_extract_idx;
+  int32_t available = p->rx_insert_idx - p->rx_extract_idx;
   if (available < 0) {
     available += PIPE_RX_BUFFER_SIZE;
   }
@@ -135,8 +135,8 @@ void pipe_receive(struct pipe_periph *p)
   if (p->fd_read < 0) { return; }
 
   int16_t i;
-  int16_t available = PIPE_RX_BUFFER_SIZE - pipe_char_available(p);
-  uint8_t buf[PIPE_RX_BUFFER_SIZE];
+  int32_t available = PIPE_RX_BUFFER_SIZE - pipe_char_available(p);
+  static uint8_t buf[PIPE_RX_BUFFER_SIZE];
 
   if (available <= 0) {
     return;  // No space
@@ -213,7 +213,7 @@ static void *pipe_thread(void *data __attribute__((unused)))
 #endif
 #ifdef USE_PIPE1_READER
   if(pipe1.fd_read >= 0){
-    FD_SET(pipe1.fd_read, &socks_master);
+    FD_SET(pipe1.fd_read, &fds_master);
     if (pipe1.fd_read > fdmax) {
       fdmax = pipe1.fd_read;
     }
@@ -221,7 +221,7 @@ static void *pipe_thread(void *data __attribute__((unused)))
 #endif
 #ifdef USE_PIPE2_READER
   if(pipe2.fd_read >= 0){
-    FD_SET(pipe2.fd_read, &socks_master);
+    FD_SET(pipe2.fd_read, &fds_master);
     if (pipe2.fd_read > fdmax) {
       fdmax = pipe2.fd_read;
     }

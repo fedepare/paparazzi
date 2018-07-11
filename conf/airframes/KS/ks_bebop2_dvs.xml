@@ -11,7 +11,7 @@
       </module>
     
       <define name="LIMIT_EVENT_POLLING" value="true"/>
-      <define name="INS_INT_VEL_ID" value="6"/><!--VEL_DVS_ID"/-->
+      <define name="INS_INT_VEL_ID" value="ABI_DISABLE"/><!--VEL_DVS_ID"/-->
       <define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/>
       <define name="USE_SONAR" value="1"/>
       
@@ -45,7 +45,7 @@
     <module name="pipe">
       <define name="USE_PIPE0_READER" value="/tmp/seesfifo_cs"/>
       <define name="USE_PIPE0_WRITER" value="/tmp/seesfifo_sc"/>
-      <define name="PIPE_RX_BUFFER_SIZE" value="8192"/>
+      <define name="PIPE_RX_BUFFER_SIZE" value="16384"/>
     </module>
     
     <module name="video_thread">
@@ -55,16 +55,16 @@
     <module name="video_rtp_stream">
       <define name="VIEWVIDEO_CAMERA" value="bottom_camera"/>
       <!--define name="VIEWVIDEO_CAMERA2" value="front_camera"/-->
-      <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="2"/>
-      <define name="VIEWVIDEO_QUALITY_FACTOR" value="40"/>
+      <!--define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="2"/-->
+      <define name="VIEWVIDEO_QUALITY_FACTOR" value="60"/>
     </module>
     
-    <module name="cv_opticflow">
+    <!--module name="cv_opticflow">
       <define name="OPTICFLOW_METHOD" value="0"/>
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
-      <!--define name="OPTICFLOW_FPS" value="45"/-->
-      <!--define name="CAMERA_ROTATED_180" value="TRUE"/-->
-    </module>
+      <!--define name="OPTICFLOW_FPS" value="45"/>
+      <!--define name="CAMERA_ROTATED_180" value="TRUE"/>
+    </module-->
   </firmware>
   
   <section name="DVS" prefix="DVS_">
@@ -111,12 +111,16 @@
     <define name="MAG_Y_SENS" value="9.71913902739" integer="16"/>
     <define name="MAG_Z_SENS" value="6.88648156696" integer="16"/>
 
-    <define name="ACCEL_X_NEUTRAL" value="21"/>
-    <define name="ACCEL_Y_NEUTRAL" value="-133"/>
-    <define name="ACCEL_Z_NEUTRAL" value="-398"/>
-    <define name="ACCEL_X_SENS" value="2.447130060517249" integer="16"/>
-    <define name="ACCEL_Y_SENS" value="2.448775882118666" integer="16"/>
-    <define name="ACCEL_Z_SENS" value="2.42528511464309" integer="16"/>
+    <define name="ACCEL_X_NEUTRAL" value="24"/>
+    <define name="ACCEL_Y_NEUTRAL" value="-57"/>
+    <define name="ACCEL_Z_NEUTRAL" value="-401"/>
+    <define name="ACCEL_X_SENS" value="2.444993054173359" integer="16"/>
+    <define name="ACCEL_Y_SENS" value="2.451003012316027" integer="16"/>
+    <define name="ACCEL_Z_SENS" value="2.423539033587872" integer="16"/>
+    
+    <define name="BODY_TO_IMU_PHI" value="1.2" unit="deg"/>
+    <define name="BODY_TO_IMU_THETA" value="0.35" unit="deg"/>
+    <define name="BODY_TO_IMU_PSI" value="0." unit="deg"/>
   </section>
 
   <!-- local magnetic field -->

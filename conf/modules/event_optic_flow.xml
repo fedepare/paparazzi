@@ -24,7 +24,7 @@
     <file name="event_optic_flow.h"/>
   </header>
   <init fun="event_optic_flow_init()"/>
-  <periodic fun="event_optic_flow_periodic()" start="event_optic_flow_start()" stop="event_optic_flow_stop()" freq="100" autorun="TRUE"/>
+  <periodic fun="event_optic_flow_periodic()" start="event_optic_flow_start()" freq="100" autorun="TRUE"/>
   <event fun="event_optic_flow_event()"/>
   <makefile target="ap">
     <file name="event_optic_flow.c"/>
