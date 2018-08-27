@@ -41,6 +41,8 @@
 #include "generated/airframe.h"           // AC_ID
 #include "subsystems/abi.h"               // rssi
 
+#include "guidance/guidance_h.h"
+#include "guidance/guidance_v.h"
 #include "autopilot.h"
 
 float input_layer_out[nr_input_neurons];
@@ -132,6 +134,7 @@ static int nn_run(float D, float Ddot, float dt)
   if (autopilot_get_mode() != mode && autopilot_get_mode() == AP_MODE_GUIDED){
     guidance_v_set_guided_z(stateGetPositionNed_f()->z);
     nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST]/MAX_PPRZ;
+    guidance_h_hover_enter();
   }
   mode = autopilot_get_mode();
 
