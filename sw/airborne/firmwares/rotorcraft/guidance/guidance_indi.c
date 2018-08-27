@@ -70,8 +70,13 @@ float guidance_indi_speed_gain = 1.8;
 abi_event accel_sp_ev;
 static void accel_sp_cb(uint8_t sender_id, uint8_t flag, struct FloatVect3 *accel_sp);
 struct FloatVect3 indi_accel_sp = {0.0, 0.0, 0.0};
-bool indi_accel_sp_set_2d = false;
-bool indi_accel_sp_set_3d = false;
+enum {
+  HOR_SP_FLAG,
+  VERT_SP_FLAG
+};
+uint8_t indi_accel_sp_flag = 0;
+float time_of_accel_sp_hor = 0.f;
+float time_of_accel_sp_vert = 0.f;
 
 struct FloatVect3 sp_accel = {0.0, 0.0, 0.0};
 #ifdef GUIDANCE_INDI_SPECIFIC_FORCE_GAIN
@@ -108,9 +113,6 @@ struct FloatVect3 control_increment; // [dtheta, dphi, dthrust]
 
 float filter_cutoff = GUIDANCE_INDI_FILTER_CUTOFF;
 float guidance_indi_max_bank = GUIDANCE_H_MAX_BANK;
-
-float time_of_accel_sp_2d = 0.0;
-float time_of_accel_sp_3d = 0.0;
 
 struct FloatEulers guidance_euler_cmd;
 float thrust_in;
@@ -160,38 +162,41 @@ void guidance_indi_run(float heading_sp)
   //filter accel to get rid of noise and filter attitude to synchronize with accel
   guidance_indi_propagate_filters(&eulers_yxz);
 
-  //Linear controller to find the acceleration setpoint from position and velocity
-  float pos_x_err = POS_FLOAT_OF_BFP(guidance_h.ref.pos.x) - stateGetPositionNed_f()->x;
-  float pos_y_err = POS_FLOAT_OF_BFP(guidance_h.ref.pos.y) - stateGetPositionNed_f()->y;
-  float pos_z_err = POS_FLOAT_OF_BFP(guidance_v_z_ref - stateGetPositionNed_i()->z);
-
-  float speed_sp_x = pos_x_err * guidance_indi_pos_gain;
-  float speed_sp_y = pos_y_err * guidance_indi_pos_gain;
-  float speed_sp_z = pos_z_err * guidance_indi_pos_gain;
-
-  // If the acceleration setpoint is set over ABI message
-  if (indi_accel_sp_set_2d) {
+  // If the horizontal acceleration setpoint is set over ABI message
+  if (bit_is_set(indi_accel_sp_flag, HOR_SP_FLAG)) {
     sp_accel.x = indi_accel_sp.x;
     sp_accel.y = indi_accel_sp.y;
-    // In 2D the vertical motion is derived from the flight plan
-    sp_accel.z = (speed_sp_z - stateGetSpeedNed_f()->z) * guidance_indi_speed_gain;
-    float dt = get_sys_time_float() - time_of_accel_sp_2d;
+    float dt = get_sys_time_float() - time_of_accel_sp_hor;
     // If the input command is not updated after a timeout, switch back to flight plan control
     if (dt > 0.5) {
-      indi_accel_sp_set_2d = false;
-    }
-  } else if (indi_accel_sp_set_3d) {
-    sp_accel.x = indi_accel_sp.x;
-    sp_accel.y = indi_accel_sp.y;
-    sp_accel.z = indi_accel_sp.z;
-    float dt = get_sys_time_float() - time_of_accel_sp_3d;
-    // If the input command is not updated after a timeout, switch back to flight plan control
-    if (dt > 0.5) {
-      indi_accel_sp_set_3d = false;
+      ClearBit(indi_accel_sp_flag, HOR_SP_FLAG);
     }
   } else {
+    // Get set-point from flight plan and use linear controller to find the acceleration setpoint
+    float pos_x_err = POS_FLOAT_OF_BFP(guidance_h.ref.pos.x) - stateGetPositionNed_f()->x;
+    float pos_y_err = POS_FLOAT_OF_BFP(guidance_h.ref.pos.y) - stateGetPositionNed_f()->y;
+
+    float speed_sp_x = pos_x_err * guidance_indi_pos_gain;
+    float speed_sp_y = pos_y_err * guidance_indi_pos_gain;
+
     sp_accel.x = (speed_sp_x - stateGetSpeedNed_f()->x) * guidance_indi_speed_gain;
     sp_accel.y = (speed_sp_y - stateGetSpeedNed_f()->y) * guidance_indi_speed_gain;
+  }
+
+  // If the horizontal acceleration setpoint is set over ABI message
+  if (bit_is_set(indi_accel_sp_flag, VERT_SP_FLAG)) {
+    sp_accel.z = indi_accel_sp.z;
+    float dt = get_sys_time_float() - time_of_accel_sp_vert;
+    // If the input command is not updated after a timeout, switch back to flight plan control
+    if (dt > 0.5) {
+      ClearBit(indi_accel_sp_flag, VERT_SP_FLAG);
+    }
+  } else {
+    // Get set-point from flight plan and use linear controller to find the acceleration setpoint
+    float pos_z_err = POS_FLOAT_OF_BFP(guidance_v_z_ref - stateGetPositionNed_i()->z);
+
+    float speed_sp_z = pos_z_err * guidance_indi_pos_gain;
+
     sp_accel.z = (speed_sp_z - stateGetSpeedNed_f()->z) * guidance_indi_speed_gain;
   }
 
@@ -224,7 +229,7 @@ void guidance_indi_run(float heading_sp)
   //If the thrust to specific force ratio has been defined, include vertical control
   //else ignore the vertical acceleration error
 #ifndef GUIDANCE_INDI_SPECIFIC_FORCE_GAIN
-#ifndef STABILIZATION_ATTITUDE_INDI_FULL
+#if STABILIZATION_ATTITUDE_INDI_FULL
   a_diff.z = 0.0;
 #endif
 #endif
@@ -357,21 +362,22 @@ UNUSED void guidance_indi_calcG(struct FloatMat33 *Gmat)
 
 /**
  * ABI callback that obtains the acceleration setpoint from telemetry
- * flag: 0 -> 2D, 1 -> 3D
+ * flag bitmask to select axis for accel setpoint
+ *  bit 0: horizontal
+ *  bit 1: vertical
  */
 static void accel_sp_cb(uint8_t sender_id __attribute__((unused)), uint8_t flag, struct FloatVect3 *accel_sp)
 {
-  if (flag == 0) {
+  indi_accel_sp_flag |= flag;
+  if (bit_is_set(flag, HOR_SP_FLAG)) {
     indi_accel_sp.x = accel_sp->x;
     indi_accel_sp.y = accel_sp->y;
-    indi_accel_sp_set_2d = true;
-    time_of_accel_sp_2d = get_sys_time_float();
-  } else if (flag == 1) {
-    indi_accel_sp.x = accel_sp->x;
-    indi_accel_sp.y = accel_sp->y;
+    time_of_accel_sp_hor = get_sys_time_float();
+  }
+
+  if (bit_is_set(flag, VERT_SP_FLAG)) {
     indi_accel_sp.z = accel_sp->z;
-    indi_accel_sp_set_3d = true;
-    time_of_accel_sp_3d = get_sys_time_float();
+    time_of_accel_sp_vert = get_sys_time_float();
   }
 }
 

@@ -409,6 +409,10 @@
 #define ACCEL_SP_FCR_ID 1 // Formation Control Rotorcraft
 #endif
 
+#ifndef ACCEL_SP_DVS_ID
+#define ACCEL_SP_DVS_ID 2 // DVS vision based control
+#endif
+
 /*
  * RELATIVE_LOCALIZATION communication (message 24)
 */

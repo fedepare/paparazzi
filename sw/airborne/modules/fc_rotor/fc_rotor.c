@@ -42,7 +42,15 @@ void fc_read_msg(void)
     u.y = DL_DESIRED_SETPOINT_uy(dl_buffer);
     u.z = DL_DESIRED_SETPOINT_uz(dl_buffer);
 
-    AbiSendMsgACCEL_SP(ACCEL_SP_FCR_ID, flag, &u);
+    uint8_t accel_sp_flag = 0;
+    if (flag == 0 || flag == 1){
+      SetBit(accel_sp_flag, 0);
+    }
+    if (flag == 1){
+      SetBit(accel_sp_flag, 1);
+    }
+
+    AbiSendMsgACCEL_SP(ACCEL_SP_FCR_ID, accel_sp_flag, &u);
 
     if (flag == 0) {
       // with 2D control, set flight altitude in integer ENU LTP frame
