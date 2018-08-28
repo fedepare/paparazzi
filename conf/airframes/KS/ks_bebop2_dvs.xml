@@ -13,7 +13,7 @@
       <define name="LIMIT_EVENT_POLLING" value="true"/>
       <define name="INS_INT_VEL_ID" value="VEL_DVS_ID"/>
       <define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/>
-      <define name="INS_INT_GPS_ID" value="ABI_DISABLE"/>
+      <!--define name="INS_INT_GPS_ID" value="ABI_DISABLE"/-->
       
       <define name="USE_SONAR" value="1"/>
       
@@ -153,7 +153,7 @@
   </section>
 
   <section name="INS" prefix="INS_">
-    <define name="USE_GPS_ALT" value="1"/>
+    <define name="USE_GPS_ALT" value="0"/>
     <!-- trust GPS a lot: -->
     <define name="VFF_R_GPS" value="0.01"/> 
     <define name="VFF_VZ_R_GPS" value="0.01"/>
@@ -289,7 +289,7 @@
     <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
     <define name="MODE_AUTO1" value="AP_MODE_MODULE"/>
     <!--define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/-->
-    <define name="MODE_AUTO2" value="AP_MODE_MODULE"/>
+    <define name="MODE_AUTO2" value="AP_MODE_GUIDED"/>
 
     <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
   </section>

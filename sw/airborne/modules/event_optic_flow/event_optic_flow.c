@@ -402,11 +402,13 @@ void event_optic_flow_periodic(void) {
   // Set status globally
   eofState.status = status;
 
+  /*
   if (agl > 0.3f && agl < 10.f){
     AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
         agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
         eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
   }
+  */
 }
 
 /***********************

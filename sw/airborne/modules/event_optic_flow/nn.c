@@ -49,12 +49,14 @@ float input_layer_out[nr_input_neurons];
 float hidden_layer_out[nr_hidden_neurons] = {0};
 float layer2_out[nr_output_neurons] = {0};
 
-static float sigmoid(float val)
+float sigmoid(float val);
+float sigmoid(float val)
 {
   return 1.f / (1.f + expf(-val));
 }
 
-static float relu(float val)
+float relu(float val);
+float relu(float val)
 {
   BoundLower(val, 0.f);
   return val;
@@ -125,31 +127,36 @@ static float predict_nn(float D, float Ddot, float dt)
     return layer2_out[0];
 }
 
-static uint8_t mode;
-static float start_time;
-static float nominal_throttle;
-float thrust_effectiveness = 0.4f;
+float thrust_effectiveness = 0.18f;
 static int nn_run(float D, float Ddot, float dt)
 {
+  static uint8_t mode = AP_MODE_KILL;
+  static float start_time = 0.f;
+  static float nominal_throttle = 0.f;
+
   if (autopilot_get_mode() != mode && autopilot_get_mode() == AP_MODE_GUIDED){
     guidance_v_set_guided_z(stateGetPositionNed_f()->z);
     nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST]/MAX_PPRZ;
     guidance_h_hover_enter();
+    guidance_v_set_guided_th(nominal_throttle);
+    start_time = get_sys_time_float();
   }
   mode = autopilot_get_mode();
 
   if(mode != AP_MODE_GUIDED || get_sys_time_float() - start_time < 1.f){
-    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST]/MAX_PPRZ)/2.f;
     return 0;
   }
   float cmd = predict_nn(D, Ddot, dt);
 
+  cmd = 0.5f;
+
   // limit commands
-  Bound(cmd, -0.8, 0.5);
+  Bound(cmd, -0.8f, 0.5f);
   guidance_v_set_guided_th(cmd*thrust_effectiveness + nominal_throttle);
 
   return 1;
 
+  /*
   struct FloatVect3 accel_sp;
   uint8_t accel_sp_flag = 0b00000010; // vertical accel only
 
@@ -163,6 +170,7 @@ static int nn_run(float D, float Ddot, float dt)
   guidance_v_set_guided_th(accel_sp.z);
 
   return 1;
+  */
 }
 
 static void nn_test(void)
@@ -198,7 +206,7 @@ static void div_cb(uint8_t sender_id, uint32_t stamp, int16_t UNUSED flow_x,
 void nn_init(void)
 {
   // bind to optial flow messages to get divergence
-  //AbiBindMsgOPTICAL_FLOW(OFL_NN_ID, &optical_flow_ev, div_cb);
+  AbiBindMsgOPTICAL_FLOW(OFL_NN_ID, &optical_flow_ev, div_cb);
 }
 
 /*
