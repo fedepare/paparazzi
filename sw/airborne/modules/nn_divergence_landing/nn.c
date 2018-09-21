@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) Kirk Scheper
  *
@@ -23,8 +24,8 @@
  * This module is generates a command to avoid other vehicles based on their relative gps location
  */
 
-#include "modules/event_optic_flow/nn.h"
-#include "modules/event_optic_flow/nn_weights.h"
+#include "modules/nn_divergence_landing/nn.h"
+#include "modules/nn_divergence_landing/nn_weights.h"
 
 #include "stdio.h"
 
@@ -127,28 +128,33 @@ static float predict_nn(float D, float Ddot, float dt)
     return layer2_out[0];
 }
 
-float thrust_effectiveness = 0.18f;
+float thrust_effectiveness = 0.112f; // transfer function from G to thrust percentage
 static int nn_run(float D, float Ddot, float dt)
 {
-  static uint8_t mode = AP_MODE_KILL;
+  static bool first_run = true;
   static float start_time = 0.f;
   static float nominal_throttle = 0.f;
 
-  if (autopilot_get_mode() != mode && autopilot_get_mode() == AP_MODE_GUIDED){
-    guidance_v_set_guided_z(stateGetPositionNed_f()->z);
-    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST]/MAX_PPRZ;
-    guidance_h_hover_enter();
-    guidance_v_set_guided_th(nominal_throttle);
-    start_time = get_sys_time_float();
-  }
-  mode = autopilot_get_mode();
-
-  if(mode != AP_MODE_GUIDED || get_sys_time_float() - start_time < 1.f){
+  if(autopilot_get_mode() != AP_MODE_GUIDED){
+    first_run = true;
     return 0;
   }
+
+  if (first_run){
+    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
+    start_time = get_sys_time_float();
+    first_run = false;
+  }
+
+  // stabilize the vehicle and improve the estimate of the nominal throttle
+  if(get_sys_time_float() - start_time < 5.f){
+    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2;
+    return 0;
+  }
+
   float cmd = predict_nn(D, Ddot, dt);
 
-  cmd = 0.5f;
+  printf("cmd: %f\n", cmd);
 
   // limit commands
   Bound(cmd, -0.8f, 0.5f);
@@ -205,7 +211,7 @@ static void div_cb(uint8_t sender_id, uint32_t stamp, int16_t UNUSED flow_x,
 
 void nn_init(void)
 {
-  // bind to optial flow messages to get divergence
+  // bind to optical flow messages to get divergence
   AbiBindMsgOPTICAL_FLOW(OFL_NN_ID, &optical_flow_ev, div_cb);
 }
 

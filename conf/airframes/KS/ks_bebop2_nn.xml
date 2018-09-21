@@ -11,9 +11,9 @@
       </module>
     
       <define name="LIMIT_EVENT_POLLING" value="true"/>
-      <define name="INS_INT_VEL_ID" value="VEL_DVS_ID"/>
+      <define name="INS_INT_VEL_ID" value="ABI_DISABLE"/>
       <!--define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/-->
-      <define name="INS_INT_GPS_ID" value="ABI_DISABLE"/>
+      <!--define name="INS_INT_GPS_ID" value="ABI_DISABLE"/-->
       
       <define name="USE_SONAR" value="1"/>
       
@@ -41,8 +41,9 @@
       <define name="AHRS_HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
     </module>
     <module name="ins" type="hff_extended"/>
+    <!--module name="guidance" type="indi"/-->
 
-    <module name="event_optic_flow">
+    <!--module name="event_optic_flow">
       <define name="DVS_PIPE" value="pipe0"/>
     </module>
     
@@ -50,24 +51,11 @@
       <define name="USE_PIPE0_READER" value="/tmp/seesfifo_cs"/>
       <define name="USE_PIPE0_WRITER" value="/tmp/seesfifo_sc"/>
       <define name="PIPE_RX_BUFFER_SIZE" value="16384"/>
-    </module>
+    </module-->
     
-    <!--module name="video_thread">
+    <module name="video_thread">
       <define name="MT9V117_TARGET_FPS" value="45"/>
-    </module-->
-    
-    <!--module name="optical_flow_landing">
-    <define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/><!--FLOW_DVS_ID>
-      <define name="OFL_PGAIN" value="0.2"/>
-      <define name="OFL_IGAIN" value="0.0"/>
-      <define name="OFL_DGAIN" value="0.0"/>
-      <define name="OFL_CONTROL_METHOD" value="0"/>
-      <define name="OFL_COV_WINDOW_SIZE" value="100"/>
-      <define name="OFL_COV_LANDING_LIMIT" value="6"/>
-      <define name="OFL_COV_SETPOINT" value="-4"/>
-      <define name="OFL_P_LAND_THRESHOLD" value="0.01"/>
-      <define name="OFL_ELC_OSCILLATE" value="0"/>
-    </module-->
+    </module>
     
     <!--module name="video_rtp_stream">
       <define name="VIEWVIDEO_CAMERA" value="bottom_camera"/>
@@ -76,12 +64,14 @@
       <!--define name="VIEWVIDEO_QUALITY_FACTOR" value="60"/>
     </module-->
     
-    <!--module name="cv_opticflow">
+    <module name="cv_opticflow">
       <define name="OPTICFLOW_METHOD" value="0"/>
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
       <!--define name="OPTICFLOW_FPS" value="45"/>
-      <define name="CAMERA_ROTATED_180" value="TRUE"/>
-    </module-->
+      <define name="CAMERA_ROTATED_180" value="TRUE"/-->
+    </module>
+    
+    <module name="nn_divergence_landing"/>
   </firmware>
   
   <section name="DVS" prefix="DVS_">
