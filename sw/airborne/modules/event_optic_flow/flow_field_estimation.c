@@ -8,7 +8,7 @@
 #include "flow_field_estimation.h"
 #include "mcu_periph/sys_time.h"
 
-float DET_MIN_RESOLUTION = 1e-5;
+float DET_MIN_RESOLUTION = 1e-8;
 
 void lowPassFilterWithThreshold(float *val, float new, float factor, float limit);
 
@@ -29,16 +29,8 @@ void flowStatsInit(struct flowStats *s)
   }
 }
 
-void flowStatsUpdate(struct flowStats *s, struct flowEvent e, struct FloatRates rates,
-                     bool enableDerotation)
+void flowStatsUpdate(struct flowStats *s, struct flowEvent e)
 {
-/*  // TODO check this! Can be converted before sending from camera
-  // X,Y are defined around the camera's principal point
-  float x = (e.x - intrinsics.principalPointX) * intrinsics.focalLengthX_inv;
-  float y = (e.y - intrinsics.principalPointY) * intrinsics.focalLengthY_inv;
-  float u = e.u * intrinsics.focalLengthX_inv;
-  float v = e.v * intrinsics.focalLengthY_inv;*/
-
   // Find direction/index of flow
   float alpha = atan2f(e.v, e.u);
   alpha += M_PI / (2.f * N_FIELD_DIRECTIONS);
@@ -54,13 +46,8 @@ void flowStatsUpdate(struct flowStats *s, struct flowEvent e, struct FloatRates 
   float S = e.x * s->cos_angles[a] + e.y * s->sin_angles[a];
   float V = e.u * s->cos_angles[a] + e.v * s->sin_angles[a];
 
-  // Derotation in direction of flow field
-  if (enableDerotation) {
-    V -= -s->sin_angles[a] * (rates.p - e.y * rates.r - e.x * e.y * rates.q + e.x * e.x * rates.p)
-         + s->cos_angles[a] * (rates.q - e.x * rates.r - e.x * e.y * rates.p + e.y * e.y * rates.q);
-  }
-
   // Update flow field statistics
+
   s->sumS [a] += S;
   s->sumSS[a] += S * S;
   s->sumV [a] += V;

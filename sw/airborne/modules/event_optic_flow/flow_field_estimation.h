@@ -108,8 +108,7 @@ void flowStatsInit(struct flowStats *s);
 /**
  * Performs an update of all flow field statistics with a new event.
  */
-void flowStatsUpdate(struct flowStats *s, struct flowEvent e, struct FloatRates rates,
-                     bool enableDerotation);
+void flowStatsUpdate(struct flowStats *s, struct flowEvent e);
 
 /**
  * Recomputation of the flow field using the latest statistics.

@@ -58,17 +58,17 @@
 
 // Module settings
 #ifndef EOF_ENABLE_DEROTATION
-#define EOF_ENABLE_DEROTATION 1
+#define EOF_ENABLE_DEROTATION 0
 #endif
 PRINT_CONFIG_VAR(EOF_ENABLE_DEROTATION)
 
 #ifndef EOF_FILTER_TIME_CONST
-#define EOF_FILTER_TIME_CONST 0.02f
+#define EOF_FILTER_TIME_CONST 0.03f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONST)
 
 #ifndef EOF_FILTER_RETENTION_TIME_CONST
-#define EOF_FILTER_RETENTION_TIME_CONST 0.02f
+#define EOF_FILTER_RETENTION_TIME_CONST 0.05f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 
@@ -121,6 +121,7 @@ static const bool ROTATE_CAM_2_BODY = (fabsf(DVS_BODY_TO_CAM_PHI) > 1e-5f
 
 // NED
 #ifndef DVS_BODY_TO_CAM_Z
+//0.03f
 #define DVS_BODY_TO_CAM_Z 0.f
 #endif
 PRINT_CONFIG_VAR(DVS_BODY_TO_CAM_Z)
@@ -402,13 +403,12 @@ void event_optic_flow_periodic(void) {
   // Set status globally
   eofState.status = status;
 
-  /*
-  if (agl > 0.3f && agl < 10.f){
+  if (agl > 0.f && agl < 10.f){
+    // the imu already has it's own filter so send raw data
     AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
         agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
         eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
   }
-  */
 }
 
 /***********************
@@ -463,7 +463,7 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N) {
         e.u = (float) u * INT16_TO_FLOAT;
         e.v = (float) v * INT16_TO_FLOAT;`
 
-        flowStatsUpdate(s, e, eofState.rates, enableDerotation);
+        flowStatsUpdate(s, e);
         returnStatus = UPDATE_STATS;
         (*N)++;
       } else {
@@ -495,7 +495,7 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N) {
     e.y = (float)flow_msgs[i].yu * INT16_TO_FLOAT;
     e.u = (float)flow_msgs[i].u * INT16_TO_FLOAT;
     e.v = (float)flow_msgs[i].v * INT16_TO_FLOAT;
-    flowStatsUpdate(s, e, eofState.rates, enableDerotation);
+    flowStatsUpdate(s, e);
     returnStatus = UPDATE_STATS;
     (*N)++;
   }

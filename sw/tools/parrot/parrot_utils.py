@@ -234,6 +234,7 @@ class ParrotUtils:
     def kill_program(self, name):
         self.execute_command('killall -9 ' + name)
         self.execute_command('killall -9 sees_driver.elf')
+        sleep(1)
         print('Program "' + name + '" is now killed')
 
     # Start a new program
