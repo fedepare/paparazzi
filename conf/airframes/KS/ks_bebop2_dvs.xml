@@ -22,6 +22,8 @@
       
       <define name="HFF_ACCEL_NOISE" value="3."/>
       <define name="HFF_VEL_NOISE" value="0.3"/>
+      
+      <define name="SENSOR_SYNC_SEND_SONAR" value="1"/>
     </target>
     
     <target name="nps" board="pc">
@@ -163,7 +165,7 @@
     <!-- setpoint limits for attitude stabilization rc flight -->
     <define name="SP_MAX_PHI" value="30" unit="deg"/>
     <define name="SP_MAX_THETA" value="30" unit="deg"/>
-    <define name="SP_MAX_R" value="300" unit="deg/s"/>
+    <define name="SP_MAX_R" value="150" unit="deg/s"/>
     <define name="DEADBAND_A" value="0"/>
     <define name="DEADBAND_E" value="0"/>
     <define name="DEADBAND_R" value="50"/>
@@ -181,10 +183,10 @@
     <define name="REF_MAX_Q" value="600." unit="deg/s"/>
     <define name="REF_MAX_QDOT" value="RadOfDeg(8000.)"/>
 
-    <define name="REF_OMEGA_R" value="450" unit="deg/s"/>
+    <define name="REF_OMEGA_R" value="225" unit="deg/s"/>
     <define name="REF_ZETA_R" value="0.9"/>
-    <define name="REF_MAX_R" value="600." unit="deg/s"/>
-    <define name="REF_MAX_RDOT" value="RadOfDeg(8000.)"/>
+    <define name="REF_MAX_R" value="300." unit="deg/s"/>
+    <define name="REF_MAX_RDOT" value="RadOfDeg(4000.)"/>
     
     <!-- feedback -->
     <define name="PHI_PGAIN" value="850"/>
@@ -195,8 +197,8 @@
     <define name="THETA_DGAIN" value="425"/>
     <define name="THETA_IGAIN" value="0"/>
 
-    <define name="PSI_PGAIN" value="1000"/>
-    <define name="PSI_DGAIN" value="700"/>
+    <define name="PSI_PGAIN" value="500"/>
+    <define name="PSI_DGAIN" value="350"/>
     <define name="PSI_IGAIN" value="0"/>
 
     <!-- feedforward -->
@@ -207,10 +209,15 @@
 
   <section name="STABILIZATION_ATTITUDE_INDI" prefix="STABILIZATION_INDI_">
     <!-- control effectiveness, can be obtained by switching on "adaptive" in the indi settings -->
-    <define name="G1_P" value="0.100"/>
+    <!--define name="G1_P" value="0.100"/>
     <define name="G1_Q" value="0.050"/>
     <define name="G1_R" value="0.0010"/>
-    <define name="G2_R" value="0.236"/>
+    <define name="G2_R" value="0.236"/-->
+    
+    <define name="G1_P" value="0.0350"/>
+    <define name="G1_Q" value="0.030"/>
+    <define name="G1_R" value="0.0009"/>
+    <define name="G2_R" value="0.150"/>
 
     <!-- Here it is assumed that your removed the damping from your bebop2!
          The dampers do not really damp, but cause oscillation. By removing/
@@ -222,10 +229,10 @@
     <!-- reference acceleration for attitude control -->
     <define name="REF_ERR_P" value="600.0"/>
     <define name="REF_ERR_Q" value="600.0"/>
-    <define name="REF_ERR_R" value="600.0"/>
+    <define name="REF_ERR_R" value="150.0"/>
     <define name="REF_RATE_P" value="28.0"/>
     <define name="REF_RATE_Q" value="28.0"/>
-    <define name="REF_RATE_R" value="28.0"/>
+    <define name="REF_RATE_R" value="7.0"/>
 
     <!-- second order filter parameters -->
     <define name="FILT_CUTOFF" value="3.2"/>
@@ -242,23 +249,23 @@
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-    <define name="HOVER_KP" value="300"/> <!-- GPS: 400 no GPS: 300--> 
-    <define name="HOVER_KD" value="100"/> <!-- GPS: 120 no GPS: 100--> 
-    <define name="HOVER_KI" value="20"/> <!-- GPS: 20 no GPS: 20--> 
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.6"/>
+    <define name="HOVER_KP" value="250"/> <!-- GPS: 400 no GPS: 300--> 
+    <define name="HOVER_KD" value="175"/> <!-- GPS: 120 no GPS: 100--> 
+    <define name="HOVER_KI" value="10"/> <!-- GPS: 20 no GPS: 20--> 
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.66"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
   </section>
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
-    <define name="REF_MAX_SPEED" value="2" unit="m/s"/>
+    <define name="REF_MAX_SPEED" value="1" unit="m/s"/>
     <define name="MAX_BANK" value="30" unit="deg"/>
-    <define name="PGAIN" value="200"/> <!-- GPS: 250 no GPS: 200--> 
-    <define name="DGAIN" value="200"/> <!-- GPS: 200 no GPS: 200-->
+    <define name="PGAIN" value="175"/> <!-- GPS: 250 no GPS: 200--> 
+    <define name="DGAIN" value="125"/> <!-- GPS: 200 no GPS: 200-->
     <define name="IGAIN" value="10"/> <!-- GPS: 10 no GPS: 10-->
-    <define name="GUIDANCE_H_VGAIN" value="75"/>
-    <define name="GUIDANCE_H_AGAIN" value="35"/>
+    <define name="VGAIN" value="75"/>
+    <define name="AGAIN" value="35"/>
   </section>
-  
+
   <section name="GUIDANCE_INDI" prefix="GUIDANCE_INDI_">
     <define name="POS_GAIN" value="0.5"/>
     <define name="SPEED_GAIN" value="1.8"/>
@@ -287,8 +294,7 @@
     <define name="MODE_STARTUP" value="AP_MODE_NAV"/>
     <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
     <define name="MODE_AUTO1" value="AP_MODE_MODULE"/>
-    <!--define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/-->
-    <define name="MODE_AUTO2" value="AP_MODE_GUIDED"/>
+    <define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/>
 
     <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
   </section>

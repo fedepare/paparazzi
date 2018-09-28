@@ -68,7 +68,7 @@ PRINT_CONFIG_VAR(EOF_ENABLE_DEROTATION)
 PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONST)
 
 #ifndef EOF_FILTER_RETENTION_TIME_CONST
-#define EOF_FILTER_RETENTION_TIME_CONST 0.05f
+#define EOF_FILTER_RETENTION_TIME_CONST 0.06f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 
@@ -179,6 +179,7 @@ static uint16_t mode;
 static bool mode_switched;
 
 struct MedianFilter3Float rate_filter;
+struct MedianFilter3Float vel_filter;
 // SWITCH THIS ON TO ENABLE CONTROL THROTTLE
 //static const bool ASSIGN_CONTROL = false; //TODO Strange, had to rename this to make code compatible with optical_flow_landing
 
@@ -194,7 +195,6 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N);
 static void sendFlowFieldState(struct transport_tx *trans, struct link_device *dev);
 int16_t uartGetInt16(struct uart_periph *p);
 int32_t uartGetInt32(struct uart_periph *p);
-void divergenceControlReset(void);
 
 static struct FloatRMat body_to_cam;         ///< IMU to camera rotation
 
@@ -284,6 +284,7 @@ void event_optic_flow_start(void) {
   eofState.NNew = 0;
 
   InitMedianFilterRatesFloat(rate_filter, 5);
+  InitMedianFilterVect3Float(vel_filter, 5);
 
   mode = autopilot_get_mode();
   mode_switched = false;
@@ -403,8 +404,10 @@ void event_optic_flow_periodic(void) {
   // Set status globally
   eofState.status = status;
 
+  // the imu already has it's own filter so just remove outliers with median filter
+  UpdateMedianFilterVect3Float(vel_filter, body_flow);
+
   if (agl > 0.f && agl < 10.f){
-    // the imu already has it's own filter so send raw data
     AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
         agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
         eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
