@@ -177,7 +177,7 @@ float filt_baro_tc = 3;
 float filt_laser_tc_nominal = 0.5;
 float filt_laser_tc_slow = 2;
 
-float altitude_setp = 0.7f;
+float altitude_setp = 1.3f;
 
 bool filt_gate_on=true;
 float filt_gate_tc=0.5;  // gate filter time constant, in seconds
@@ -498,7 +498,10 @@ static bool gate_vision_on = false;
 static void navigate_towards_gate(void)
 {
   // compute errors
-  float alignment_error = gate_filt.height / gate_filt.width - 1.f; // [-]
+  float alignment_error = 0.f;
+  if (gate_filt.width > 1e-5){
+    alignment_error = gate_filt.height / gate_filt.width - 1.f; // [-]
+  }
   BoundLower(alignment_error, 0.f);
   // sign of the alignment error is ambiguous so set it based on the long term derivative of the error
   // alignment_gain_sign = -(derivative of the error)
@@ -775,7 +778,7 @@ static void delfly_vision_parse_msg(void)
   switch (msg_id) {
 
     case DL_STEREOCAM_GATE:
-      if (DL_STEREOCAM_GATE_quality(stereocam_msg_buf) > 14) // ignore messages when gate was not detected (quality=14)
+      if (DL_STEREOCAM_GATE_quality(stereocam_msg_buf) > 30) // ignore messages when gate was not detected (quality=14)
       {
         gate_raw.quality = DL_STEREOCAM_GATE_quality(stereocam_msg_buf);
         gate_raw.width   = DL_STEREOCAM_GATE_width(stereocam_msg_buf);
@@ -807,7 +810,7 @@ static void delfly_vision_parse_msg(void)
 
           }
           gate_raw.depth = gate_distances[min_idx] - position_along_gate_field;
-          float speed_est = -0.049*sp_theta_gate; // estimate from pitch setpoint
+          float speed_est = -2.806f * sp_theta_gate; // estimate from pitch setpoint (-0.049 m/s / deg)
           //float speed_est = -0.049*stateGetNedToBodyEulers_f()->theta; // estimate from measured pitch
           position_along_gate_field += speed_est*gate_raw.dt;
           position_along_gate_field_from_speed += speed_est*gate_raw.dt;
@@ -823,13 +826,14 @@ static void delfly_vision_parse_msg(void)
         }
 
         memcpy(gate_raw.color_cnt, pprzlink_get_DL_STEREOCAM_GATE_color_bins(stereocam_msg_buf), gate_raw.num_color_bins*sizeof(gate_raw.color_cnt[0]));
-
-        evaluate_state_machine_gate();
       }
       else
       {
-        gate_raw.quality = 0;
+        gate_raw.quality = 0.f;
+        gate_raw.phi     = 0.f;
+        gate_raw.theta   = 0.f;
       }
+      evaluate_state_machine_gate();
 
       break;
 
@@ -897,6 +901,13 @@ void guidance_h_module_enter(void)
 {
   // reset integrator of rc_yaw_setpoint
   stabilization_attitude_read_rc_setpoint_eulers(&rc_sp, false, false, false);
+
+  sp.phi = 0.f;
+  sp.theta = 0.f;
+  sp.theta = sp_theta_gate;
+  sp.psi = stateGetNedToBodyEulers_f()->psi;
+
+  set_attitude_setpoint();
 
   stab_cmd.phi = rc_sp.phi;
   stab_cmd.theta = rc_sp.theta;
