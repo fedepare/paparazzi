@@ -509,7 +509,7 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N) {
 
 void set_record(void)
 {
-  static uint8_t msg[1];
+  static uint8_t msg[] = {0x99, 0};
   static bool local_switch = RECORD_SWITCH;
   if (local_switch == record_switch){
     return;
@@ -517,11 +517,11 @@ void set_record(void)
   local_switch = record_switch;
 #ifdef DVS_PIPE
   if (record_switch) {
-    msg[0] = '1';
+    msg[1] = '1';
   } else {
-    msg[0] = '0';
+    msg[1] = '0';
   }
-  pipe_send_raw(&DVS_PIPE, 0, msg, 1);
+  pipe_send_raw(&DVS_PIPE, 0, msg, 2);
   if (record_switch) {
     logger_file_file_logger_periodic_status = MODULES_START;
   } else {
