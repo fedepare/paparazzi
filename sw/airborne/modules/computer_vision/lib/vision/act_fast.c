@@ -45,7 +45,7 @@ struct agent_t agents[MAX_AGENTS];
  * @param[in] min_gradient The minimum gradient, in order to determine when to take a long or short step
  * @param[in] gradient_method: 0 = simple {-1, 0, 1}, 1 = Sobel {-1,0,1,-2,0,2,-1,0,1}
 */
-void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_t **ret_corners,
+void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_tf **ret_corners,
               uint16_t n_agents, uint16_t n_time_steps, float long_step, float short_step, int min_gradient, int gradient_method)
 {
 
@@ -162,6 +162,117 @@ void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners
       (*ret_corners)[(*num_corners)].x = (uint32_t) agents[a].x;
       (*ret_corners)[(*num_corners)].y = (uint32_t) agents[a].y;
       (*num_corners)++;
+    }
+  }
+}
+
+/*
+ * ACT-FAST corner detection for objects
+ *
+ * Difference with regular ACT-FAST algorithm:
+ * - Agents are initialized at the predicted position of a corner
+ * - Fixed, small step size
+ * - If no corner is found at the predicted location, the old position is simply inserted back in
+ * - Notify when corner is almost out of view
+ *
+ * Variables to be added to opticflow:
+ * - succes_corners: array of indices of successfully detected corners
+ * - border_corners: array of indices of corners located in the border of the image
+ */
+
+void act_fast_object(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_tf **ret_corners,
+              uint16_t n_agents, uint16_t n_time_steps, float long_step, float short_step, int min_gradient, int gradient_method)
+{
+  int a = 0;
+  int border = 4;
+  float px, py, pnorm;
+  // ensure that n_agents is never bigger than MAX_AGENTS
+  n_agents = (n_agents < MAX_AGENTS) ? n_agents : MAX_AGENTS;
+
+  for(a=0; a<n_agents;a++){
+	  // px, py represent the preferred direction of the agent when there is no texture
+	  // here we initialize it differently for each agent:
+	  // TODO: don't we have a randf function in Paparazzi?
+	  px = ((float)(rand() % 10000)) / 10000.0f;
+	  py = ((float)(rand() % 10000)) / 10000.0f;
+	  pnorm = sqrtf(px * px + py * py);
+	  struct agent_t ag = {(*ret_corners)[a].x,(*ret_corners)[a].y, 1, px / pnorm, py / pnorm};
+	  agents[a] = ag;
+  }
+
+  /* ********************************************************
+   * 2) loop over the agents, moving and checking for corners
+   * ********************************************************/
+
+  // gradient
+  int dx, dy;
+
+  // loop over all time steps:
+  for (int t = 0; t < n_time_steps; t++) {
+    // loop over the agents
+    for (a = 0; a < n_agents; a++) {
+      // only do something if the agent is active:
+      if (agents[a].active) {
+        // check if this position is a corner:
+        uint16_t x = (uint16_t) agents[a].x;
+        uint16_t y = (uint16_t) agents[a].y;
+        if (fast9_detect_pixel(img, fast_threshold, x, y)) {
+          // we arrived at a corner, yeah!!!
+          agents[a].active = 0;
+          break;
+        } else {
+          // make a step:
+          struct point_t loc = {agents[a].x, agents[a].y};
+          image_gradient_pixel(img, &loc, gradient_method, &dx, &dy);
+          int gradient = (abs(dx) + abs(dy)) / 2;
+          if (abs(gradient) >= min_gradient) {
+            // determine the angle and make a step in that direction:
+            float norm_factor = sqrtf((float)(dx * dx + dy * dy));
+            agents[a].x += (dy / norm_factor) * short_step;
+            agents[a].y += (dx / norm_factor) * short_step;
+          } else {
+            // make a step in the preferred direction:
+            agents[a].x += agents[a].preferred_dir_x * long_step;
+            agents[a].y += agents[a].preferred_dir_y * long_step;
+          }
+        }
+
+        // let the agent move over the image in a toroid world:
+        if (agents[a].x > img->w - border) {
+          agents[a].x = border;
+        } else if (agents[a].x < border) {
+          agents[a].x = img->w - border;
+        }
+        if (agents[a].y > img->h - border) {
+          agents[a].y = border;
+        } else if (agents[a].y < border) {
+          agents[a].y = img->h - border;
+        }
+      }
+    }
+  }
+
+  // Transform agents to corners:
+  (*num_corners) = 0;
+  for (a = 0; a < n_agents; a++) {
+	// for active agents do a last check on the new position:
+	if (agents[a].active) {
+		// check if the last step brought the agent to a corner:
+		uint16_t x = (uint16_t) agents[a].x;
+		uint16_t y = (uint16_t) agents[a].y;
+		if (fast9_detect_pixel(img, fast_threshold, x, y)) {
+		  // we arrived at a corner, yeah!!!
+		  agents[a].active = 0;
+		}
+	}
+
+    // if inactive, the agent is a corner:
+    if (!agents[a].active) {
+      (*ret_corners)[a].x = (uint32_t) agents[a].x;
+      (*ret_corners)[a].y = (uint32_t) agents[a].y;
+      (*ret_corners)[a].x_full = (uint32_t) agents[a].x*10;
+	  (*ret_corners)[a].y_full = (uint32_t) agents[a].y*10;
+	  (*num_corners)++;
     }
   }
 }

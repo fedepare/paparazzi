@@ -167,3 +167,22 @@ float covariance_f(float *arr1, float *arr2, uint32_t n_elements)
   }
   return (sumXY / n_elements - sumX * sumY / (n_elements * n_elements));
 }
+
+void covariance_f_ref(float *arr1, float *arr2, uint32_t n_elements,float *covariance)
+{
+  if (n_elements == 0) {
+    // Note that something else is wrong if you want the covariance of 0 samples.
+    return 0.f;
+  }
+  // Determine means for each vector:
+  float sumX = 0.f, sumY = 0.f, sumXY = 0.f;
+
+  // Determine the covariance:
+  uint32_t i;
+  for (i = 0; i < n_elements; i++) {
+    sumX += arr1[i];
+    sumY += arr2[i];
+    sumXY += arr1[i] * arr2[i];
+  }
+  *covariance = (float)(sumXY / n_elements - sumX * sumY / (n_elements * n_elements));
+}

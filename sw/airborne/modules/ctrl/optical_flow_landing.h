@@ -75,6 +75,8 @@ struct OpticalFlowLanding {
   float t_transition;           ///< how many seconds the drone has to be oscillating in order to transition to the hover phase with reduced gain
   float p_land_threshold;       ///< if during the exponential landing the gain reaches this value, the final landing procedure is triggered
   bool elc_oscillate;           ///< Whether or not to oscillate at beginning of elc to find optimum gain
+  float average_thrust;         ///< Average thrust in the landing phase
+  float final_thrust;
 };
 
 extern struct OpticalFlowLanding of_landing_ctrl;
@@ -90,5 +92,6 @@ extern struct OpticalFlowLanding of_landing_ctrl;
 extern void guidance_v_module_init(void);
 extern void guidance_v_module_enter(void);
 extern void guidance_v_module_run(bool in_flight);
+
 
 #endif /* OPTICAL_FLOW_LANDING_H_ */

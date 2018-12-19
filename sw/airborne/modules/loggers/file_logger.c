@@ -27,23 +27,18 @@
 #include "file_logger.h"
 
 #include <stdio.h>
-#include <sys/stat.h>
-#include <time.h>
 #include "std.h"
 
 #include "subsystems/imu.h"
-#ifdef COMMAND_THRUST
 #include "firmwares/rotorcraft/stabilization.h"
-#else
-#include "firmwares/fixedwing/stabilization/stabilization_attitude.h"
-#include "firmwares/fixedwing/stabilization/stabilization_adaptive.h"
-#endif
-
 #include "state.h"
+#include "modules/ibvs_sim/ibvs_sim.h"
+#include "modules/computer_vision/opticflow/opticflow_calculator.h"
+#include "mcu_periph/sys_time.h"
 
 /** Set the default File logger path to the USB drive */
 #ifndef FILE_LOGGER_PATH
-#define FILE_LOGGER_PATH /data/video/usb
+#define FILE_LOGGER_PATH /data/ftp/internal_000
 #endif
 
 /** The file pointer */
@@ -52,32 +47,16 @@ static FILE *file_logger = NULL;
 /** Start the file logger and open a new file */
 void file_logger_start(void)
 {
-  // check if log path exists
-  struct stat s;
-  int err = stat(STRINGIFY(FILE_LOGGER_PATH), &s);
-
-  if(err < 0) {
-    // try to make the directory
-    mkdir(STRINGIFY(FILE_LOGGER_PATH), 0666);
-  }
-
-  // Get current date/time, format is YYYY-MM-DD.HH:mm:ss
-  char date_time[80];
-  time_t now = time(0);
-  struct tm  tstruct;
-  tstruct = *localtime(&now);
-  strftime(date_time, sizeof(date_time), "%Y-%m-%d_%X", &tstruct);
-
   uint32_t counter = 0;
   char filename[512];
 
   // Check for available files
-  sprintf(filename, "%s/%s.csv", STRINGIFY(FILE_LOGGER_PATH), date_time);
+  sprintf(filename, "%s/%05d.csv", STRINGIFY(FILE_LOGGER_PATH), counter);
   while ((file_logger = fopen(filename, "r"))) {
     fclose(file_logger);
 
-    sprintf(filename, "%s/%s_%05d.csv", STRINGIFY(FILE_LOGGER_PATH), date_time, counter);
     counter++;
+    sprintf(filename, "%s/%05d.csv", STRINGIFY(FILE_LOGGER_PATH), counter);
   }
 
   file_logger = fopen(filename, "w");
@@ -85,13 +64,7 @@ void file_logger_start(void)
   if (file_logger != NULL) {
     fprintf(
       file_logger,
-
-	  //rotorcraft uses COMMAND_THRUST, fixedwing COMMAND_THROTTLE at this time
-#ifdef COMMAND_THRUST
       "counter,gyro_unscaled_p,gyro_unscaled_q,gyro_unscaled_r,accel_unscaled_x,accel_unscaled_y,accel_unscaled_z,mag_unscaled_x,mag_unscaled_y,mag_unscaled_z,COMMAND_THRUST,COMMAND_ROLL,COMMAND_PITCH,COMMAND_YAW,qi,qx,qy,qz\n"
-#else
-      "counter,gyro_unscaled_p,gyro_unscaled_q,gyro_unscaled_r,accel_unscaled_x,accel_unscaled_y,accel_unscaled_z,mag_unscaled_x,mag_unscaled_y,mag_unscaled_z,	h_ctl_aileron_setpoint, h_ctl_elevator_setpoint, qi,qx,qy,qz\n"
-#endif
     );
   }
 }
@@ -100,13 +73,34 @@ void file_logger_start(void)
 void file_logger_stop(void)
 {
   if (file_logger != NULL) {
+    // Print the last values we require
+    fprintf(file_logger,"%s,%f,%f,%f,%f,%d,%f,%f,%d,%d,%d,%d,%f,%f,%f,%s",
+        "final row",
+        opticflow.t_0,
+        opticflow.t_1,
+        opticflow.t_2,
+        opticflow.t_3,
+        opticflow.n_reinits,
+        opticflow.roih_init,
+        opticflow.roiw_init,
+        opticflow.roi_center_init.x,
+        opticflow.roi_center_init.y,
+        opticflow.img_gray.w,
+        opticflow.img_gray.h,
+        opticflow.start_pos.x,
+        opticflow.start_pos.y,
+        opticflow.start_pos.z,
+        "t_new_window:"
+        );
+    for(uint32_t i = 0;i<opticflow.n_reinits;i++){
+      fprintf(file_logger,",%f",opticflow.t_new_window[i]);
+    }
     fclose(file_logger);
     file_logger = NULL;
   }
 }
 
-/** Log the values to a csv file    */
-/** Change the Variable that you are interested in here */
+/** Log the values to a csv file */
 void file_logger_periodic(void)
 {
   if (file_logger == NULL) {
@@ -114,10 +108,19 @@ void file_logger_periodic(void)
   }
   static uint32_t counter;
   struct Int32Quat *quat = stateGetNedToBodyQuat_i();
+  struct EnuCoor_f *enu = stateGetPositionEnu_f();
+  struct EnuCoor_f *venu = stateGetSpeedEnu_f();
+  float t = get_sys_time_float();
 
-#ifdef COMMAND_THRUST //For example rotorcraft
-  fprintf(file_logger, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+  fprintf(file_logger, "%d,%f,%f,%f,%f,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
           counter,
+          t,
+          enu->x,
+          enu->y,
+          enu->z,
+          venu->x,
+          venu->y,
+          venu->z,
           imu.gyro_unscaled.p,
           imu.gyro_unscaled.q,
           imu.gyro_unscaled.r,
@@ -136,26 +139,5 @@ void file_logger_periodic(void)
           quat->qy,
           quat->qz
          );
-#else
-  fprintf(file_logger, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-          counter,
-          imu.gyro_unscaled.p,
-          imu.gyro_unscaled.q,
-          imu.gyro_unscaled.r,
-          imu.accel_unscaled.x,
-          imu.accel_unscaled.y,
-          imu.accel_unscaled.z,
-          imu.mag_unscaled.x,
-          imu.mag_unscaled.y,
-          imu.mag_unscaled.z,
-		  h_ctl_aileron_setpoint,
-		  h_ctl_elevator_setpoint,
-          quat->qi,
-          quat->qx,
-          quat->qy,
-          quat->qz
-         );
-#endif
-
   counter++;
 }

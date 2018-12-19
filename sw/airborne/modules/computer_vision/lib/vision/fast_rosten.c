@@ -31,6 +31,9 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// remove
+#include <stdio.h>
+
 #include <stdlib.h>
 #include "fast_rosten.h"
 
@@ -49,10 +52,10 @@ static void fast_make_offsets(int32_t *pixel, uint16_t row_stride, uint8_t pixel
  * @param[in] **ret_corners pointer to the array which contains the corners that were detected.
  * @param[in] *roi array of format [x0 y0 x1 y1] describing the region of interest in the image where the corners will be detected. If null, the whole image is used.
 */
-void fast9_detect(struct image_t *img, uint8_t threshold, uint16_t min_dist, uint16_t x_padding, uint16_t y_padding, uint16_t *num_corners, uint16_t *ret_corners_length, struct point_t **ret_corners, uint16_t *roi)
+void fast9_detect(struct image_t *img, uint8_t threshold, uint16_t min_dist, uint16_t x_padding, uint16_t y_padding, uint16_t *num_corners, uint16_t *ret_corners_length, struct point_tf **ret_corners, uint16_t *roi)
 {
 
-  uint16_t corner_cnt = *num_corners;
+    uint16_t corner_cnt = *num_corners;
   int pixel[16];
   int16_t i;
   uint16_t x, y, x_min, x_max, y_min, x_start, x_end, y_start, y_end;
@@ -3671,6 +3674,7 @@ void fast9_detect(struct image_t *img, uint8_t threshold, uint16_t min_dist, uin
     }
   }
   *num_corners = corner_cnt;
+
 }
 
 /**
@@ -3707,7 +3711,6 @@ static void fast_make_offsets(int32_t *pixel, uint16_t row_stride, uint8_t pixel
  * @param[in] y, the y-coordinate of the pixel
  */
 int fast9_detect_pixel(struct image_t *img, uint8_t threshold, uint16_t x, uint16_t y) {
-
   // Set the pixel size
   uint8_t pixel_size = 1;
   if (img->type == IMAGE_YUV422) {

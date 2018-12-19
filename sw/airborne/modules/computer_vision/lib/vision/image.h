@@ -62,6 +62,15 @@ struct point_t {
   uint16_t y_sub;         ///< The y subpixel coordinate of the point
 };
 
+/* Image point structure with a decimal on x and y */
+struct point_tf {
+  uint32_t x;             ///< The x coordinate of the point
+  uint32_t y;             ///< The y coordinate of the point
+  uint16_t count;         ///< Number of times the point has been tracked successfully
+  uint32_t x_full;         ///< The x subpixel coordinate of the point
+  uint32_t y_full;         ///< The y subpixel coordinate of the point
+};
+
 /* Vector structure for point differences */
 struct flow_t {
   struct point_t pos;         ///< The original position the flow comes from

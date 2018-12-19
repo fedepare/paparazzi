@@ -98,6 +98,8 @@ extern float variance_f(float *array, uint32_t n_elements);
  */
 extern float covariance_f(float *array1, float *array2, uint32_t n_elements);
 
+extern void covariance_f_ref(float *arr1, float *arr2, uint32_t n_elements,float *covariance);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
