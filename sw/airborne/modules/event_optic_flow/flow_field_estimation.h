@@ -12,7 +12,7 @@
 #include <inttypes.h>
 #include "math/pprz_algebra_float.h"
 
-#define N_FIELD_DIRECTIONS 6
+#define N_FIELD_DIRECTIONS 8
 
 /**
  * Flow event struct, simplified version of the cAER implementation.
@@ -22,7 +22,7 @@
  */
 struct flowEvent {
   float x, y;
-  int32_t t;
+  uint64_t ts;
   float u, v;
 };
 
@@ -38,7 +38,7 @@ struct flowField {
   float wy_filtered;
   float D_filtered;
   float confidence;
-  int32_t t;
+  uint64_t ts;
 };
 
 /**
@@ -74,6 +74,7 @@ struct flowStats {
   float cos_angles[N_FIELD_DIRECTIONS];
   float sin_angles[N_FIELD_DIRECTIONS];
   float eventRate;
+  uint64_t ts;
 };
 
 /**

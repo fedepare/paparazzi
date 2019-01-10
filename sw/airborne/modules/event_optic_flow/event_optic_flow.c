@@ -63,12 +63,12 @@
 PRINT_CONFIG_VAR(EOF_ENABLE_DEROTATION)
 
 #ifndef EOF_FILTER_TIME_CONST
-#define EOF_FILTER_TIME_CONST 0.03f
+#define EOF_FILTER_TIME_CONST 0.1f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONST)
 
 #ifndef EOF_FILTER_RETENTION_TIME_CONST
-#define EOF_FILTER_RETENTION_TIME_CONST 0.06f
+#define EOF_FILTER_RETENTION_TIME_CONST 0.05f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 
@@ -78,17 +78,17 @@ PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 PRINT_CONFIG_VAR(EOF_INLIER_MAX_DIFF)
 
 #ifndef EOF_MIN_EVENT_RATE
-#define EOF_MIN_EVENT_RATE 50.f
+#define EOF_MIN_EVENT_RATE 1000.f
 #endif
 PRINT_CONFIG_VAR(EOF_MIN_EVENT_RATE)
 
 #ifndef EOF_MIN_POSITION_VARIANCE
-#define EOF_MIN_POSITION_VARIANCE 0.4f
+#define EOF_MIN_POSITION_VARIANCE 0.1f
 #endif
 PRINT_CONFIG_VAR(EOF_MIN_POSITION_VARIANCE)
 
 #ifndef EOF_MIN_R2
-#define EOF_MIN_R2 0.05f
+#define EOF_MIN_R2 0.05f    // was 0.01f
 #endif
 PRINT_CONFIG_VAR(EOF_MIN_R2)
 
@@ -152,7 +152,7 @@ PRINT_CONFIG_VAR(DVS_GYRO_ID)
 struct module_state eofState;
 
 // Sensing parameters
-uint8_t enableDerotation = EOF_ENABLE_DEROTATION;
+uint8_t enableDerotation = 0;//EOF_ENABLE_DEROTATION;
 float filterTimeConstant = EOF_FILTER_TIME_CONST;
 float kfTimeConst = EOF_FILTER_RETENTION_TIME_CONST;
 float inlierMaxDiff = EOF_INLIER_MAX_DIFF;
@@ -268,10 +268,12 @@ void event_optic_flow_init(void) {
 void event_optic_flow_start(void) {
   // Timing
   eofState.lastTime = get_sys_time_float();
+
   // Reset low pass filter for rates
   eofState.rates.p = 0.f;
   eofState.rates.q = 0.f;
   eofState.rates.r = 0.f;
+
   // (Re-)initialization
   eofState.moduleFrequency = 100.0f;
   eofState.z_NED = 0.0f;
@@ -340,34 +342,34 @@ void event_optic_flow_periodic(void) {
   // but before operations where timing info is necessary
   float currentTime = get_sys_time_float();
   float dt = currentTime - eofState.lastTime;
+  if (dt <= 1e-5f){
+    return;
+  }
   eofState.moduleFrequency = 1.0f/dt;
   eofState.lastTime = currentTime;
 
-  float filterFactor = dt/filterTimeConstant;
+  float filterFactor = dt/(filterTimeConstant + dt);
   Bound(filterFactor, 0.f, 1.f);
 
-  float kfFactor = 1.f - dt/kfTimeConst;
+  float kfFactor = dt/(kfTimeConst + dt);
   Bound(kfFactor, 0.f, 1.f);
-
-  static uint16_t i;
-  // Reset sums for next iteration
-  for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
-    eofState.stats.sumS [i] *= kfFactor;
-    eofState.stats.sumSS[i] *= kfFactor;
-    eofState.stats.sumV [i] *= kfFactor;
-    eofState.stats.sumVV[i] *= kfFactor;
-    eofState.stats.sumSV[i] *= kfFactor;
-    eofState.stats.N[i] *= kfFactor;
-  }
 
   // Obtain UART data if available
   eofState.NNew = 0;
-  enum updateStatus status = processInput(&eofState.stats, &eofState.NNew);
+  struct flowStats new_stats;
+  flowStatsInit(&new_stats);
+  enum updateStatus status = processInput(&new_stats, &eofState.NNew);
 
-  eofState.stats.eventRate *= kfFactor;
-  for (i = 0; i < N_FIELD_DIRECTIONS; i++){
-    eofState.stats.eventRate += eofState.stats.N[i];
+  // Update statistics with low pass filter, updated with s1 = s0 + (n - s0)*dt/(tau + dt)
+  for (uint16_t i = 0; i < N_FIELD_DIRECTIONS; i++) {
+    eofState.stats.sumS[i]  += (new_stats.sumS[i]  - eofState.stats.sumS[i] ) * kfFactor;
+    eofState.stats.sumSS[i] += (new_stats.sumSS[i] - eofState.stats.sumSS[i]) * kfFactor;
+    eofState.stats.sumV[i]  += (new_stats.sumV[i]  - eofState.stats.sumV[i] ) * kfFactor;
+    eofState.stats.sumVV[i] += (new_stats.sumVV[i] - eofState.stats.sumVV[i]) * kfFactor;
+    eofState.stats.sumSV[i] += (new_stats.sumSV[i] - eofState.stats.sumSV[i]) * kfFactor;
+    eofState.stats.N[i]     += (new_stats.N[i]     - eofState.stats.N[i]    ) * kfFactor;
   }
+  eofState.stats.eventRate += (eofState.NNew/dt - eofState.stats.eventRate) * kfFactor;
 
   if (status == UPDATE_STATS) {
     // If new events are received, recompute flow field

@@ -10,13 +10,22 @@
 
 float DET_MIN_RESOLUTION = 1e-8;
 
-void lowPassFilterWithThreshold(float *val, float new, float factor, float limit);
+static void lowPassFilterWithThreshold(float *val, float new_val, float factor, float limit)
+{
+  float delta = (new_val - *val)*factor;
+  if (delta > limit) {
+    delta = limit;
+  }
+  if (delta < -limit) {
+    delta = -limit;
+  }
+  *val += delta;
+}
 
 void flowStatsInit(struct flowStats *s)
 {
   s->eventRate = 0.f;
-  int32_t i;
-  for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
+  for (int32_t i = 0; i < N_FIELD_DIRECTIONS; i++) {
     s->sumS[i] = 0.f;
     s->sumSS[i] = 0.f;
     s->sumV[i] = 0.f;
@@ -33,35 +42,41 @@ void flowStatsUpdate(struct flowStats *s, struct flowEvent e)
 {
   // Find direction/index of flow
   float alpha = atan2f(e.v, e.u);
-  alpha += M_PI / (2.f * N_FIELD_DIRECTIONS);
+
+  // wrap to pi
   while (alpha < 0.f) {
     alpha += M_PI;
   }
   while (alpha >= M_PI) {
     alpha -= M_PI;
   }
-  int32_t a = (int32_t)(N_FIELD_DIRECTIONS * alpha / M_PI);
+
+  int32_t a = (int32_t)roundf(N_FIELD_DIRECTIONS * alpha / M_PI);
+  // wrap to available directions
+  if (a == N_FIELD_DIRECTIONS){
+    a = 0;
+  }
 
   // Transform flow to direction reference frame
   float S = e.x * s->cos_angles[a] + e.y * s->sin_angles[a];
   float V = e.u * s->cos_angles[a] + e.v * s->sin_angles[a];
 
   // Update flow field statistics
-
   s->sumS [a] += S;
   s->sumSS[a] += S * S;
   s->sumV [a] += V;
   s->sumVV[a] += V * V;
   s->sumSV[a] += S * V;
   s->N[a]++;
+  s->ts = e.ts;
 }
 
 enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s,
-                                     float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
-                                     float minR2, float power)
+                                     float filterFactor, float inlierMaxDiff,
+                                     float minEventRate, float minPosVariance, float minR2,
+                                     float power)
 {
-
-  // Define persistant variables
+  // Define persistent variables
   static uint32_t i;
   static float varS[N_FIELD_DIRECTIONS];
   static float c_var[N_FIELD_DIRECTIONS];
@@ -73,27 +88,19 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
   float sumN = 0.f;
   uint32_t nValidDirections = 0;
 
-  // Compute rate confidence value
-  float c_rate = 1.f;
-  if (s->eventRate < minEventRate) {
-    c_rate = s->eventRate / minEventRate;//powf(s->eventRate / minEventRate, power);
-  }
-
   // Loop over all directions and collect total flow field information
   for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
     // Skip if too few new events were added along this direction
     // If the 'moving' number of events is below 1, skip
-    if (s->N[i] <= 1.f) {
+    if (s->N[i] < 3.f) {
       varS[i] = 0.f;
       c_var[i] = 0.f;
       continue;
     }
 
-    // Obtain mean statistics
-    float meanS  = s->sumS[i] / s->N[i];
-
     // Compute position variances and confidence values from mean statistics
-    varS[i] = ((s->sumSS[i] / s->N[i]) - meanS * meanS);// * intrinsics.focalLengthX * intrinsics.focalLengthX;
+    varS[i] = (s->sumSS[i] - s->sumS[i]*s->sumS[i]/s->N[i]) / s->N[i];
+
     if (varS[i] < minPosVariance) {
       //c_var[i] *= powf(varS[i] / minPosVariance, power);
       c_var[i] = varS[i] / minPosVariance;
@@ -121,8 +128,8 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
   }
 
   // Compute determinant
-  float det = A[0][0] * A[1][1] * A[2][2]
-              + 2 * A[0][1] * A[0][2] * A[1][2]
+  float det =   A[0][0] * A[1][1] * A[2][2]
+          + 2 * A[0][1] * A[0][2] * A[1][2]
               - A[0][0] * A[1][2] * A[1][2]
               - A[1][1] * A[0][2] * A[0][2]
               - A[2][2] * A[0][1] * A[0][1];
@@ -158,27 +165,24 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
     }
   }
 
+  // Compute rate confidence value
+  float c_rate = 1.f;
+  if (s->eventRate < minEventRate) {
+    c_rate = s->eventRate / minEventRate;//powf(s->eventRate / minEventRate, power);
+  }
+
   field->wx = p[0];
   field->wy = p[1];
-  field->D = p[2];
+  field->D  = p[2];
 
   field->confidence = c_rate * c_var_max * c_R2;
-  lowPassFilterWithThreshold(&field->wx_filtered, p[0], field->confidence * filterFactor, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->wy_filtered, p[1], field->confidence * filterFactor, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->D_filtered, p[2], field->confidence * filterFactor, inlierMaxDiff);
+  float tau = field->confidence * filterFactor;
+  lowPassFilterWithThreshold(&field->wx_filtered, p[0], tau, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->wy_filtered, p[1], tau, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->D_filtered,  p[2], tau, inlierMaxDiff);
+  field->ts = s->ts;
 
   // If no problem was found, update is successful
   return UPDATE_SUCCESS;
 }
 
-void lowPassFilterWithThreshold(float *val, float new, float factor, float limit)
-{
-  float delta = (new - *val)*factor;
-  if (delta > limit) {
-    delta = limit;
-  }
-  if (delta < -limit) {
-    delta = -limit;
-  }
-  *val += delta;
-}
