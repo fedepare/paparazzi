@@ -1608,7 +1608,15 @@
     </message>
 
     <!-- 211 is free -->
-    <!-- 212 is free -->
+    <message name="NN_LANDING" id="212">
+      <field name="D"         type="float"/>
+      <field name="Ddot"      type="float"/>
+      <field name="a"         type="float"/>
+      <field name="v"         type="float"/>
+      <field name="h"         type="float"/>
+      <field name="T"         type="float"/>
+      <field name="mode"      type="uint8"/>
+    </message>
 
     <message name="TUNE_VERT" id="213">
       <field name="z_sp"      type="int32" alt_unit="m"    alt_unit_coef="0.0039063"/>

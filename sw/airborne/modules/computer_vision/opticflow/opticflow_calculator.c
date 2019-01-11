@@ -229,6 +229,8 @@ PRINT_CONFIG_VAR(OPTICFLOW_SHOW_FLOW)
 //Include median filter
 #include "filters/median_filter.h"
 struct MedianFilter3Float vel_filt;
+struct MedianFilter3Float flow_filt;
+struct MedianFilterFloat div_size_filt;
 struct FloatRMat body_to_cam;
 
 /* Functions only used here */
@@ -307,6 +309,8 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
 
     // Init median filters with zeros
     InitMedianFilterVect3Float(vel_filt, MEDIAN_DEFAULT_SIZE);
+    InitMedianFilterVect3Float(flow_filt, MEDIAN_DEFAULT_SIZE);
+    init_median_filter_f(&div_size_filt, MEDIAN_DEFAULT_SIZE);
   }
 
   // Convert image to grayscale
@@ -577,6 +581,17 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
         }
       }
     }
+  }
+
+  //Apply a  median filter to the velocity if wanted
+  if (opticflow->median_filter == true) {
+    struct FloatVect3 temp_flow = {result->flow_x,result->flow_y, result->divergence};
+    UpdateMedianFilterVect3Float(flow_filt, temp_flow);
+    result->flow_x = temp_flow.x;
+    result->flow_y = temp_flow.y;
+    result->divergence = temp_flow.z;
+
+    result->div_size = update_median_filter_f(&div_size_filt, result->div_size);
   }
 
   // Velocity calculation

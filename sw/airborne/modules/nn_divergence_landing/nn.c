@@ -46,50 +46,88 @@
 #include "guidance/guidance_v.h"
 #include "autopilot.h"
 
-float input_layer_out[nr_input_neurons];
+float input_layer_out[nr_input_neurons] = {0};
 float hidden_layer_out[nr_hidden_neurons] = {0};
 float layer2_out[nr_output_neurons] = {0};
 
-float sigmoid(float val);
-float sigmoid(float val)
+static float sigmoid(float val)
 {
   return 1.f / (1.f + expf(-val));
 }
 
-float relu(float val);
-float relu(float val)
+static float relu(float val)
 {
   BoundLower(val, 0.f);
   return val;
 }
 
-static float predict_nn(float D, float Ddot, float dt)
+static float divergence, divergence_dot, thrust;
+
+#if PERIODIC_TELEMETRY
+#include "subsystems/datalink/telemetry.h"
+#include "subsystems/ins/ins_int.h"
+#include "autopilot.h"
+/**
+ * Send optical flow telemetry information
+ * @param[in] *trans The transport structure to send the information over
+ * @param[in] *dev The link to send the data over
+ */
+static void nn_landing_telem_send(struct transport_tx *trans, struct link_device *dev)
+{
+  // get filtered accel directly from ins
+  struct NedCoor_f ltp_accel;
+  ACCELS_FLOAT_OF_BFP(ltp_accel, ins_int.ltp_accel);
+
+  pprz_msg_send_NN_LANDING(trans, dev, AC_ID,
+                               &divergence, &divergence_dot,
+                               &(ltp_accel.z), &(stateGetSpeedNed_f()->z), &(stateGetPositionNed_f()->z),
+                               &thrust, &autopilot.mode);
+}
+#endif
+
+static void zero_neurons(void){
+  for (int16_t i = 0; i < nr_input_neurons; i++){
+    input_layer_out[i] = 0.f;
+  }
+  for (int16_t i = 0; i < nr_hidden_neurons; i++){
+    hidden_layer_out[i] = 0.f;
+  }
+  for (int16_t i = 0; i < nr_output_neurons; i++){
+    layer2_out[i] = 0.f;
+  }
+}
+
+static float predict_nn(float in[], float dt)
 {
   int i,j;
 
 #if NN_TYPE == NN || NN_TYPE == RNN
-  input_layer_out[0] = D + bias0[0];
-  input_layer_out[1] = Ddot + bias0[1];
+
+#if NN_TYPE == NN
+  for (i = 0; i < nr_input_neurons; i++){
+    input_layer_out[i] = in[i] + bias0[i];
+  }
+#elif NN_TYPE == RNN
+  for (i = 0; i < nr_input_neurons; i++){
+    input_layer_out[i] = in[i] + bias0[i] + input_layer_out[0]*recurrent_weights0[0];
+  }
+#endif
 
   float potential;
-  for (i = 0; i < nr_hidden_neurons; i++)
-  {
+  for (i = 0; i < nr_hidden_neurons; i++){
     potential = 0.f;
-    for (j = 0; j < nr_input_neurons; j++)
-    {
+    for (j = 0; j < nr_input_neurons; j++){
       potential += input_layer_out[j]*layer1_weights[j][i];
     }
 #if NN_TYPE == RNN
-    potential = hidden_layer_out[i]*recurrent_weights1[i];
+    potential += hidden_layer_out[i]*recurrent_weights1[i];
 #endif
     hidden_layer_out[i] = relu(potential + bias1[i]);
   }
 
-  for (i = 0; i < nr_output_neurons; i++)
-  {
+  for (i = 0; i < nr_output_neurons; i++){
     potential = 0.f;
-    for (j = 0; j < nr_hidden_neurons; j++)
-    {
+    for (j = 0; j < nr_hidden_neurons; j++){
       potential += hidden_layer_out[j]*layer2_weights[j][i];
     }
 #if NN_TYPE == RNN
@@ -125,10 +163,12 @@ static float predict_nn(float D, float Ddot, float dt)
     layer2_out[i] = layer2_out[i] + dt*derivative;
   }
 #endif
-    return layer2_out[0];
+
+  return layer2_out[0];
 }
 
-float thrust_effectiveness = 0.112f; // transfer function from G to thrust percentage
+//float thrust_effectiveness = 0.112f; // transfer function from G to thrust percentage
+float thrust_effectiveness = 0.05f; // transfer function from G to thrust percentage
 static int nn_run(float D, float Ddot, float dt)
 {
   static bool first_run = true;
@@ -143,22 +183,32 @@ static int nn_run(float D, float Ddot, float dt)
   if (first_run){
     nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
     start_time = get_sys_time_float();
+    zero_neurons();
     first_run = false;
   }
 
-  // stabilize the vehicle and improve the estimate of the nominal throttle
-  if(get_sys_time_float() - start_time < 5.f){
-    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2;
+  // Stabilise the vehicle and improve the estimate of the nominal throttle
+  if(get_sys_time_float() - start_time < 3.f){
+    // wait a few seconds for the Guided controller to settle
     return 0;
   }
 
-  float cmd = predict_nn(D, Ddot, dt);
+  if(get_sys_time_float() - start_time < 5.f){
+    // get good estimate to nominal throttle
+    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2;
 
-  printf("cmd: %f\n", cmd);
+    // initialise network by running zeros through it
+    static float zero_input[] = {0.f, 0.f};
+    predict_nn(zero_input, dt);
+    return 0;
+  }
+
+  float input[] = {D, Ddot};
+  thrust = predict_nn(input, dt);
 
   // limit commands
-  Bound(cmd, -0.8f, 0.5f);
-  guidance_v_set_guided_th(cmd*thrust_effectiveness + nominal_throttle);
+  Bound(thrust, -0.8f, 0.5f);
+  guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
 
   return 1;
 
@@ -166,7 +216,8 @@ static int nn_run(float D, float Ddot, float dt)
   struct FloatVect3 accel_sp;
   uint8_t accel_sp_flag = 0b00000010; // vertical accel only
 
-  accel_sp.z = predict_nn(D, Ddot, dt);
+  float input[] = {D, Ddot};
+  accel_sp.z = thrust = predict_nn(input, dt);
 
   // limit commands
   Bound(accel_sp.z, -0.8, 0.5);
@@ -179,11 +230,6 @@ static int nn_run(float D, float Ddot, float dt)
   */
 }
 
-static void nn_test(void)
-{
-  printf("%f\n", predict_nn(1.f, 1.f, 0.05));
-}
-
 /* Use optical flow estimates */
 #ifndef OFL_NN_ID
 #define OFL_NN_ID ABI_BROADCAST
@@ -191,35 +237,51 @@ static void nn_test(void)
 PRINT_CONFIG_VAR(OFL_NN_ID)
 
 static abi_event optical_flow_ev;
-
 static void div_cb(uint8_t sender_id, uint32_t stamp, int16_t UNUSED flow_x,
     int16_t UNUSED flow_y, int16_t UNUSED flow_der_x, int16_t UNUSED flow_der_y,
     float UNUSED quality, float size_divergence)
 {
-  static float D = 0.f, Ddot = 0.f;
   static uint32_t last_stamp = 0;
 
-  float dt = (stamp - last_stamp) / 1e-6;
+  float dt = (stamp - last_stamp) / 1e6;
   last_stamp = stamp;
   if (dt > 1e-5){
-    Ddot = (D - size_divergence) / dt;
+    divergence_dot = (size_divergence - divergence) / dt;
   }
-  D = size_divergence;
+  divergence = size_divergence;
 
-  nn_run(D, Ddot, dt);
+  nn_run(divergence, divergence_dot, dt);
 }
 
 void nn_init(void)
 {
+  zero_neurons();
+
+  divergence = 0.f;
+  divergence_dot = 0.f;
+  thrust = 0.f;
+
+#if PERIODIC_TELEMETRY
+  register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_NN_LANDING, nn_landing_telem_send);
+#endif
+
   // bind to optical flow messages to get divergence
   AbiBindMsgOPTICAL_FLOW(OFL_NN_ID, &optical_flow_ev, div_cb);
 }
 
 /*
- * Send my gps position to the other members of the swarm
+ *  debug printout
  */
 void nn_periodic(void)
 {
-  nn_test();
+  static uint16_t steps = 0;
+  float input[] = {0.f, 0.f};
+  if (steps >= 10){
+    input[0] = 1.f;
+    input[1] = 1.f;
+  } else {
+    steps++;
+  }
+  printf("%f\n", predict_nn(input, 0.05));
 }
 

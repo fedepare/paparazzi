@@ -15,8 +15,6 @@
       <!--define name="OFL_OPTICAL_FLOW_ID" value="FLOW_DVS_ID"/-->
       <!--define name="INS_INT_GPS_ID" value="ABI_DISABLE"/-->
       
-      <define name="USE_SONAR" value="1"/>
-      
       <define name="VFF_EXTENDED_ACCEL_NOISE" value="3."/>
       <define name="VFF_EXTENDED_VEL_NOISE" value="0.3"/>
       
@@ -40,7 +38,7 @@
       <define name="AHRS_USE_GPS_HEADING" value="TRUE"/>
       <define name="AHRS_HEADING_UPDATE_GPS_MIN_SPEED" value="0"/>
     </module>
-    <module name="ins" type="hff_extended"/>
+    <module name="ins" type=""/>
     <!--module name="guidance" type="indi"/-->
 
     <!--module name="event_optic_flow">
@@ -67,6 +65,7 @@
     <module name="cv_opticflow">
       <define name="OPTICFLOW_METHOD" value="0"/>
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
+      <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
       <!--define name="OPTICFLOW_FPS" value="45"/>
       <define name="CAMERA_ROTATED_180" value="TRUE"/-->
     </module>
@@ -235,7 +234,7 @@
     <define name="HOVER_KP" value="300"/> <!-- GPS: 400 no GPS: 300--> 
     <define name="HOVER_KD" value="100"/> <!-- GPS: 120 no GPS: 100--> 
     <define name="HOVER_KI" value="20"/> <!-- GPS: 20 no GPS: 20--> 
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.6"/>
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.59"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
   </section>
 
@@ -278,7 +277,8 @@
     <define name="MODE_MANUAL" value="AP_MODE_ATTITUDE_DIRECT"/>
     <define name="MODE_AUTO1" value="AP_MODE_MODULE"/>
     <!--define name="MODE_AUTO2" value="AP_MODE_HOVER_Z_HOLD"/-->
-    <define name="MODE_AUTO2" value="AP_MODE_GUIDED"/>
+    <define name="MODE_STARTUP" value="AP_MODE_NAV"/>
+    <!--define name="MODE_AUTO2" value="AP_MODE_GUIDED"/-->
 
     <define name="NO_RC_THRUST_LIMIT" value="TRUE"/>
   </section>

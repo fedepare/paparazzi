@@ -33,6 +33,7 @@
       <message name="DIVERGENCE"               period="0.05"/>
       <message name="DRAGSPEED"                period="0.02"/>
       <message name="EVENT_OPTIC_FLOW_EST"   period="0.051"/>
+      <message name="NN_LANDING"             period="0.1"/>
     </mode>
 
     <mode name="ppm">

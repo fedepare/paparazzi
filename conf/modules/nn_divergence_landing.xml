@@ -16,7 +16,7 @@
     <file name="nn.h"/>
   </header>
   <init fun="nn_init()"/>
-  <periodic fun="nn_periodic()" freq="1" autorun="FALSE"/>
+  <periodic fun="nn_periodic()" freq="2" autorun="FALSE"/>
   <makefile target="ap">
     <file name="nn.c"/>
   </makefile>
