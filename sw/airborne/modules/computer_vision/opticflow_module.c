@@ -158,15 +158,6 @@ struct image_t *opticflow_module_calc(struct image_t *img)
   opticflow_result = temp_result;
   opticflow_got_result = flow_successful;
 
-//  // Print opticflow to terminal
-//  if(flow_successful){
-//  printf("Optical flow results: (%d,%d) \n", opticflow_result.flow_x,opticflow_result.flow_y);
-//  /*printf("Corners: (%d,%d) \n", opticflow.fast9_ret_corners[0].x,opticflow.fast9_ret_corners[0].y);*/
-//  for (uint16_t i = 0; i < opticflow_result.tracked_cnt; i++) {
-//    printf("Corners: (%d,%d) \n", opticflow.fast9_ret_corners[i].x,opticflow.fast9_ret_corners[i].y);
-//  	}
-//  }
-
   // release the mutex as we are done with editing the opticflow result
   pthread_mutex_unlock(&opticflow_mutex);
   return img;

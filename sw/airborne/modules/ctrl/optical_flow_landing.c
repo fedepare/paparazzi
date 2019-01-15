@@ -173,10 +173,9 @@ void vertical_ctrl_optical_flow_cb(uint8_t sender_id, uint32_t stamp, int16_t fl
 
 // common functions for different landing strategies:
 static void set_cov_div(int32_t thrust);
-static void update_errors(float error, float dt);
-static void vertical_ctrl_module_init(void);
-static uint32_t final_landing_procedure(void);
 static int32_t PID_divergence_control(float divergence_setpoint, float P, float I, float D, float dt);
+static void update_errors(float error, float dt);
+static uint32_t final_landing_procedure(void);
 
 // resetting all variables to be called for instance when starting up / re-entering module
 static void reset_all_vars(void);
@@ -187,7 +186,7 @@ float past_divergence_history[OFL_COV_WINDOW_SIZE];
 uint32_t ind_hist;
 uint8_t cov_array_filled;
 
-
+void vertical_ctrl_module_init(void);
 void vertical_ctrl_module_run(bool in_flight);
 
 /**
@@ -406,6 +405,7 @@ void vertical_ctrl_module_run(bool in_flight)
           dstate *= gain_factor;
           pused = pstate;
         }
+
         // use the divergence for control:
         thrust_set = PID_divergence_control(phase_0_set_point, pused, istate, dstate, dt);
 
@@ -506,8 +506,6 @@ uint32_t final_landing_procedure()
   uint32_t thrust = 0.85 * nominal_throttle;
   Bound(thrust, 0.6 * nominal_throttle, 0.9 * MAX_PPRZ);
   landing = true;
-  opticflow->landing = true;
-  opticflow->object_tracking = false;
 
   return thrust;
 }

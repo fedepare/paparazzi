@@ -31,9 +31,6 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// remove
-#include <stdio.h>
-
 #include <stdlib.h>
 #include "fast_rosten.h"
 
@@ -55,7 +52,7 @@ static void fast_make_offsets(int32_t *pixel, uint16_t row_stride, uint8_t pixel
 void fast9_detect(struct image_t *img, uint8_t threshold, uint16_t min_dist, uint16_t x_padding, uint16_t y_padding, uint16_t *num_corners, uint16_t *ret_corners_length, struct point_tf **ret_corners, uint16_t *roi)
 {
 
-    uint16_t corner_cnt = *num_corners;
+  uint16_t corner_cnt = *num_corners;
   int pixel[16];
   int16_t i;
   uint16_t x, y, x_min, x_max, y_min, x_start, x_end, y_start, y_end;
