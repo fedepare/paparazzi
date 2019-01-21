@@ -183,6 +183,7 @@ def main():
         print("Launching "+options.simtype+" simulator with arguments: "+' '.join(simargs))
 
     # start the simulator, replacing this process
+    print(simsitl, [simsitl] + simargs)
     os.execv(simsitl, [simsitl] + simargs)
 
 if __name__ == "__main__":

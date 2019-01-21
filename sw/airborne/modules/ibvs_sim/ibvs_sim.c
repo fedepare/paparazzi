@@ -769,7 +769,7 @@ void set_cov_div(float thrust,struct opticflow_t *opticflow)
   // only take covariance into account if there are enough samples in the histories:
   if (of_landing_ctrl.COV_METHOD == 0 && cov_array_filled > 0) {
     // TODO: step in landing set point causes an incorrectly perceived covariance
-    covariance_f_ref(thrust_history, divergence_history, of_landing_ctrl.window_size,&opticflow->cov_div);
+    opticflow->cov_div = covariance_f(thrust_history, divergence_history, of_landing_ctrl.window_size);
   } else if (of_landing_ctrl.COV_METHOD == 1 && cov_array_filled > 1) {
     // todo: delay steps should be invariant to the run frequency
     cov_div = covariance_f(past_divergence_history, divergence_history, of_landing_ctrl.window_size);

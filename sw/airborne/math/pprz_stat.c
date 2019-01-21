@@ -25,6 +25,8 @@
  */
 
 #include "math/pprz_stat.h"
+#include <string.h>
+#include <stdlib.h>
 
 /*********
  * Integer implementations
@@ -50,6 +52,37 @@ int32_t mean_i(int32_t *array, uint32_t n_elements)
     sum += (float)array[i];
   }
   return (int32_t)(sum / n_elements);
+}
+
+// Comparison function for qsort
+static int cmpfunc_i(const void * a, const void * b)
+{
+ return ( *(const int32_t*)a - *(const int32_t*)b );
+}
+
+/** Compute the median value of an array
+ *  This is implemented using floats to handle scaling of all variables
+ *  @param[in] *array The array
+ *  @param[in] n_elements Number of elements in the array
+ *  @return median
+ */
+int32_t median_i(int32_t *array, uint32_t n_elements)
+{
+  if (n_elements == 0) {
+    // Note that something else is wrong if you want the median of 0 samples.
+    return 0;
+  }
+  //sort array
+  int32_t sorted_array[n_elements];
+  memcpy(sorted_array, array, sizeof(int32_t) * n_elements);
+  qsort(sorted_array, n_elements, sizeof(int32_t), cmpfunc_i);
+
+  uint32_t half_n_elements = n_elements / 2;
+  if (n_elements % 2){
+    return sorted_array[half_n_elements];
+  } else {
+    return (sorted_array[half_n_elements] + sorted_array[half_n_elements - 1]) / 2;
+  }
 }
 
 /** Compute the variance of an array of values (integer).
@@ -128,6 +161,37 @@ float mean_f(float *array, uint32_t n_elements)
   return (sum_f(array, n_elements) / n_elements);
 }
 
+// Comparison function for qsort
+static int cmpfunc_f(const void * a, const void * b)
+{
+ return (int)( *(const float*)a - *(const float*)b );
+}
+
+/** Compute the median value of an array (float)
+ *  This is implemented using floats to handle scaling of all variables
+ *  @param[in] *array The array
+ *  @param[in] n_elements Number of elements in the array
+ *  @return median
+ */
+float median_f(float *array, uint32_t n_elements)
+{
+  if (n_elements == 0) {
+    // Note that something else is wrong if you want the median of 0 samples.
+    return 0;
+  }
+  //sort array
+  float sorted_array[n_elements];
+  memcpy(sorted_array, array, sizeof(float) * n_elements);
+  qsort(sorted_array, n_elements, sizeof(float), cmpfunc_f);
+
+  uint32_t half_n_elements = n_elements / 2;
+  if (n_elements % 2){
+    return sorted_array[half_n_elements];
+  } else {
+    return (sorted_array[half_n_elements] + sorted_array[half_n_elements - 1]) / 2.f;
+  }
+}
+
 /** Compute the variance of an array of values (float).
  *  The variance is a measure of how far a set of numbers is spread out
  *  V(X) = E[(X-E[X])^2] = E[X^2] - E[X]^2
@@ -166,23 +230,4 @@ float covariance_f(float *arr1, float *arr2, uint32_t n_elements)
     sumXY += arr1[i] * arr2[i];
   }
   return (sumXY / n_elements - sumX * sumY / (n_elements * n_elements));
-}
-
-void covariance_f_ref(float *arr1, float *arr2, uint32_t n_elements,float *covariance)
-{
-  if (n_elements == 0) {
-    // Note that something else is wrong if you want the covariance of 0 samples.
-    return 0.f;
-  }
-  // Determine means for each vector:
-  float sumX = 0.f, sumY = 0.f, sumXY = 0.f;
-
-  // Determine the covariance:
-  uint32_t i;
-  for (i = 0; i < n_elements; i++) {
-    sumX += arr1[i];
-    sumY += arr2[i];
-    sumXY += arr1[i] * arr2[i];
-  }
-  *covariance = (float)(sumXY / n_elements - sumX * sumY / (n_elements * n_elements));
 }

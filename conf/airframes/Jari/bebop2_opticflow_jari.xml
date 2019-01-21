@@ -34,16 +34,15 @@
     <module name="send_imu_mag_current"/> -->
     <module name="air_data"/>
     <!-- <module name="gps" type="ubx_ucenter"/> -->
-    <module name="logger_file">
+    <!--module name="logger_file">
       <define name="FILE_LOGGER_PATH" value="/data/ftp/internal_000"/>
-    </module>
+    </module-->
 
     <module name="video_thread"/>
     <module name="pose_history"/>
 
     <module name="cv_opticflow">
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
-      <define name="MAX_HORIZON" value="10"/>
       <define name="OPTICFLOW_FX" value="347.22222222"/> <!-- 2.5 / (3.6 * 2.0) * 1000 -->
       <define name="OPTICFLOW_FY" value="347.22222222"/> <!-- 2.5 / (3.6 * 2.0) * 1000 -->
       <define name="OPTICFLOW_FOV_W" value="0.665499265"/> <!-- 2 * arctan(240 / (2*347.22222222)) -->
@@ -53,17 +52,16 @@
     </module>
     
     <!-- Add ibvs module here -->
-    <module name="ibvs_sim">
+    <!--module name="ibvs_sim">
     	<define name="IBVS_CAMERA" value="bottom_camera"/>
     	<define name="IBVS_FX" value="347.22222222"/> <!-- 2.5 / (3.6 * 2.0) * 1000 -->
-        <define name="IBVS_FY" value="347.22222222"/> <!-- 2.5 / (3.6 * 2.0) * 1000 -->
-    </module>
+      <!--define name="IBVS_FY" value="347.22222222"/> <!-- 2.5 / (3.6 * 2.0) * 1000 -->
+    <!--/module-->
 
-    <module name="video_capture">
+    <!--module name="video_capture">
       <define name="VIDEO_CAPTURE_CAMERA" value="bottom_camera"/>
-      <!-- <define name="VIDEO_CAPTURE_CAMERA" value="front_camera"/ -->
       <define name="VIDEO_CAPTURE_PATH" value="/data/ftp/internal_000/images"/>
-    </module>
+    </module-->
 
     <!-- <module name="optical_flow_landing.xml"/> -->
     <!-- <module name="opticflow_hover.xml"/> -->
@@ -225,14 +223,8 @@
     <define name="HOVER_KP" value="350"/>
     <define name="HOVER_KD" value="85"/>
     <define name="HOVER_KI" value="20"/>
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.52"/>
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.68"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="TRUE"/>
-	<!-- old?
-    <define name="ADAPT_INITIAL_HOVER_THROTTLE" value="0.55"/> 
-    <define name="ADAPT_MIN_HOVER_THROTTLE" value="0.48"/> 		
-    <define name="ADAPT_MAX_HOVER_THROTTLE" value="0.62"/> 		
-    <define name="ADAPT_NOISE_FACTOR" value="0.8"/> 			
-	-->
   </section>
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">

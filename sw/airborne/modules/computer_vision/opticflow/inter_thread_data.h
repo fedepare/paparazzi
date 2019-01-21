@@ -40,10 +40,10 @@ struct opticflow_result_t {
   uint16_t tracked_cnt;   ///< The amount of tracked corners
 
   // Camera frame with the origin in the top left corner of the image
-  int16_t flow_x;         ///< Flow in x direction from the camera (in subpixels) with X positive to the right
-  int16_t flow_y;         ///< Flow in y direction from the camera (in subpixels) with Y positive to the bottom
-  int16_t flow_der_x;     ///< The derotated flow calculation in the x direction (in subpixels)
-  int16_t flow_der_y;     ///< The derotated flow calculation in the y direction (in subpixels)
+  int32_t flow_x;         ///< Flow in x direction from the camera (in subpixels) with X positive to the right
+  int32_t flow_y;         ///< Flow in y direction from the camera (in subpixels) with Y positive to the bottom
+  int32_t flow_der_x;     ///< The derotated flow calculation in the x direction (in subpixels)
+  int32_t flow_der_y;     ///< The derotated flow calculation in the y direction (in subpixels)
 
   struct FloatVect3 vel_cam;      ///< The velocity in camera frame (m/s)
   struct FloatVect3 vel_body;     ///< The velocity in body frame (m/s) with X positive to the front of the aircraft, Y positive to the right and Z positive downwards to the ground

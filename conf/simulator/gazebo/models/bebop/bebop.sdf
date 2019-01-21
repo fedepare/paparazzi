@@ -194,7 +194,7 @@
       </inertial>
       <sensor type="wideanglecamera" name="front_camera">
         <update_rate>15.0</update_rate><!-- adjust with MT9F002_TARGET_FPS -->
-        <camera name="front_camera">
+        <camera name="/dev/video0">
           <image>
             <width>3746</width><!-- with MT9F002_OUTPUT_SCALER = 1.00, will be scaled by NPS --><!-- Reduced to 3 rad FoV for Gazebo 7 compatibility -->
             <height>3288</height>
@@ -242,7 +242,7 @@
       </inertial>
       <sensor type="camera" name="bottom_camera">
         <update_rate>30.0</update_rate>
-        <camera name="bottom_camera">
+        <camera name="/dev/video1">
           <horizontal_fov>0.7175</horizontal_fov>
           <image>
             <width>240</width>

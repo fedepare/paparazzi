@@ -50,7 +50,7 @@
 #include BOARD_CONFIG
 
 // whether to show the flow and corners:
-#define OPTICFLOW_SHOW_CORNERS 0
+#define OPTICFLOW_SHOW_CORNERS 1
 
 #define EXHAUSTIVE_FAST 0
 #define ACT_FAST 1
@@ -107,12 +107,12 @@ PRINT_CONFIG_VAR(OPTICFLOW_MAX_ITERATIONS)
 PRINT_CONFIG_VAR(OPTICFLOW_THRESHOLD_VEC)
 
 #ifndef OPTICFLOW_PYRAMID_LEVEL
-#define OPTICFLOW_PYRAMID_LEVEL 2
+#define OPTICFLOW_PYRAMID_LEVEL 0
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_PYRAMID_LEVEL)
 
 #ifndef OPTICFLOW_FAST9_ADAPTIVE
-#define OPTICFLOW_FAST9_ADAPTIVE TRUE
+#define OPTICFLOW_FAST9_ADAPTIVE FALSE
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FAST9_ADAPTIVE)
 
@@ -170,7 +170,7 @@ PRINT_CONFIG_VAR(OPTICFLOW_MEDIAN_FILTER)
 PRINT_CONFIG_VAR(OPTICFLOW_FEATURE_MANAGEMENT)
 
 #ifndef OPTICFLOW_FAST9_REGION_DETECT
-#define OPTICFLOW_FAST9_REGION_DETECT 1
+#define OPTICFLOW_FAST9_REGION_DETECT 0
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FAST9_REGION_DETECT)
 
@@ -261,19 +261,23 @@ PRINT_CONFIG_VAR(OPTICFLOW_SHOW_FLOW)
 #include "filters/median_filter.h"
 struct MedianFilter3Float vel_filt;
 struct FloatRMat body_to_cam;
-static uint16_t run_count = 0;
 
 /* Functions only used here */
 static uint32_t timeval_diff(struct timeval *starttime, struct timeval *finishtime);
 static int cmp_flow(const void *a, const void *b);
 static int cmp_array(const void *a, const void *b);
-static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow_result_t *result, uint16_t *roi);
-static void manage_flow_features_object(struct opticflow_t *opticflow, struct opticflow_result_t *result);
-static void init_object_tracking(struct opticflow_t *opticflow);
-static void check_for_features(struct opticflow_t *opticflow, struct opticflow_result_t *result);
+static void manage_flow_features(struct opticflow_t *opticflow, uint16_t *roi);
+static void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t *tracker);
 
+static void remove_bad_vectors(struct opticflow_t *opticflow, struct flow_t *vectors);
+static void check_tracked_points_corners(struct opticflow_t *opticflow, struct flow_t *vectors);
+static void check_back_flow(struct opticflow_t *opticflow, struct flow_t *vecotrs);
 static struct flow_t *predict_flow_vectors(struct flow_t *flow_vectors, uint16_t n_points, float phi_diff,
     float theta_diff, float psi_diff, struct opticflow_t *opticflow);
+static void compute_global_flow(struct flow_t *vectors, struct opticflow_t *opticflow, struct opticflow_result_t *result);
+static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct object_tracker_t *tracker);
+
+struct object_tracker_t tracker_glob;
 /**
  * Initialize the opticflow calculator
  * @param[out] *opticflow The new optical flow calculator
@@ -308,7 +312,9 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
   opticflow->fast9_min_distance = OPTICFLOW_FAST9_MIN_DISTANCE;
   opticflow->fast9_padding = OPTICFLOW_FAST9_PADDING;
   opticflow->fast9_rsize = 512;
-  opticflow->fast9_ret_corners = calloc(opticflow->fast9_rsize, sizeof(struct point_tf));
+  opticflow->fast9_ret_corners = calloc(opticflow->fast9_rsize, sizeof(struct point_t));
+  opticflow->fast9_rsize_prev = opticflow->fast9_rsize;
+  opticflow->fast9_ret_corners_prev = calloc(opticflow->fast9_rsize_prev, sizeof(struct point_t));
 
   opticflow->corner_method = OPTICFLOW_CORNER_METHOD;
   opticflow->actfast_long_step = OPTICFLOW_ACTFAST_LONG_STEP;
@@ -319,44 +325,50 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
   struct FloatEulers euler = {OPTICFLOW_BODY_TO_CAM_PHI, OPTICFLOW_BODY_TO_CAM_THETA, OPTICFLOW_BODY_TO_CAM_PSI};
   float_rmat_of_eulers(&body_to_cam, &euler);
 
-  opticflow->object_tracking = OPTICFLOW_OBJECT_TRACKING;
-  opticflow->object_tracking_set = false;
-  opticflow->ibvs_init = OPTICFLOW_IBVS_INIT;
-
-  opticflow->previous_fast9_ret_corners = calloc(opticflow->fast9_rsize, sizeof(struct point_tf));
-  opticflow->n_new_corners = 0;
-
-  opticflow->nr_of_new_corners_to_detect = 25; // Might have to be increased back to 25
-  opticflow->new_fast9_ret_corners = calloc(opticflow->nr_of_new_corners_to_detect, sizeof(struct point_tf));
-  opticflow->object_tracking_reset = false;
-  opticflow->in_flight = true;
-  opticflow->t_new_window = calloc(30, sizeof(float));
-  opticflow->n_reinits = 0;
-  opticflow->roih_init = 80.0;
-  opticflow->roiw_init = 60.0;
-  opticflow->roi_center_init.x = 130;
-  opticflow->roi_center_init.y = 120;
-
-  // Initialize logger
-  uint32_t file_counter = 0;
-  char filename[512];
-  char* ibvs_file_logger_path = "./data/Jari";
-  opticflow->ibvs_file_logger = NULL;
-  // Check for available files
-  sprintf(filename, "%s/run%d.csv", ibvs_file_logger_path, (int32_t)file_counter);
-  while ((opticflow->ibvs_file_logger = fopen(filename, "r"))) {
-    fclose(opticflow->ibvs_file_logger);
-
-    file_counter++;
-    sprintf(filename, "%s/run%d.csv", ibvs_file_logger_path, (int32_t)file_counter);
-  }
-  printf("%s\n",filename);
-  opticflow->ibvs_file_logger = fopen(filename,"w");
-  if(opticflow->ibvs_file_logger != NULL){
-    fprintf(opticflow->ibvs_file_logger,"t\tx\ty\tz\tvx\tvy\tvz\txstart\tystart\tzstart\troihinit\troiwinit\troixinit"
-      "\troiyinit\timgw\timgh\tfov\tgoaldiv\tt0\tt1\tt2\tt3\ttlanded\tnreinits\tphistart\tthetastart\tpsistart\n");
-  }
+  init_object_tracking(opticflow, &tracker_glob);
 }
+
+
+/**
+ * Run the optical flow on a new image frame
+ * @param[in] *opticflow The opticalflow structure that keeps track of previous images
+ * @param[in] *state The state of the drone
+ * @param[in] *img The image frame to calculate the optical flow from
+ * @param[out] *result The optical flow result
+ */
+bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result)
+{
+  bool flow_successful = false;
+  // A switch counter that checks in the loop if the current method is similar,
+  // to the previous (for reinitializing structs)
+  static int8_t switch_counter = -1;
+  if (switch_counter != opticflow->method) {
+    opticflow->just_switched_method = true;
+    switch_counter = opticflow->method;
+    // Clear the static result
+    memset(result, 0, sizeof(struct opticflow_result_t));
+  } else {
+    opticflow->just_switched_method = false;
+  }
+
+  // Switch between methods (0 = fast9/lukas-kanade, 1 = EdgeFlow)
+  if (opticflow->method == 0) {
+    flow_successful = calc_fast9_lukas_kanade(opticflow, img, result, tracker_glob.roi);
+    update_object_roi(opticflow, img, &tracker_glob);
+  } else if (opticflow->method == 1) {
+    flow_successful = calc_edgeflow_tot(opticflow, img, result);
+  }
+
+  /* Rotate velocities from camera frame coordinates to body coordinates for control
+  * IMPORTANT!!! This frame to body orientation should be the case for the Parrot
+  * ARdrone and Bebop, however this can be different for other quadcopters
+  * ALWAYS double check!
+  */
+  float_rmat_transp_vmult(&result->vel_body, &body_to_cam, &result->vel_cam);
+
+  return flow_successful;
+}
+
 /**
  * Run the optical flow with fast9 and lukaskanade on a new image frame
  * @param[in] *opticflow The opticalflow structure that keeps track of previous images
@@ -366,7 +378,7 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
  * @return Was optical flow successful
  */
 bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
-                             struct opticflow_result_t *result)
+                             struct opticflow_result_t *result, uint16_t *roi)
 {
   if (opticflow->just_switched_method) {
     // Create the image buffers
@@ -379,15 +391,13 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     // Init median filters with zeros
     InitMedianFilterVect3Float(vel_filt, MEDIAN_DEFAULT_SIZE);
 
-    result->corner_cnt = 0;
-    result->tracked_cnt = 0;
+    opticflow->corner_cnt = 0;
+    opticflow->corner_cnt_prev = 0;
+    opticflow->tracked_cnt = 0;
   }
 
   // Convert image to grayscale
   image_to_grayscale(img, &opticflow->img_gray);
-  opticflow->img_gray.ts = img->ts;
-  opticflow->img_gray.pprz_ts = img->pprz_ts;
-  opticflow->img_gray.eulers = img->eulers;
 
   // Copy to previous image if not set
   if (!opticflow->got_first_img) {
@@ -396,15 +406,10 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     return false;
   }
 
-  // variables for linear flow fit:
-  float error_threshold;
-  int n_iterations_RANSAC, n_samples_RANSAC, success_fit;
-  struct linear_flow_fit_info fit_info;
-
   // Update FPS for information
   float dt = timeval_diff(&(opticflow->prev_img_gray.ts), &(img->ts)) / 1000.f;
   if (dt > 1e-5) {
-    result->fps = 1 / dt;
+    result->fps = 1.f / dt;
   } else {
     return false;
   }
@@ -412,54 +417,23 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   // *************************************************************************************
   // Corner detection
   // *************************************************************************************
-
-  // if feature_management is selected and tracked corners drop below a threshold, redetect
   if (opticflow->feature_management) {
-    result->corner_cnt = result->tracked_cnt;
-    // check if new region of interest defined
-    if (opticflow->object_tracking && opticflow->object_tracking_set){
-      printf("Reset \n");
-      init_object_tracking(opticflow);
-      result->corner_cnt = 0;
-      manage_flow_features(opticflow, result, opticflow->roi);
-      for (uint16_t i = 0; i < result->corner_cnt; i++){
-        opticflow->fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[i].x * opticflow->subpixel_factor;
-        opticflow->fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[i].y * opticflow->subpixel_factor;
-      }
-    }
-    // Look for new features in the ROI
-    else if(opticflow->object_tracking && result->corner_cnt < opticflow->max_track_corners-2){
-      // define number of corners to look for
-      opticflow->n_new_corners = opticflow->max_track_corners - result->corner_cnt;
-      check_for_features(opticflow, result);
-    }
-	  // update feature management
-    else if (result->corner_cnt < opticflow->max_track_corners / 2){
-	    result->corner_cnt = 0;
-		  manage_flow_features(opticflow, result, NULL);
-		  for (uint16_t i = 0; i < result->corner_cnt; i++){
-		    opticflow->fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[i].x * opticflow->subpixel_factor;
-		    opticflow->fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[i].y * opticflow->subpixel_factor;
-		  }
-		  /*opticflow->object_tracking_set = false;*/
-	  }
+    // if feature_management is selected and tracked corners drop below a threshold, redetect
+    manage_flow_features(opticflow, roi);
   } else {
     // needs to be set to 0 because result is now static
-    result->corner_cnt = 0;
+    opticflow->corner_cnt = 0;
 
     if (opticflow->corner_method == EXHAUSTIVE_FAST) {
       // FAST corner detection
       // TODO: There is something wrong with fast9_detect destabilizing FPS. This problem is reduced with putting min_distance
       // to 0 (see defines), however a more permanent solution should be considered
       fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                   opticflow->fast9_padding, opticflow->fast9_padding, &result->corner_cnt,
-                   &opticflow->fast9_rsize,
-                   &opticflow->fast9_ret_corners,
-                   NULL);
-
+                   opticflow->fast9_padding, opticflow->fast9_padding, &opticflow->corner_cnt,
+                   &opticflow->fast9_rsize, &opticflow->fast9_ret_corners, roi);
     } else if (opticflow->corner_method == ACT_FAST) {
       // ACT-FAST corner detection:
-      act_fast(&opticflow->prev_img_gray, opticflow->fast9_threshold, &result->corner_cnt,
+      act_fast(&opticflow->prev_img_gray, opticflow->fast9_threshold, &opticflow->corner_cnt,
                &opticflow->fast9_ret_corners, n_agents, n_time_steps,
                opticflow->actfast_long_step, opticflow->actfast_short_step, opticflow->actfast_min_gradient,
                opticflow->actfast_gradient_method);
@@ -467,21 +441,18 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
 
     // Adaptive threshold
     if (opticflow->fast9_adaptive) {
-
       // This works well for exhaustive FAST, but drives the threshold to the minimum for ACT-FAST:
       // Decrease and increase the threshold based on previous values
-      if (result->corner_cnt < 40) { // TODO: Replace 40 with OPTICFLOW_MAX_TRACK_CORNERS / 2
+      if (opticflow->corner_cnt < 40) { // TODO: Replace 40 with OPTICFLOW_MAX_TRACK_CORNERS / 2
         // make detections easier:
         if (opticflow->fast9_threshold > FAST9_LOW_THRESHOLD) {
           opticflow->fast9_threshold--;
         }
-
         if (opticflow->corner_method == ACT_FAST) {
           n_time_steps++;
           n_agents++;
         }
-
-      } else if (result->corner_cnt > OPTICFLOW_MAX_TRACK_CORNERS * 2 && opticflow->fast9_threshold < FAST9_HIGH_THRESHOLD) {
+      } else if (opticflow->corner_cnt > opticflow->max_track_corners * 2 && opticflow->fast9_threshold < FAST9_HIGH_THRESHOLD) {
         opticflow->fast9_threshold++;
         if (opticflow->corner_method == ACT_FAST && n_time_steps > 5 && n_agents > 10) {
           n_time_steps--;
@@ -491,13 +462,8 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     }
   }
 
-#if OPTICFLOW_SHOW_CORNERS
-  static uint8_t white[4] = {127, 255, 127, 255};
-  image_show_points_color(img, opticflow->fast9_ret_corners, result->corner_cnt, white);
-#endif
-
   // Check if we found some corners to track
-  if (result->corner_cnt < 1) {
+  if (opticflow->corner_cnt < 3) {
     // Clear the result otherwise the previous values will be returned for this frame too
     VECT3_ASSIGN(result->vel_cam, 0, 0, 0);
     VECT3_ASSIGN(result->vel_body, 0, 0, 0);
@@ -508,163 +474,98 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     return false;
   }
 
+#if OPTICFLOW_SHOW_CORNERS
+  image_show_points(img, opticflow->fast9_ret_corners, opticflow->corner_cnt);
+#endif
+
   // *************************************************************************************
   // Corner Tracking
   // *************************************************************************************
-
   // Execute a Lucas Kanade optical flow
-  result->tracked_cnt = result->corner_cnt;
-  uint8_t keep_bad_points = 0;
-  struct flow_t *vectors = opticFlowLK(&opticflow->img_gray, &opticflow->prev_img_gray, opticflow->fast9_ret_corners,
-                                       &result->tracked_cnt,
-                                       opticflow->window_size / 2, opticflow->subpixel_factor, opticflow->max_iterations,
-                                       opticflow->threshold_vec, opticflow->max_track_corners, opticflow->pyramid_level, keep_bad_points);
+  struct flow_t *vectors = NULL;
+  if (opticflow->feature_management) {
+    struct flow_t *vectors_prev = NULL;
+    struct flow_t *vectors_new = NULL;
+    // first only track corners that have been previously tracked
+    // we split this such that newly tracked points are evenly distributed in the image
+    opticflow->tracked_cnt = opticflow->corner_cnt_prev;
+    if(opticflow->tracked_cnt){
+      vectors_prev = opticFlowLK(&opticflow->img_gray, &opticflow->prev_img_gray, opticflow->fast9_ret_corners,
+                                         &opticflow->tracked_cnt, opticflow->window_size / 2, opticflow->subpixel_factor,
+                                         opticflow->max_iterations, opticflow->threshold_vec, opticflow->corner_cnt_prev,
+                                         opticflow->pyramid_level, true);
+    }
+    // Track new corners
+    opticflow->tracked_cnt = opticflow->corner_cnt - opticflow->corner_cnt_prev;
+    if(opticflow->tracked_cnt){
+      vectors_new = opticFlowLK(&opticflow->img_gray, &opticflow->prev_img_gray, &(opticflow->fast9_ret_corners[opticflow->corner_cnt_prev]),
+                                         &opticflow->tracked_cnt, opticflow->window_size / 2, opticflow->subpixel_factor,
+                                         opticflow->max_iterations, opticflow->threshold_vec, Max(0,(int16_t)opticflow->max_track_corners - opticflow->corner_cnt_prev),
+                                         opticflow->pyramid_level, true);
+    }
 
+    vectors = malloc((opticflow->tracked_cnt + opticflow->corner_cnt_prev) * sizeof(struct flow_t));
 
+    memcpy(vectors, vectors_prev, opticflow->corner_cnt_prev * sizeof(struct flow_t));
+    memcpy(&(vectors[opticflow->corner_cnt_prev]), vectors_new, opticflow->tracked_cnt * sizeof(struct flow_t));
+    opticflow->tracked_cnt += opticflow->corner_cnt_prev;
+
+    free(vectors_prev);
+    free(vectors_new);
+  } else {
+    opticflow->tracked_cnt = opticflow->corner_cnt;
+    vectors = opticFlowLK(&opticflow->img_gray, &opticflow->prev_img_gray, opticflow->fast9_ret_corners,
+                                       &opticflow->tracked_cnt, opticflow->window_size / 2, opticflow->subpixel_factor,
+                                       opticflow->max_iterations, opticflow->threshold_vec, opticflow->max_track_corners,
+                                       opticflow->pyramid_level, true);
+  }
+
+  // cleanup bad corners
   if (opticflow->track_back) {
-    // TODO: Watch out!
-    // We track the flow back and give badly back-tracked vectors a high error,
-    // but we do not yet remove these vectors, nor use the errors in any other function than showing the flow.
+    check_back_flow(opticflow, vectors);
+  }
+  if (opticflow->feature_management) {
+    check_tracked_points_corners(opticflow, vectors);
+  }
 
-    // initialize corners at the tracked positions:
-    for (int i = 0; i < result->tracked_cnt; i++) {
-      opticflow->fast9_ret_corners[i].x = (uint32_t)(vectors[i].pos.x + vectors[i].flow_x) / opticflow->subpixel_factor;
-      opticflow->fast9_ret_corners[i].y = (uint32_t)(vectors[i].pos.y + vectors[i].flow_y) / opticflow->subpixel_factor;
-    }
-
-    // present the images in the opposite order:
-    keep_bad_points = 1;
-    uint16_t back_track_cnt = result->tracked_cnt;
-    struct flow_t *back_vectors = opticFlowLK(&opticflow->prev_img_gray, &opticflow->img_gray, opticflow->fast9_ret_corners,
-                                  &back_track_cnt,
-                                  opticflow->window_size / 2, opticflow->subpixel_factor, opticflow->max_iterations,
-                                  opticflow->threshold_vec, opticflow->max_track_corners, opticflow->pyramid_level, keep_bad_points);
-
-    // printf("Tracked %d points back.\n", back_track_cnt);
-    int32_t back_x, back_y, diff_x, diff_y, dist_squared;
-    int32_t back_track_threshold = 200;
-
-    for (int i = 0; i < result->tracked_cnt; i++) {
-      if (back_vectors[i].error < LARGE_FLOW_ERROR) {
-        back_x = (int32_t)(back_vectors[i].pos.x + back_vectors[i].flow_x);
-        back_y = (int32_t)(back_vectors[i].pos.y + back_vectors[i].flow_y);
-        diff_x = back_x - vectors[i].pos.x;
-        diff_y = back_y - vectors[i].pos.y;
-        dist_squared = diff_x * diff_x + diff_y * diff_y;
-        // printf("Vector %d: x,y = %d, %d, back x, y = %d, %d, back tracking error %d\n", i, vectors[i].pos.x, vectors[i].pos.y, back_x, back_y, dist_squared);
-        if (dist_squared > back_track_threshold) {
-          vectors[i].error = LARGE_FLOW_ERROR;
-        }
-      } else {
-        vectors[i].error = LARGE_FLOW_ERROR;
-      }
-    }
-
-    free(back_vectors);
+  if (opticflow->show_flow) {
+    uint8_t color[4] = {127, 127, 127, 127};
+    uint8_t bad_color[4] = {127, 0, 127, 0};
+    image_show_flow_color(img, vectors, opticflow->tracked_cnt, opticflow->subpixel_factor, color, bad_color);
   }
 
   // *************************************************************************************
-  // Next Loop Preparation
+  // Next Loop Preparation and corner cleanup
   // *************************************************************************************
-  if (opticflow->feature_management) {
-    result->corner_cnt = result->tracked_cnt;
-    opticflow->nr_of_corners_detected = result->corner_cnt;
-    // Calculate the new positions 1 decimal accurate to save for the next calculation
-    // However use the integer version to display
-    uint16_t local_roi[4];
-    for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-      opticflow->fast9_ret_corners[i].x_full = vectors[i].pos.x + vectors[i].flow_x;
-      opticflow->fast9_ret_corners[i].y_full = vectors[i].pos.y + vectors[i].flow_y;
-      // round to nearest for int position
-      opticflow->fast9_ret_corners[i].x = (uint32_t)roundf((float)opticflow->fast9_ret_corners[i].x_full/opticflow->subpixel_factor);
-      opticflow->fast9_ret_corners[i].y = (uint32_t)roundf((float)opticflow->fast9_ret_corners[i].y_full/opticflow->subpixel_factor);
-      opticflow->fast9_ret_corners[i].count = vectors[i].pos.count;
+  remove_bad_vectors(opticflow, vectors);
 
-      uint8_t window = 2;
-      if (opticflow->fast9_ret_corners[i].x <= window || opticflow->fast9_ret_corners[i].y <= window ||
-          opticflow->fast9_ret_corners[i].x + window > img->w || opticflow->fast9_ret_corners[i].y + window > img->h){
-        continue;
-      }
-      local_roi[0] = opticflow->fast9_ret_corners[i].x - window;
-      local_roi[1] = opticflow->fast9_ret_corners[i].y - window;
-      local_roi[2] = opticflow->fast9_ret_corners[i].x + window;
-      local_roi[3] = opticflow->fast9_ret_corners[i].y + window;
+  if (opticflow->tracked_cnt < 3) {
+    // We got no flow
+    result->flow_x = 0;
+    result->flow_y = 0;
 
-      uint16_t local_corners_size = 32;
-      struct point_tf *local_corners = calloc(local_corners_size, sizeof(struct point_tf));
-      uint16_t local_corners_found = 0;
-      fast9_detect(&opticflow->img_gray, opticflow->fast9_threshold, 1,
-                           0, 0, &local_corners_found,
-                           &local_corners_size,
-                           &local_corners,
-                           local_roi);
-
-      if (local_corners_found == 0)
-      {
-        // Reduce result->tracked_cnt
-        result->tracked_cnt -= 1;
-        // Remove entry from vectors
-        // Move entry at tracked_cnt to this location
-        vectors[i].pos.x = vectors[result->tracked_cnt].pos.x;
-        vectors[i].pos.y = vectors[result->tracked_cnt].pos.y;
-        vectors[i].flow_x = vectors[result->tracked_cnt].flow_x;
-        vectors[i].flow_y = vectors[result->tracked_cnt].flow_y;
-        // Remove entry from fast9_corners
-        opticflow->fast9_ret_corners[i].x = opticflow->fast9_ret_corners[result->tracked_cnt].x;
-        opticflow->fast9_ret_corners[i].y = opticflow->fast9_ret_corners[result->tracked_cnt].y;
-        opticflow->fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[result->tracked_cnt].x_full;
-        opticflow->fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[result->tracked_cnt].y_full;
-        // Reduce i to make sure this corner is still checked
-        i -= 1;
-
-      } else {
-        float min_dist = window * window;
-        uint16_t min_ind = 0;
-        for(uint16_t j = 0; j < local_corners_found; j++){
-          float diff_x = (float)opticflow->fast9_ret_corners[i].x - (float)local_corners[j].x;
-          float diff_y = (float)opticflow->fast9_ret_corners[i].y - (float)local_corners[j].y;
-          float dist = sqrtf(diff_x*diff_x + diff_y*diff_y);
-          if (dist < min_dist){
-            min_dist = dist;
-            min_ind = j;
-          }
-        }
-        // update vectors with local_corners[min_ind].x - opticflow->fast9_ret_corners[i].x;
-        vectors[i].flow_x += local_corners[min_ind].x*opticflow->subpixel_factor - opticflow->fast9_ret_corners[i].x_full;
-        vectors[i].flow_y += local_corners[min_ind].y*opticflow->subpixel_factor - opticflow->fast9_ret_corners[i].y_full;
-
-        // Update fast corners
-        opticflow->fast9_ret_corners[i].x = local_corners[min_ind].x;
-        opticflow->fast9_ret_corners[i].y = local_corners[min_ind].y;
-        opticflow->fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[i].x * opticflow->subpixel_factor;
-        opticflow->fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[i].y * opticflow->subpixel_factor;
-      }
-
-      free(local_corners);
-    }
-
-  if (opticflow->show_flow) {
-    uint8_t color[4] = {0, 0, 0, 0};
-    uint8_t bad_color[4] = {0, 0, 0, 0};
-    image_show_flow_color(img, vectors, result->tracked_cnt, opticflow->subpixel_factor, color, bad_color);
+    free(vectors);
+    image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
+    return false;
   }
 
   // Global flow calculations
   static int n_samples = 100;
   // Estimate size divergence:
   if (SIZE_DIV) {
-    result->div_size = get_size_divergence(vectors, result->tracked_cnt, n_samples);// * result->fps;
+    result->div_size = get_size_divergence(vectors, opticflow->tracked_cnt, n_samples);// * result->fps;
   } else {
     result->div_size = 0.0f;
   }
 
   if (LINEAR_FIT) {
     // Linear flow fit (normally derotation should be performed before):
-    error_threshold = 10.0f;
-    n_iterations_RANSAC = 20;
-    n_samples_RANSAC = 5;
-    success_fit = analyze_linear_flow_field(vectors, result->tracked_cnt, error_threshold, n_iterations_RANSAC,
-                                            n_samples_RANSAC, img->w, img->h, &fit_info);
+    static float error_threshold = 10.0f;
+    static int n_iterations_RANSAC = 20;
+    static int n_samples_RANSAC = 5;
+    struct linear_flow_fit_info fit_info;
+    int success_fit = analyze_linear_flow_field(vectors, opticflow->tracked_cnt,
+        error_threshold, n_iterations_RANSAC, n_samples_RANSAC, img->w, img->h, &fit_info);
 
     if (!success_fit) {
       fit_info.divergence = 0.0f;
@@ -678,33 +579,18 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     result->surface_roughness = 0.0f;
   }
 
-  // compute flow as mean of vectors
-  int32_t flow_sum_x = 0, flow_sum_y = 0;
-  for (uint16_t i = 0; i < result->tracked_cnt; i++){
-    flow_sum_x += vectors[i].flow_x;
-    flow_sum_y += vectors[i].flow_y;
-  }
-  result->flow_x = flow_sum_x / result->tracked_cnt;
-  result->flow_y = flow_sum_y / result->tracked_cnt;
+  // compute flow from vectors
+  compute_global_flow(vectors, opticflow, result);
 
   // TODO scale flow to rad/s here
 
   // ***************
   // Flow Derotation
   // ***************
-
   float diff_flow_x = 0.f;
   float diff_flow_y = 0.f;
 
-  if (opticflow->derotation && result->tracked_cnt > 5) {
-    diff_flow_x = (opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi) * OPTICFLOW_FX;
-    diff_flow_y = (opticflow->img_gray.eulers.theta - opticflow->prev_img_gray.eulers.theta) * OPTICFLOW_FY;
-    /*diff_flow_x = (cam_state->rates.p)  / result->fps * img->w /
-                  OPTICFLOW_FOV_W;// * img->w / OPTICFLOW_FOV_W;
-    diff_flow_y = (cam_state->rates.q) / result->fps * img->h /
-                  OPTICFLOW_FOV_H;// * img->h / OPTICFLOW_FOV_H;*/
-  }
-
+  if (opticflow->derotation) {
     float rotation_threshold = M_PI / 180.0f;
     if (fabs(opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi) > rotation_threshold
         || fabs(opticflow->img_gray.eulers.theta - opticflow->prev_img_gray.eulers.theta) > rotation_threshold) {
@@ -712,16 +598,13 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
       // do not apply the derotation if the rotation rates are too high:
       result->flow_der_x = 0.0f;
       result->flow_der_y = 0.0f;
-
     } else {
-
       // determine the roll, pitch, yaw differencces between the images.
       float phi_diff = opticflow->img_gray.eulers.phi - opticflow->prev_img_gray.eulers.phi;
       float theta_diff = opticflow->img_gray.eulers.theta - opticflow->prev_img_gray.eulers.theta;
       float psi_diff = opticflow->img_gray.eulers.psi - opticflow->prev_img_gray.eulers.psi;
 
-      if (strcmp(OPTICFLOW_CAMERA.dev_name, "/dev/video0") == 0) {
-
+      if (strcmp(OPTICFLOW_CAMERA.dev_name, front_camera.dev_name) == 0) {
         // bottom cam: just subtract a scaled version of the roll and pitch difference from the global flow vector:
         diff_flow_x = phi_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_x; // phi_diff works better than (cam_state->rates.p)
         diff_flow_y = theta_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_y;
@@ -730,34 +613,18 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
         result->flow_der_y = result->flow_y - diff_flow_y * opticflow->subpixel_factor *
                              opticflow->derotation_correction_factor_y;
       } else {
-
         // frontal cam, predict individual flow vectors:
-        struct flow_t *predicted_flow_vectors = predict_flow_vectors(vectors, result->tracked_cnt, phi_diff, theta_diff,
+        struct flow_t *predicted_flow_vectors = predict_flow_vectors(vectors, opticflow->tracked_cnt, phi_diff, theta_diff,
                                                 psi_diff, opticflow);
         if (opticflow->show_flow) {
           uint8_t color[4] = {255, 255, 255, 255};
           uint8_t bad_color[4] = {255, 255, 255, 255};
-          image_show_flow_color(img, predicted_flow_vectors, result->tracked_cnt, opticflow->subpixel_factor, color, bad_color);
+          image_show_flow_color(img, predicted_flow_vectors, opticflow->tracked_cnt, opticflow->subpixel_factor, color, bad_color);
         }
 
-        for (int i = 0; i < result->tracked_cnt; i++) {
-          // subtract the flow:
-          vectors[i].flow_x -= predicted_flow_vectors[i].flow_x;
-          vectors[i].flow_y -= predicted_flow_vectors[i].flow_y;
-        }
-
-        // vectors have to be re-sorted after derotation:
-        qsort(vectors, result->tracked_cnt, sizeof(struct flow_t), cmp_flow);
-
-        if (result->tracked_cnt % 2) {
-          // Take the median point
-          result->flow_der_x = vectors[result->tracked_cnt / 2].flow_x;
-          result->flow_der_y = vectors[result->tracked_cnt / 2].flow_y;
-        } else {
-          // Take the average of the 2 median points
-          result->flow_der_x = (vectors[result->tracked_cnt / 2 - 1].flow_x + vectors[result->tracked_cnt / 2].flow_x) / 2.f;
-          result->flow_der_y = (vectors[result->tracked_cnt / 2 - 1].flow_y + vectors[result->tracked_cnt / 2].flow_y) / 2.f;
-        }
+        // recompute flow from vectors
+        compute_global_flow(predicted_flow_vectors, opticflow, result);
+        free(predicted_flow_vectors);
       }
     }
   }
@@ -777,217 +644,183 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     UpdateMedianFilterVect3Float(vel_filt, result->vel_cam);
   }
 
-  // Update ROI
-  if(opticflow->object_tracking){
-    // Before we move ROI we should do two checks
-    // 1. Did we initialize offset_roi_cg already?
-    if (!opticflow->offset_defined){
-      // Keep track of previous corners for future reference
-      opticflow->previous_tracked_cnt = result->tracked_cnt;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        opticflow->previous_fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[i].x_full;
-        opticflow->previous_fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[i].y_full;
-        opticflow->previous_fast9_ret_corners[i].x = opticflow->fast9_ret_corners[i].x;
-        opticflow->previous_fast9_ret_corners[i].y = opticflow->fast9_ret_corners[i].y;
-      }
-      // Find average position of corners
-      struct point_tf av_corn_pos;
-      av_corn_pos.x_full = 0, av_corn_pos.y_full = 0;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        av_corn_pos.x_full += opticflow->fast9_ret_corners[i].x_full;
-        av_corn_pos.y_full += opticflow->fast9_ret_corners[i].y_full;
-      }
-      opticflow->cg_corners.x_full = av_corn_pos.x_full/result->tracked_cnt;
-      opticflow->cg_corners.y_full = av_corn_pos.y_full/result->tracked_cnt;
-      // Find correction: roi - cg
-      opticflow->offset_roi_cg.x_full = (int32_t)opticflow->roi_center.x_full - (int32_t)opticflow->cg_corners.x_full;
-      opticflow->offset_roi_cg.y_full = (int32_t)opticflow->roi_center.y_full - (int32_t)opticflow->cg_corners.y_full;
-      opticflow->offset_defined = true;
-      // Find average distance to the cg
-      struct point_tf av_dist; av_dist.x_full = 0; av_dist.y_full = 0;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        av_dist.x_full += abs((int32_t)opticflow->fast9_ret_corners[i].x_full-(int32_t)opticflow->cg_corners.x_full);
-        av_dist.y_full += abs((int32_t)opticflow->fast9_ret_corners[i].y_full-(int32_t)opticflow->cg_corners.y_full);
-      }
-      opticflow->av_dist.x_full = av_dist.x_full/result->tracked_cnt;
-      opticflow->av_dist.y_full = av_dist.y_full/result->tracked_cnt;
-
-      // Define initial w/d and h/d
-      opticflow->width_dist_ratio = opticflow->roiw*(float)(opticflow->subpixel_factor)/opticflow->av_dist.x_full;
-      opticflow->height_dist_ratio = opticflow->roih*(float)(opticflow->subpixel_factor)/opticflow->av_dist.y_full;
-      opticflow->n_new_corners = 0;
-    } else{
-      // Check if we were able to keep at least 15 of the old corners
-      // Three times in a row keeping less than 15 corners, means we can assume we're in the last phase of the landing
-
-      // 2. Did we lose corners?
-      if (opticflow->previous_tracked_cnt > result->tracked_cnt){
-        // Nr of lost corners
-        uint8_t cnt_diff = opticflow->previous_tracked_cnt - result->tracked_cnt;
-        // Array of removed corner index
-        uint16_t rem_ind[cnt_diff];
-        for (uint16_t j = 0; j < cnt_diff; j++) {
-          struct point_tf nr_to_look_for;
-          // Look for the index in the new list of the entry most closely matching the last entry of the previous list
-          nr_to_look_for.x = opticflow->previous_fast9_ret_corners[opticflow->previous_tracked_cnt-j-1].x_full;
-          nr_to_look_for.y = opticflow->previous_fast9_ret_corners[opticflow->previous_tracked_cnt-j-1].y_full;
-          float min_dist = 100;
-          uint16_t min_ind = 0;
-          for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-            float diff_x = (float)opticflow->fast9_ret_corners[i].x_full - (float)nr_to_look_for.x;
-            float diff_y = (float)opticflow->fast9_ret_corners[i].y_full - (float)nr_to_look_for.y;
-            float dist = sqrtf(diff_x*diff_x + diff_y*diff_y);
-            if (dist < min_dist){
-              min_dist = dist;
-              min_ind = i;
-            }
-          }
-          rem_ind[j] = min_ind;
-        }
-        // Find lost distance due to lost corner
-        struct point_tf lost_corn_dist_sum;
-        lost_corn_dist_sum.x_full = 0; lost_corn_dist_sum.y_full = 0;
-        for (uint16_t j = 0; j < cnt_diff; j++) {
-          lost_corn_dist_sum.x_full += abs((int32_t)opticflow->previous_fast9_ret_corners[rem_ind[j]].x_full-(int32_t)opticflow->cg_corners.x_full);
-          lost_corn_dist_sum.y_full += abs((int32_t)opticflow->previous_fast9_ret_corners[rem_ind[j]].y_full-(int32_t)opticflow->cg_corners.y_full);
-        }
-        // Find lost coordinates due to lost corner
-        struct point_tf lost_corn_sum;
-        lost_corn_sum.x_full = 0; lost_corn_sum.y_full = 0;
-        for (uint16_t j = 0; j < cnt_diff; j++) {
-          lost_corn_sum.x_full += opticflow->previous_fast9_ret_corners[rem_ind[j]].x_full;
-          lost_corn_sum.y_full += opticflow->previous_fast9_ret_corners[rem_ind[j]].y_full;
-        }
-        // Calculate w/d correction
-        float w_corr_lost_x = (opticflow->av_dist.x_full*(float)result->tracked_cnt)/
-            (opticflow->av_dist.x_full*(float)opticflow->previous_tracked_cnt-(float)lost_corn_dist_sum.x_full);
-        float h_corr_lost_y = (opticflow->av_dist.y_full*(float)result->tracked_cnt)/
-            (opticflow->av_dist.y_full*(float)opticflow->previous_tracked_cnt-(float)lost_corn_dist_sum.y_full);
-        // Update w/d
-        opticflow->width_dist_ratio *= w_corr_lost_x;
-        opticflow->height_dist_ratio *= h_corr_lost_y;
-        // Calculate roi_cg correction
-        struct point_tf_signed off_cor_lost;
-        float old_new_corr_ratio = (float)opticflow->previous_tracked_cnt/(float)result->tracked_cnt -1.0;
-        off_cor_lost.x_full = (int32_t)roundf((old_new_corr_ratio*(float)opticflow->cg_corners.x_full)-((float)lost_corn_sum.x_full/(float)result->tracked_cnt));
-        off_cor_lost.y_full = (int32_t)roundf((old_new_corr_ratio*(float)opticflow->cg_corners.y_full)-((float)lost_corn_sum.y_full/(float)result->tracked_cnt));
-        // Update roi cg offset
-        opticflow->offset_roi_cg.x_full -= off_cor_lost.x_full;
-        opticflow->offset_roi_cg.y_full -= off_cor_lost.y_full;
-      }
-      // When new corners are detected, we update the roi parameters
-      if (opticflow->n_new_corners>0){
-        // New corners are at: tracked_cnt and later
-        struct point_tf found_sum; found_sum.x_full = 0; found_sum.y_full = 0;
-        for(uint16_t i=0;i<opticflow->n_new_corners;i++){
-          found_sum.x_full += opticflow->fast9_ret_corners[i+result->tracked_cnt].x_full;
-          found_sum.y_full += opticflow->fast9_ret_corners[i+result->tracked_cnt].y_full;
-        }
-        // New number of corners
-        uint16_t n_new = opticflow->n_new_corners + opticflow->previous_tracked_cnt;
-        // Correct offset
-        struct point_tf_signed off_cor_found;
-        float mult_fact_old_new = (float)opticflow->previous_tracked_cnt/(float)n_new-1.0;
-        off_cor_found.x_full = (int32_t)roundf((float)found_sum.x_full/(float)n_new+(float)opticflow->cg_corners.x_full*mult_fact_old_new);
-        off_cor_found.y_full = (int32_t)roundf((float)found_sum.y_full/(float)n_new+(float)opticflow->cg_corners.y_full*mult_fact_old_new);
-        opticflow->offset_roi_cg.x_full -= off_cor_found.x_full;
-        opticflow->offset_roi_cg.y_full -= off_cor_found.y_full;
-        // Correct w/d
-        struct point_tfloat width_corr_found;
-        struct point_tf found_dist_sum; found_dist_sum.x_full = 0; found_dist_sum.y_full = 0;
-        for(uint16_t i=0;i<opticflow->n_new_corners;i++){
-          found_dist_sum.x_full += abs((int)opticflow->fast9_ret_corners[i+result->tracked_cnt].x_full-(int)opticflow->cg_corners.x_full);
-          found_dist_sum.y_full += abs((int)opticflow->fast9_ret_corners[i+result->tracked_cnt].y_full-(int)opticflow->cg_corners.y_full);
-        }
-        width_corr_found.x_full = opticflow->av_dist.x_full*((float)n_new)/
-            (opticflow->av_dist.x_full*(float)opticflow->previous_tracked_cnt + (float)found_dist_sum.x_full);
-        width_corr_found.y_full = opticflow->av_dist.y_full*(n_new)/
-            (opticflow->av_dist.y_full*opticflow->previous_tracked_cnt + (float)found_dist_sum.y_full);
-        opticflow->width_dist_ratio *= width_corr_found.x_full;
-        opticflow->height_dist_ratio *= width_corr_found.y_full;
-        // For next loop and rest of the calculations, new corners now belong to the list
-        result->tracked_cnt += opticflow->n_new_corners;
-        opticflow->n_new_corners = 0;
-      }
-      // Find average position of corners
-      struct point_tf av_corn_pos;
-      av_corn_pos.x_full = 0, av_corn_pos.y_full = 0;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        av_corn_pos.x_full += opticflow->fast9_ret_corners[i].x_full;
-        av_corn_pos.y_full += opticflow->fast9_ret_corners[i].y_full;
-      }
-      opticflow->cg_corners.x_full = av_corn_pos.x_full/result->tracked_cnt;
-      opticflow->cg_corners.y_full = av_corn_pos.y_full/result->tracked_cnt;
-      // Propagate ROI based on average position of corners
-      opticflow->roi_center.x_full = (uint16_t)((int32_t)opticflow->cg_corners.x_full+opticflow->offset_roi_cg.x_full);
-      opticflow->roi_center.y_full = (uint16_t)((int32_t)opticflow->cg_corners.y_full+opticflow->offset_roi_cg.y_full);
-      opticflow->roi_center.x = opticflow->roi_center.x_full/opticflow->subpixel_factor;
-      opticflow->roi_center.y = opticflow->roi_center.y_full/opticflow->subpixel_factor;
-      // Find average distance to corner cg
-      struct point_tf av_dist; av_dist.x_full = 0; av_dist.y_full = 0;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        av_dist.x_full += (uint32_t)abs((int32_t)opticflow->fast9_ret_corners[i].x_full-(int32_t)opticflow->cg_corners.x_full);
-        av_dist.y_full += (uint32_t)abs((int32_t)opticflow->fast9_ret_corners[i].y_full-(int32_t)opticflow->cg_corners.y_full);
-      }
-      opticflow->av_dist.x_full = (float)av_dist.x_full/(float)result->tracked_cnt;
-      opticflow->av_dist.y_full = (float)av_dist.y_full/(float)result->tracked_cnt;
-      // Update ROI width based on new average distance
-      opticflow->roiw = opticflow->width_dist_ratio*opticflow->av_dist.x_full/opticflow->subpixel_factor;
-      opticflow->roih = opticflow->height_dist_ratio*opticflow->av_dist.y_full/opticflow->subpixel_factor;
-      /*printf("New roi dimensions = (%f,%f)\n",opticflow->roiw,opticflow->roih);*/
-      // Update ROI size based on the difference in movement between the left and right and top and bottom due to divergence
-      // Divergence is defined opposite to the usual
-      // roi[0].dx - roi[2].dx = (roi[0].x-roi[2].x)*div_size/subpixel = roiw*div_size/subpixel, this should logically be the increase in size
-      // Update all roi features
-      // Check which condition is most stringent: being within the window or the roi
-      opticflow->roi[0] = (uint16_t)MAX(opticflow->min_dist_from_edge,((int16_t)opticflow->roi_center.x_full -
-          (int16_t)(opticflow->roiw*opticflow->subpixel_factor/2))/(int16_t)opticflow->subpixel_factor);
-      opticflow->roi[2] = (uint16_t)MIN((int16_t)opticflow->img_gray.w-opticflow->min_dist_from_edge,((int16_t)opticflow->roi_center.x_full +
-          (int16_t)(opticflow->roiw*opticflow->subpixel_factor/2))/(int16_t)opticflow->subpixel_factor);
-      opticflow->roi[1] = (uint16_t)MAX(opticflow->min_dist_from_edge,((int16_t)opticflow->roi_center.y_full -
-          (int16_t)(opticflow->roih*opticflow->subpixel_factor/2))/(int16_t)opticflow->subpixel_factor);
-      opticflow->roi[3] = (uint16_t)MIN((int16_t)opticflow->img_gray.h-opticflow->min_dist_from_edge,((int16_t)opticflow->roi_center.y_full +
-          (int16_t)(opticflow->roih*opticflow->subpixel_factor/2))/(int16_t)opticflow->subpixel_factor);
-      // Prepare for next iteration
-      opticflow->previous_tracked_cnt = result->tracked_cnt;
-      for (uint16_t i = 0; i < result->tracked_cnt; i++) {
-        opticflow->previous_fast9_ret_corners[i].x_full = opticflow->fast9_ret_corners[i].x_full;
-        opticflow->previous_fast9_ret_corners[i].y_full = opticflow->fast9_ret_corners[i].y_full;
-        opticflow->previous_fast9_ret_corners[i].x = opticflow->fast9_ret_corners[i].x;
-        opticflow->previous_fast9_ret_corners[i].y = opticflow->fast9_ret_corners[i].y;
-      }
-    }
-    // Check if width takes up to big a part of the screen, if so reinitialize for the next frame
-    if(opticflow->roiw > 0.75*opticflow->img_gray.w || opticflow->roih > 0.75*opticflow->img_gray.h){
-      opticflow->object_tracking_set = true;
-      opticflow->object_tracking_reset = true;
-    }
-    // Display ROI
-    struct point_tf roi_to_show[4];
-    roi_to_show[0].x = opticflow->roi[0];
-    roi_to_show[0].y = opticflow->roi[1];
-    roi_to_show[1].x = opticflow->roi[0];
-    roi_to_show[1].y = opticflow->roi[3];
-    roi_to_show[2].x = opticflow->roi[2];
-    roi_to_show[2].y = opticflow->roi[1];
-    roi_to_show[3].x = opticflow->roi[2];
-    roi_to_show[3].y = opticflow->roi[3];
-#if OPTICFLOW_SHOW_CORNERS
-  static uint8_t white[4] = {127, 255, 127, 255};
-  image_show_points_color(img, roi_to_show, 4, white);
-#endif
-  }
-
-
   // Determine quality of noise measurement for state filter
   //TODO develop a noise model based on groundtruth
-  //result->noise_measurement = 1 - (float)result->tracked_cnt / ((float)opticflow->max_track_corners * 1.25f);
+  //result->noise_measurement = 1 - (float)opticflow->tracked_cnt / ((float)opticflow->max_track_corners * 1.25f);
   result->noise_measurement = 0.25;
+  result->tracked_cnt = opticflow->tracked_cnt;
+  result->corner_cnt = opticflow->corner_cnt;
 
-  free(vectors);
   image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
+  free(vectors);
 
   return true;
+}
+
+static void remove_bad_vectors(struct opticflow_t *opticflow, struct flow_t *vectors)
+{
+  if(opticflow->feature_management){
+    if(opticflow->corner_cnt_prev){
+      // remove bad vectors from the previously tracked points first, do two pass
+      uint16_t good_vectors[opticflow->corner_cnt_prev];
+      uint16_t good_counter = 0;
+      for (int16_t i = 0; i < (int16_t)opticflow->corner_cnt_prev; i++) {
+        if (vectors[i].error < LARGE_FLOW_ERROR){
+          good_vectors[good_counter++] = i;
+        }
+      }
+      // get total bad for previous set of points
+      for (int16_t i = 0; i + 1 < (int16_t)opticflow->corner_cnt_prev; i++) {
+        if (vectors[i].error >= LARGE_FLOW_ERROR){
+          good_counter--;
+          // move last element into this position effectively deleting point
+          opticflow->tracked_cnt--;
+          memcpy(&(vectors[i]), &(vectors[good_vectors[good_counter]]), sizeof(struct flow_t));
+          memcpy(&(opticflow->fast9_ret_corners[i]), &(opticflow->fast9_ret_corners[good_vectors[good_counter]]), sizeof(struct point_t));
+          opticflow->corner_cnt_prev--;
+          memcpy(&(opticflow->fast9_ret_corners_prev[i]), &(opticflow->fast9_ret_corners_prev[good_vectors[good_counter]]), sizeof(struct point_t));
+          // don't need to check this again, we know it's good, so no i--
+        }
+      }
+    }
+
+    // remove all rest of the bad vectors
+    uint16_t start = opticflow->corner_cnt_prev >= 1 ? opticflow->corner_cnt_prev - 1 : 0;
+    for (int16_t i = start; i + 1 < (int16_t)opticflow->tracked_cnt; i++) {
+      if (vectors[i].error >= LARGE_FLOW_ERROR){
+        // move last element into this position effectively deleting point
+        opticflow->tracked_cnt--;
+        memcpy(&(vectors[i]), &(vectors[opticflow->tracked_cnt]), sizeof(struct flow_t));
+        memcpy(&(opticflow->fast9_ret_corners[i]), &(opticflow->fast9_ret_corners[opticflow->tracked_cnt]), sizeof(struct point_t));
+        i--;
+      }
+    }
+    // check final vector
+    if (opticflow->corner_cnt_prev && vectors[opticflow->corner_cnt_prev - 1].error >= LARGE_FLOW_ERROR){
+      opticflow->corner_cnt_prev--;
+    }
+  } else {
+    // remove all bad vectors
+    for (int16_t i = 0; i + 1 < (int16_t)opticflow->tracked_cnt; i++) {
+      if (vectors[i].error >= LARGE_FLOW_ERROR){
+        // move last element into this position effectively deleting point
+        opticflow->tracked_cnt--;
+        memcpy(&(vectors[i]), &(vectors[opticflow->tracked_cnt]), sizeof(struct flow_t));
+        i--;
+      }
+    }
+  }
+
+  // check final vector
+  if (opticflow->tracked_cnt && vectors[opticflow->tracked_cnt - 1].error >= LARGE_FLOW_ERROR){
+    // move last element into this position effectively deleting point
+    opticflow->tracked_cnt--;
+  }
+}
+/*
+ * Will check if there is a corner in the vicinity of that predicted by the flow
+ */
+static void check_tracked_points_corners(struct opticflow_t *opticflow, struct flow_t *vectors)
+{
+  uint16_t local_roi[4];  // local search roi
+  uint16_t local_corners_size = 9;  // max corners to find in roi
+  struct point_t *local_corners = calloc(local_corners_size, sizeof(struct point_t)); // storage for corners found
+
+  for (int16_t i = 0; i < opticflow->tracked_cnt; i++) {
+    if (vectors[i].error >= LARGE_FLOW_ERROR){
+      continue;
+    }
+
+    // update corner location based on optical flow estimate of all successfully tracked points
+    opticflow->fast9_ret_corners[i].x = (uint32_t)roundf((float)(vectors[i].pos.x + vectors[i].flow_x)/opticflow->subpixel_factor);
+    opticflow->fast9_ret_corners[i].y = (uint32_t)roundf((float)(vectors[i].pos.y + vectors[i].flow_y)/opticflow->subpixel_factor);
+
+    // check if point not too close to image edge
+    static uint8_t window = 2;
+    if (opticflow->fast9_ret_corners[i].x <= window || opticflow->fast9_ret_corners[i].y <= window ||
+        opticflow->fast9_ret_corners[i].x + window >= opticflow->img_gray.w || opticflow->fast9_ret_corners[i].y + window >= opticflow->img_gray.h){
+      vectors[i].error = LARGE_FLOW_ERROR;
+      continue;
+    }
+
+    // define roi for corner search
+    local_roi[0] = opticflow->fast9_ret_corners[i].x - window;
+    local_roi[1] = opticflow->fast9_ret_corners[i].y - window;
+    local_roi[2] = opticflow->fast9_ret_corners[i].x + window;
+    local_roi[3] = opticflow->fast9_ret_corners[i].y + window;
+
+    // try to redetect corners in search area
+    uint16_t local_corners_found = 0;
+    fast9_detect(&opticflow->img_gray, opticflow->fast9_threshold, 1, 0, 0,
+        &local_corners_found, &local_corners_size, &local_corners, local_roi);
+
+    if (local_corners_found) {
+      // update corner location for next iteration
+      float min_dist_squared = (2 * window + 1) * (2 * window + 1);
+      float diff_x, diff_y, dist_squared;
+      uint16_t min_ind = 0;
+      for(uint16_t j = 0; j < local_corners_found; j++){
+        diff_x = (float)opticflow->fast9_ret_corners[i].x - (float)local_corners[j].x;
+        diff_y = (float)opticflow->fast9_ret_corners[i].y - (float)local_corners[j].y;
+        dist_squared = diff_x*diff_x + diff_y*diff_y;
+        if (dist_squared < min_dist_squared){
+          min_dist_squared = dist_squared;
+          min_ind = j;
+        }
+      }
+      // Update fast corners
+      opticflow->fast9_ret_corners[i].x = local_corners[min_ind].x;
+      opticflow->fast9_ret_corners[i].y = local_corners[min_ind].y;
+
+      // update vectors with local_corners[min_ind].x - opticflow->fast9_ret_corners[i].x;
+      //vectors[i].flow_x += local_corners[min_ind].x*opticflow->subpixel_factor - opticflow->fast9_ret_corners[i].x_full;
+      //vectors[i].flow_y += local_corners[min_ind].y*opticflow->subpixel_factor - opticflow->fast9_ret_corners[i].y_full;
+    } else {
+      vectors[i].error = LARGE_FLOW_ERROR;
+    }
+  }
+  free(local_corners);
+}
+
+void check_back_flow(struct opticflow_t *opticflow, struct flow_t *vectors)
+{
+  // copy corners
+  struct point_t *my_corners = calloc(opticflow->tracked_cnt, sizeof(struct point_t));
+
+  // initialize corners at the tracked positions:
+  for (int i = 0; i < opticflow->tracked_cnt; i++) {
+    my_corners[i].x = (uint32_t)roundf((float)(vectors[i].pos.x + vectors[i].flow_x)/opticflow->subpixel_factor);
+    my_corners[i].y = (uint32_t)roundf((float)(vectors[i].pos.y + vectors[i].flow_y)/opticflow->subpixel_factor);
+  }
+
+  // present the images in the opposite order:
+  uint16_t back_track_cnt = opticflow->tracked_cnt;
+  struct flow_t *back_vectors = opticFlowLK(&opticflow->prev_img_gray, &opticflow->img_gray, my_corners,
+                                &back_track_cnt, opticflow->window_size / 2, opticflow->subpixel_factor, opticflow->max_iterations,
+                                opticflow->threshold_vec, opticflow->tracked_cnt, opticflow->pyramid_level, 1);
+
+  float back_x, back_y, diff_x, diff_y, dist_squared;
+  float back_track_threshold = 200;
+
+  for (int i = 0; i < opticflow->tracked_cnt; i++) {
+    if (vectors[i].error >= LARGE_FLOW_ERROR){
+      continue;
+    }
+    if (back_vectors[i].error < LARGE_FLOW_ERROR) {
+      back_x = back_vectors[i].pos.x + back_vectors[i].flow_x;
+      back_y = back_vectors[i].pos.y + back_vectors[i].flow_y;
+      diff_x = back_x - vectors[i].pos.x;
+      diff_y = back_y - vectors[i].pos.y;
+      dist_squared = diff_x * diff_x + diff_y * diff_y;
+      if (dist_squared > back_track_threshold) {
+        vectors[i].error = LARGE_FLOW_ERROR;
+      }
+    } else {
+      vectors[i].error = LARGE_FLOW_ERROR;
+    }
+  }
+  free(my_corners);
+  free(back_vectors);
 }
 
 /*
@@ -998,7 +831,7 @@ static struct flow_t *predict_flow_vectors(struct flow_t *flow_vectors, uint16_t
 {
 
   // reserve memory for the predicted flow vectors:
-  struct flow_t *predicted_flow_vectors = malloc(sizeof(struct flow_t) * n_points);
+  struct flow_t *predicted_flow_vectors = calloc(n_points, sizeof(struct flow_t));
 
   float K[9] = {OPTICFLOW_CAMERA.camera_intrinsics.focal_x, 0.0f, OPTICFLOW_CAMERA.camera_intrinsics.center_x,
                 0.0f, OPTICFLOW_CAMERA.camera_intrinsics.focal_y, OPTICFLOW_CAMERA.camera_intrinsics.center_y,
@@ -1062,50 +895,56 @@ static struct flow_t *predict_flow_vectors(struct flow_t *flow_vectors, uint16_t
 /* manage_flow_features - Update list of corners to be tracked by LK
  * Remembers previous points and tries to find new points in less dense
  * areas of the image first.
- *
  */
-static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow_result_t *result, uint16_t *roi)
+static void manage_flow_features(struct opticflow_t *opticflow, uint16_t *roi)
 {
-  // first check if corners have not moved too close together due to flow:
-  int16_t c1 = 0;
-  while (c1 < (int16_t)result->corner_cnt - 1) {
-    bool exists = false;
-    for (int16_t i = c1 + 1; i < result->corner_cnt; i++) {
-      if (abs((int16_t)opticflow->fast9_ret_corners[c1].x - (int16_t)opticflow->fast9_ret_corners[i].x) <
-          opticflow->fast9_min_distance / 2
-          && abs((int16_t)opticflow->fast9_ret_corners[c1].y - (int16_t)opticflow->fast9_ret_corners[i].y) <
-          opticflow->fast9_min_distance / 2) {
-        // if too close, replace the corner with the last one in the list:
-        opticflow->fast9_ret_corners[c1].x = opticflow->fast9_ret_corners[result->corner_cnt - 1].x;
-        opticflow->fast9_ret_corners[c1].y = opticflow->fast9_ret_corners[result->corner_cnt - 1].y;
-        opticflow->fast9_ret_corners[c1].count = opticflow->fast9_ret_corners[result->corner_cnt - 1].count;
-        opticflow->fast9_ret_corners[c1].x_full = opticflow->fast9_ret_corners[result->corner_cnt - 1].x_full;
-        opticflow->fast9_ret_corners[c1].y_full = opticflow->fast9_ret_corners[result->corner_cnt - 1].y_full;
-        // decrease the number of corners:
-        result->corner_cnt--;
-        exists = true;
+  opticflow->corner_cnt = opticflow->tracked_cnt;
+  // remove tracked corners that have drifted too close together or outside of roi
+  for (int16_t c1 = 0; c1 + 1 < (int16_t)opticflow->corner_cnt; c1++) {
+    if (opticflow->fast9_ret_corners[c1].x < roi[0] || opticflow->fast9_ret_corners[c1].x > roi[2]||
+        opticflow->fast9_ret_corners[c1].y < roi[1] || opticflow->fast9_ret_corners[c1].y > roi[3]){
+      // corner has drifted out of roi
+      opticflow->corner_cnt--;
+      memcpy(&(opticflow->fast9_ret_corners[c1]), &(opticflow->fast9_ret_corners[opticflow->corner_cnt]), sizeof(struct point_t));
+      // check this location again
+      c1--;
+      continue;
+    }
+    for (int16_t i = c1 + 1; i < opticflow->corner_cnt; i++) {
+      if (abs(opticflow->fast9_ret_corners[c1].x - opticflow->fast9_ret_corners[i].x) < opticflow->fast9_min_distance / 2
+          && abs(opticflow->fast9_ret_corners[c1].y - opticflow->fast9_ret_corners[i].y) < opticflow->fast9_min_distance / 2) {
+        // if too close, replace the corner with the last one in the list, effectively removing the point:
+        opticflow->corner_cnt--;
+        memcpy(&(opticflow->fast9_ret_corners[c1]), &(opticflow->fast9_ret_corners[opticflow->corner_cnt]), sizeof(struct point_t));
+        // check this location again
+        c1--;
         // no further checking required for the removed corner
         break;
       }
     }
-    // if the corner has been replaced, the new corner in position c1 has to be checked again:
-    if (!exists) { c1++; }
+  }
+  if (opticflow->corner_cnt &&
+      (opticflow->fast9_ret_corners[opticflow->corner_cnt -1].x < roi[0] || opticflow->fast9_ret_corners[opticflow->corner_cnt - 1].x > roi[2]||
+        opticflow->fast9_ret_corners[opticflow->corner_cnt -1].y < roi[1] || opticflow->fast9_ret_corners[opticflow->corner_cnt - 1].y > roi[3])){
+    opticflow->corner_cnt--;
   }
 
-  // no need for "per region" re-detection when there are no previous corners
-  if ((opticflow->object_tracking) && ((!opticflow->fast9_region_detect) || (result->corner_cnt == 0))) {
-    fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                opticflow->fast9_padding, opticflow->fast9_padding, &result->corner_cnt,
-                &opticflow->fast9_rsize,
-                &opticflow->fast9_ret_corners,
-                roi);
-  } else if ((!opticflow->fast9_region_detect) || (result->corner_cnt == 0)) {
-    fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                 opticflow->fast9_padding, opticflow->fast9_padding, &result->corner_cnt,
-                 &opticflow->fast9_rsize,
-                 &opticflow->fast9_ret_corners,
-                 roi);
+  // make copy of corners that will be tracked from previous step
+  if (opticflow->fast9_rsize > opticflow->fast9_rsize_prev){
+    opticflow->fast9_ret_corners_prev = realloc(opticflow->fast9_ret_corners_prev, opticflow->fast9_rsize * sizeof(struct point_t));
+  }
+  memcpy(opticflow->fast9_ret_corners_prev, opticflow->fast9_ret_corners, opticflow->corner_cnt * sizeof(struct point_t));
+  opticflow->corner_cnt_prev = opticflow->corner_cnt;
 
+  if (opticflow->corner_cnt > opticflow->max_track_corners / 2){
+    return;
+  }
+  // allocation new corners
+  // no need for "per region" re-detection when there are no previous corners
+  if ((!opticflow->fast9_region_detect) || (opticflow->corner_cnt == 0)) {
+    fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
+                 opticflow->fast9_padding, opticflow->fast9_padding, &opticflow->corner_cnt,
+                 &opticflow->fast9_rsize, &opticflow->fast9_ret_corners, roi);
   } else {
     // allocating memory and initializing the 2d array that holds the number of corners per region and its index (for the sorting)
     uint16_t **region_count = calloc(opticflow->fast9_num_regions, sizeof(uint16_t *));
@@ -1114,10 +953,9 @@ static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow
       region_count[i][0] = 0;
       region_count[i][1] = i;
     }
-
     uint16_t root_regions = (uint16_t)sqrtf((float)opticflow->fast9_num_regions);
     int region_index;
-    for (uint16_t i = 0; i < result->corner_cnt; i++) {
+    for (uint16_t i = 0; i < opticflow->corner_cnt; i++) {
       region_index = (opticflow->fast9_ret_corners[i].x * root_regions / opticflow->prev_img_gray.w
          + root_regions * (opticflow->fast9_ret_corners[i].y * root_regions / opticflow->prev_img_gray.h));
       region_index = (region_index < opticflow->fast9_num_regions) ? region_index : opticflow->fast9_num_regions - 1;
@@ -1128,14 +966,14 @@ static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow
     qsort(region_count, opticflow->fast9_num_regions, sizeof(region_count[0]), cmp_array);
 
     // Detecting corners from the region with the less to the one with the most, until a desired total is reached.
-    for (uint16_t i = 0; i < opticflow->fast9_num_regions && result->corner_cnt < 2 * opticflow->max_track_corners; i++) {
+    for (uint16_t i = 0; i < opticflow->fast9_num_regions && opticflow->corner_cnt < 2 * opticflow->max_track_corners; i++) {
       // Find the boundaries of the region of interest
       roi[0] = (region_count[i][1] % root_regions) * (opticflow->prev_img_gray.w / root_regions);
       roi[1] = (region_count[i][1] / root_regions) * (opticflow->prev_img_gray.h / root_regions);
       roi[2] = roi[0] + (opticflow->prev_img_gray.w / root_regions);
       roi[3] = roi[1] + (opticflow->prev_img_gray.h / root_regions);
 
-      struct point_tf *new_corners = calloc(opticflow->fast9_rsize, sizeof(struct point_tf));
+      struct point_t *new_corners = calloc(opticflow->fast9_rsize, sizeof(struct point_t));
       uint16_t new_count = 0;
 
       fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
@@ -1145,7 +983,7 @@ static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow
       // check that no identified points already exist in list
       for (uint16_t j = 0; j < new_count; j++) {
         bool exists = false;
-        for (uint16_t k = 0; k < result->corner_cnt; k++) {
+        for (uint16_t k = 0; k < opticflow->corner_cnt; k++) {
           if (abs((int16_t)new_corners[j].x - (int16_t)opticflow->fast9_ret_corners[k].x) < (int16_t)opticflow->fast9_min_distance
               && abs((int16_t)new_corners[j].y - (int16_t)opticflow->fast9_ret_corners[k].y) < (int16_t)
               opticflow->fast9_min_distance) {
@@ -1154,14 +992,9 @@ static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow
           }
         }
         if (!exists) {
-          opticflow->fast9_ret_corners[result->corner_cnt].x = new_corners[j].x;
-          opticflow->fast9_ret_corners[result->corner_cnt].y = new_corners[j].y;
-          opticflow->fast9_ret_corners[result->corner_cnt].count = 0;
-          opticflow->fast9_ret_corners[result->corner_cnt].x_full = new_corners[j].x * opticflow->subpixel_factor;
-          opticflow->fast9_ret_corners[result->corner_cnt].y_full = new_corners[j].y * opticflow->subpixel_factor;
-          result->corner_cnt++;
-
-          if (result->corner_cnt >= opticflow->fast9_rsize) {
+          memcpy(&(opticflow->fast9_ret_corners[opticflow->corner_cnt]), &(new_corners[j]), sizeof(struct point_t));
+          opticflow->corner_cnt++;
+          if (opticflow->corner_cnt >= opticflow->fast9_rsize) {
             break;
           }
         }
@@ -1172,6 +1005,40 @@ static void manage_flow_features(struct opticflow_t *opticflow, struct opticflow
     for (uint16_t i = 0; i < opticflow->fast9_num_regions; i++) {
       free(region_count[i]);
     }
+    free(region_count);
+  }
+}
+
+void compute_global_flow(struct flow_t *vectors, struct opticflow_t *opticflow, struct opticflow_result_t *result)
+{
+  if (opticflow->tracked_cnt < 1){
+    result->flow_x = 0;
+    result->flow_y = 0;
+    return;
+  }
+
+  // compute flow from vectors
+  if(0){//opticflow->tracked_cnt > opticflow->max_track_corners / 2){
+    // if you have enough points, a median is a good estimate of flow
+    qsort(vectors, result->tracked_cnt, sizeof(struct flow_t), cmp_flow);
+    if (result->tracked_cnt % 2) {
+      // Take the median point
+      result->flow_x = vectors[result->tracked_cnt / 2].flow_x;
+      result->flow_y = vectors[result->tracked_cnt / 2].flow_y;
+    } else {
+      // Take the average of the 2 median points
+      result->flow_x = (vectors[result->tracked_cnt / 2 - 1].flow_x + vectors[result->tracked_cnt / 2].flow_x) / 2;
+      result->flow_y = (vectors[result->tracked_cnt / 2 - 1].flow_y + vectors[result->tracked_cnt / 2].flow_y) / 2;
+    }
+  } else {
+    // determine the mean for the vector:
+    float sum_x = 0.f, sum_y = 0.f;
+    for (uint32_t i = 0; i < opticflow->tracked_cnt; i++) {
+      sum_x += (float)vectors[i].flow_x;
+      sum_y += (float)vectors[i].flow_y;
+    }
+    result->flow_x = (int32_t)(sum_x / opticflow->tracked_cnt);
+    result->flow_y = (int32_t)(sum_y / opticflow->tracked_cnt);
   }
 }
 
@@ -1292,8 +1159,8 @@ bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img,
   //Fill up the results optic flow to be on par with LK_fast9
   result->flow_der_x =  result->flow_x;
   result->flow_der_y =  result->flow_y;
-  result->corner_cnt = getAmountPeaks(edge_hist_x, 500 , img->w);
-  result->tracked_cnt = getAmountPeaks(edge_hist_x, 500 , img->w);
+  opticflow->corner_cnt = getAmountPeaks(edge_hist_x, 500 , img->w);
+  opticflow->tracked_cnt = getAmountPeaks(edge_hist_x, 500 , img->w);
   result->divergence = -1.0 * (float)edgeflow.div_x /
                        RES; // Also multiply the divergence with -1.0 to make it on par with the LK algorithm of
   result->div_size =
@@ -1345,47 +1212,6 @@ bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img,
   return true;
 }
 
-
-/**
- * Run the optical flow on a new image frame
- * @param[in] *opticflow The opticalflow structure that keeps track of previous images
- * @param[in] *state The state of the drone
- * @param[in] *img The image frame to calculate the optical flow from
- * @param[out] *result The optical flow result
- */
-bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img,
-                          struct opticflow_result_t *result)
-{
-  bool flow_successful = false;
-  // A switch counter that checks in the loop if the current method is similar,
-  // to the previous (for reinitializing structs)
-  static int8_t switch_counter = -1;
-  if (switch_counter != opticflow->method) {
-    opticflow->just_switched_method = true;
-    switch_counter = opticflow->method;
-    // Clear the static result
-    memset(result, 0, sizeof(struct opticflow_result_t));
-  } else {
-    opticflow->just_switched_method = false;
-  }
-
-  // Switch between methods (0 = fast9/lukas-kanade, 1 = EdgeFlow)
-  if (opticflow->method == 0) {
-    flow_successful = calc_fast9_lukas_kanade(opticflow, img, result);
-  } else if (opticflow->method == 1) {
-    flow_successful = calc_edgeflow_tot(opticflow, img, result);
-  }
-
-  /* Rotate velocities from camera frame coordinates to body coordinates for control
-  * IMPORTANT!!! This frame to body orientation should be the case for the Parrot
-  * ARdrone and Bebop, however this can be different for other quadcopters
-  * ALWAYS double check!
-  */
-  float_rmat_transp_vmult(&result->vel_body, &body_to_cam, &result->vel_cam);
-
-  return flow_successful;
-}
-
 /**
  * Calculate the difference from start till finish
  * @param[in] *starttime The start time to calculate the difference from
@@ -1429,160 +1255,101 @@ static int cmp_array(const void *a, const void *b)
   return pa[0] - pb[0];
 }
 
-void check_for_features(struct opticflow_t *opticflow, struct opticflow_result_t *result)
-{
-  // Check if corners haven't moved too close to each other
-  int16_t c1 = 0;
-  while (c1 < (int16_t)result->corner_cnt - 1) {
-    bool exists = false;
-    for (int16_t i = c1 + 1; i < result->corner_cnt; i++) {
-      if (abs((int16_t)opticflow->fast9_ret_corners[c1].x - (int16_t)opticflow->fast9_ret_corners[i].x) <
-          opticflow->fast9_min_distance / 2
-          && abs((int16_t)opticflow->fast9_ret_corners[c1].y - (int16_t)opticflow->fast9_ret_corners[i].y) <
-          opticflow->fast9_min_distance / 2) {
-        // if too close, replace the corner with the last one in the list:
-        opticflow->fast9_ret_corners[c1].x = opticflow->fast9_ret_corners[result->corner_cnt - 1].x;
-        opticflow->fast9_ret_corners[c1].y = opticflow->fast9_ret_corners[result->corner_cnt - 1].y;
-        opticflow->fast9_ret_corners[c1].count = opticflow->fast9_ret_corners[result->corner_cnt - 1].count;
-        opticflow->fast9_ret_corners[c1].x_full = opticflow->fast9_ret_corners[result->corner_cnt - 1].x_full;
-        opticflow->fast9_ret_corners[c1].y_full = opticflow->fast9_ret_corners[result->corner_cnt - 1].y_full;
-        // decrease the number of corners:
-        result->corner_cnt--;
-        exists = true;
-        // no further checking required for the removed corner
-        break;
-      }
-    }
-    // if the corner has been replaced, the new corner in position c1 has to be checked again:
-    if (!exists) { c1++; }
-  }
-  // Look for new corners
-  // Define area to look in: should be in roi, but also somewhat centered in the image, since we don't
-  // want to lose it again right away
-  uint16_t new_corner_roi[4];
-  opticflow->new_corners_found = 0;
-  // Check which condition is most stringent
-  new_corner_roi[0] = (uint16_t)MAX(opticflow->min_dist_from_edge,(int16_t)opticflow->roi[0]);
-  new_corner_roi[2] = (uint16_t)MIN((int16_t)opticflow->img_gray.w-opticflow->min_dist_from_edge,(int16_t)opticflow->roi[2]);
-  new_corner_roi[1] = (uint16_t)MAX(opticflow->min_dist_from_edge,(int16_t)opticflow->roi[1]);
-  new_corner_roi[3] = (uint16_t)MIN((int16_t)opticflow->img_gray.h-opticflow->min_dist_from_edge,(int16_t)opticflow->roi[3]);
-  fast9_detect(&opticflow->img_gray, opticflow->fast9_threshold,opticflow->fast9_min_distance,
-       opticflow->fast9_padding, opticflow->fast9_padding, &opticflow->new_corners_found,
-       &opticflow->nr_of_new_corners_to_detect,
-       &opticflow->new_fast9_ret_corners,
-       new_corner_roi);
-  // Check which new corners are far away enough from the other corners to be selected
-  uint8_t non_double_corners = 0;
-  uint8_t index = 0;
-  // Fill random index array, so we don't only get corners close together
-  uint32_t rand_arr[opticflow->new_corners_found];
-  for (uint32_t i=0;i<opticflow->new_corners_found;i++){
-    rand_arr[i] = rand() % opticflow->new_corners_found;
-    if(i>0){
-      // Check that element is not already present in array
-      for (uint32_t j=0;j<i;j++){
-        if(rand_arr[i]==rand_arr[j]){
-          i--;
-          break;
-        }
-      }
-    }
-  }
-  uint8_t index_array[opticflow->n_new_corners];
-  // Check if while loop has to be broken, due to a lack of corners
-  opticflow->insufficient_corners = false;
-  while (non_double_corners < opticflow->n_new_corners){
-    // Select element in new_corners
-    bool exists = false;
-    uint32_t index_rand = rand_arr[index];
-    // Compare with every element in current array
-    for (uint8_t i=0;i<result->corner_cnt;i++){
-      // If distance too small break for loop and go to next element
-      if (abs((int16_t)opticflow->fast9_ret_corners[i].x - (int16_t)opticflow->new_fast9_ret_corners[index_rand].x) <
-                opticflow->fast9_min_distance / 2
-                && abs((int16_t)opticflow->fast9_ret_corners[i].y - (int16_t)opticflow->new_fast9_ret_corners[index_rand].y) <
-                opticflow->fast9_min_distance / 2) {
-        exists = true;
-        break;
-      }
-    }
-    // At end of for loop, not broken: add index to index_list
-    if (!exists){
-      index_array[non_double_corners]= index_rand;
-      non_double_corners++;
-    }
-    index++;
-    // If not enough non duplicate corners can be found
-    /*if (index >= opticflow->nr_of_new_corners_to_detect){*/
-    if (index >= opticflow->new_corners_found){
-      opticflow->n_new_corners = non_double_corners;
-      printf("Trying the break\n");
-      opticflow->insufficient_corners = true;
-      break;
-    }
-  }
-  if(opticflow->insufficient_corners){
-    opticflow->broken_in_row++;
-    if(opticflow->broken_in_row>1){
-      printf("Final landing forced, due to lack of corners\n");
-      opticflow->landing = true;
-    }
-  } else{
-    opticflow->broken_in_row = 0;
-  }
-  // Add them at the end of the corner array
-  for (uint8_t i=0;i<opticflow->n_new_corners;i++){
-    opticflow->fast9_ret_corners[result->corner_cnt+i].x = opticflow->new_fast9_ret_corners[index_array[i]].x;
-    opticflow->fast9_ret_corners[result->corner_cnt+i].y = opticflow->new_fast9_ret_corners[index_array[i]].y;
-    opticflow->fast9_ret_corners[result->corner_cnt+i].x_full = opticflow->new_fast9_ret_corners[index_array[i]].x*opticflow->subpixel_factor;
-    opticflow->fast9_ret_corners[result->corner_cnt+i].y_full = opticflow->new_fast9_ret_corners[index_array[i]].y*opticflow->subpixel_factor;
-  }
+// Initialize object to be tracked
+void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t *tracker){
+  tracker->roi_defined = false;
+
+  tracker->roi_centriod_x = 120;
+  tracker->roi_centriod_y = 120;
+  tracker->roi_h = 160;
+  tracker->roi_w = 160;
+
+  tracker->roi[0] = (uint16_t)Max(0, tracker->roi_centriod_x - tracker->roi_w/2);
+  tracker->roi[1] = (uint16_t)Max(0, tracker->roi_centriod_y - tracker->roi_h/2);
+  tracker->roi[2] = (uint16_t)(tracker->roi_centriod_x + tracker->roi_w/2);
+  tracker->roi[3] = (uint16_t)(tracker->roi_centriod_y + tracker->roi_h/2);
 }
 
-// Initialize object to be tracked
-void init_object_tracking(struct opticflow_t *opticflow){
-  /*opticflow->nr_of_object_corners = NR_OF_CORNERS_TO_TRACK;*/
-  //opticflow->max_track_corners = NR_OF_CORNERS_TO_TRACK;
-  opticflow->object_tracking_set = false;
+void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct object_tracker_t *tracker)
+{
+  if(tracker->roi_defined){
+    // todo what if all points lost... use optical flow?
+    if(opticflow->corner_cnt_prev > 3){
+        // let us separate change in point locations into change due to motion and change due to lost/added points
+      float flow_sum_x = 0.f, flow_sum_y = 0.f;  // sum of flow
+      float centroid_sum_x = 0.f, centroid_sum_y = 0.f;
+      float centroid_sum_x_prev = 0.f, centroid_sum_y_prev = 0.f;
+      for (uint16_t i = 0; i < opticflow->corner_cnt_prev; i++) {
+        // get displacement of point
+        flow_sum_x += (int32_t)opticflow->fast9_ret_corners[i].x - (int32_t)opticflow->fast9_ret_corners_prev[i].x;
+        flow_sum_y += (int32_t)opticflow->fast9_ret_corners[i].y - (int32_t)opticflow->fast9_ret_corners_prev[i].y;
 
-  opticflow->actfast_long_step = OPTICFLOW_ACTFAST_LONG_STEP_OBJECT;
-  opticflow->actfast_short_step = OPTICFLOW_ACTFAST_SHORT_STEP_OBJECT;
+        // get sum of distance
+        centroid_sum_x += opticflow->fast9_ret_corners[i].x;
+        centroid_sum_y += opticflow->fast9_ret_corners[i].y;
 
-  // Define region of interest at initialization
-  opticflow->offset_defined = false;
-  if(!opticflow->object_tracking_reset){
-    opticflow->roi_center.x = opticflow->roi_center_init.x;
-    opticflow->roi_center.y = opticflow->roi_center_init.y;
-    opticflow->roih = opticflow->roih_init;
-    opticflow->roiw = opticflow->roiw_init;
-    struct EnuCoor_f *enu = stateGetPositionEnu_f();
-    struct FloatEulers *eulers = stateGetNedToBodyEulers_f();
-    opticflow->start_pos.x = enu->x;opticflow->start_pos.y = enu->y;opticflow->start_pos.z = enu->z;
-    opticflow->start_angles.phi = eulers->phi;
-    opticflow->start_angles.theta = eulers->theta;
-    opticflow->start_angles.psi = eulers->psi;
+        centroid_sum_x_prev += opticflow->fast9_ret_corners_prev[i].x;
+        centroid_sum_y_prev += opticflow->fast9_ret_corners_prev[i].y;
+      }
+      // update roi location
+      tracker->roi_centriod_x += flow_sum_x / opticflow->corner_cnt_prev;
+      tracker->roi_centriod_y += flow_sum_y / opticflow->corner_cnt_prev;
+
+      float centroid_x = centroid_sum_x / opticflow->corner_cnt_prev;
+      float centroid_y = centroid_sum_y / opticflow->corner_cnt_prev;
+
+      float centroid_x_prev = centroid_sum_x_prev / opticflow->corner_cnt_prev;
+      float centroid_y_prev = centroid_sum_y_prev / opticflow->corner_cnt_prev;
+
+      // compute change in 1st moment of inertia
+      float change_sum = 0.f;
+      float diff_x, diff_y;
+      float dist_1, dist_2;
+      uint32_t sum = 0;
+      for (uint16_t i = 0; i < opticflow->corner_cnt_prev; i++) {
+        diff_x = opticflow->fast9_ret_corners_prev[i].x - centroid_x_prev;
+        diff_y = opticflow->fast9_ret_corners_prev[i].y - centroid_y_prev;
+        dist_1 = sqrtf(diff_x * diff_x + diff_y * diff_y);
+
+        diff_x = opticflow->fast9_ret_corners[i].x - centroid_x;
+        diff_y = opticflow->fast9_ret_corners[i].y - centroid_y;
+        dist_2 = sqrtf(diff_x * diff_x + diff_y * diff_y);
+        if (dist_1 > 1e-5){
+          change_sum +=  dist_2 / dist_1;
+          sum++;
+        }
+      }
+
+      if (sum){
+        // update roi size
+        float scaler = change_sum/sum;
+        //printf("x %.2f, y %.2f, w %.2f, h %.2f, change %f %f, %f %f\n", tracker->roi_centriod_x, tracker->roi_centriod_y, tracker->roi_w, tracker->roi_h,
+        //    change_sum/sum, tracker->roi_w*scaler, tracker->roi_h*scaler);
+        tracker->roi_w *= scaler;
+        tracker->roi_h *= scaler;
+      }
+    }
+
+    // update image roi
+    tracker->roi[0] = (uint16_t)Max(0, tracker->roi_centriod_x - tracker->roi_w/2);
+    tracker->roi[1] = (uint16_t)Max(0, tracker->roi_centriod_y - tracker->roi_h/2);
+    tracker->roi[2] = (uint16_t)Min(img->w-1, tracker->roi_centriod_x + tracker->roi_w/2);
+    tracker->roi[3] = (uint16_t)Min(img->h-1, tracker->roi_centriod_y + tracker->roi_h/2);
+
+    // draw roi on image
+    struct point_t roi_to_show[4];
+    roi_to_show[0].x = tracker->roi[0];
+    roi_to_show[0].y = tracker->roi[1];
+    roi_to_show[1].x = tracker->roi[0];
+    roi_to_show[1].y = tracker->roi[3];
+    roi_to_show[2].x = tracker->roi[2];
+    roi_to_show[2].y = tracker->roi[1];
+    roi_to_show[3].x = tracker->roi[2];
+    roi_to_show[3].y = tracker->roi[3];
+
+//#if OPTICFLOW_SHOW_CORNERS
+    static uint8_t white[4] = {127, 255, 127, 255};
+    image_show_points_color(img, roi_to_show, 4, white);
+//#endif
   }
-  else{
-    opticflow->t_new_window[opticflow->n_reinits] = get_sys_time_float();
-    opticflow->n_reinits++;
-    opticflow->roih = 0.5*opticflow->img_gray.h;
-    opticflow->roiw = 0.5*opticflow->img_gray.w;
-  }
-  opticflow->ibvs_init = true;
-
-  opticflow->min_dist_from_edge = 10;
-
-  opticflow->roi_center.x_full = opticflow->roi_center.x*opticflow->subpixel_factor;
-  opticflow->roi_center.y_full = opticflow->roi_center.y*opticflow->subpixel_factor;
-
-  opticflow->roi[0] = opticflow->roi_center.x-(uint16_t)opticflow->roiw/2;
-  opticflow->roi[1] = opticflow->roi_center.y-(uint16_t)opticflow->roih/2;
-  opticflow->roi[2] = opticflow->roi_center.x+(uint16_t)opticflow->roiw/2;
-  opticflow->roi[3] = opticflow->roi_center.y+(uint16_t)opticflow->roih/2;
-
-  opticflow->roi_full[0] = opticflow->roi[0]*opticflow->subpixel_factor;
-  opticflow->roi_full[1] = opticflow->roi[1]*opticflow->subpixel_factor;
-  opticflow->roi_full[2] = opticflow->roi[2]*opticflow->subpixel_factor;
-  opticflow->roi_full[3] = opticflow->roi[3]*opticflow->subpixel_factor;
-
 }

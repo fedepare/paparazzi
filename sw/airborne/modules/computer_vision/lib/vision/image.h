@@ -55,19 +55,19 @@ struct image_t {
 
 /* Image point structure */
 struct point_t {
-  uint32_t x;             ///< The x coordinate of the point
-  uint32_t y;             ///< The y coordinate of the point
+  int32_t x;             ///< The x coordinate of the point
+  int32_t y;             ///< The y coordinate of the point
   uint16_t count;         ///< Number of times the point has been tracked successfully
-  uint16_t x_sub;         ///< The x subpixel coordinate of the point
-  uint16_t y_sub;         ///< The y subpixel coordinate of the point
+  int16_t x_sub;         ///< The x subpixel coordinate of the point
+  int16_t y_sub;         ///< The y subpixel coordinate of the point
 };
 
 /* Vector structure for point differences */
 struct flow_t {
-  struct point_t pos;         ///< The original position the flow comes from
-  int16_t flow_x;             ///< The x direction flow in subpixels
-  int16_t flow_y;             ///< The y direction flow in subpixels
-  uint32_t error;             ///< The matching error in the tracking process
+  struct point_t pos;         ///< The original position the flow comes from in subpixels
+  int32_t flow_x;             ///< The x direction flow in subpixels
+  int32_t flow_y;             ///< The y direction flow in subpixels
+  uint32_t error;             ///< The matching error in the tracking process in subpixels
 };
 
 /* Image size structure */

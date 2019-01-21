@@ -45,7 +45,7 @@ struct agent_t agents[MAX_AGENTS];
  * @param[in] min_gradient The minimum gradient, in order to determine when to take a long or short step
  * @param[in] gradient_method: 0 = simple {-1, 0, 1}, 1 = Sobel {-1,0,1,-2,0,2,-1,0,1}
 */
-void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_tf **ret_corners,
+void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_t **ret_corners,
               uint16_t n_agents, uint16_t n_time_steps, float long_step, float short_step, int min_gradient, int gradient_method)
 {
 
@@ -179,7 +179,7 @@ void act_fast(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners
  * - succes_corners: array of indices of successfully detected corners
  * - border_corners: array of indices of corners located in the border of the image
  */
-
+/*
 void act_fast_object(struct image_t *img, uint8_t fast_threshold, uint16_t *num_corners, struct point_tf **ret_corners,
               uint16_t n_agents, uint16_t n_time_steps, float long_step, float short_step, int min_gradient, int gradient_method)
 {
@@ -203,7 +203,7 @@ void act_fast_object(struct image_t *img, uint8_t fast_threshold, uint16_t *num_
   /* ********************************************************
    * 2) loop over the agents, moving and checking for corners
    * ********************************************************/
-
+/*
   // gradient
   int dx, dy;
 
@@ -277,3 +277,4 @@ void act_fast_object(struct image_t *img, uint8_t fast_threshold, uint16_t *num_
   }
 }
 
+*/

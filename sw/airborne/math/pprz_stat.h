@@ -41,6 +41,14 @@ extern "C" {
  */
 extern int32_t mean_i(int32_t *array, uint32_t n_elements);
 
+/** Compute the median value of an array
+ *  This is implemented using floats to handle scaling of all variables
+ *  @param[in] *array The array
+ *  @param[in] n_elements Number of elements in the array
+ *  @return median
+ */
+int32_t median_i(int32_t *array, uint32_t n_elements);
+
 /** Compute the variance of an array of values (integer).
  *  The variance is a measure of how far a set of numbers is spread out
  *  V(X) = E[(X-E[X])^2] = E[X^2] - E[X]^2
@@ -78,6 +86,14 @@ extern float sum_f(float *array, uint32_t n_elements);
  */
 extern float mean_f(float *arr, uint32_t n_elements);
 
+/** Compute the median value of an array (float)
+ *  This is implemented using floats to handle scaling of all variables
+ *  @param[in] *array The array
+ *  @param[in] n_elements Number of elements in the array
+ *  @return median
+ */
+extern float median_f(float *array, uint32_t n_elements);
+
 /** Compute the variance of an array of values (float).
  *  The variance is a measure of how far a set of numbers is spread out
  *  V(X) = E[(X-E[X])^2] = E[X^2] - E[X]^2
@@ -97,8 +113,6 @@ extern float variance_f(float *array, uint32_t n_elements);
  *  @return covariance
  */
 extern float covariance_f(float *array1, float *array2, uint32_t n_elements);
-
-extern void covariance_f_ref(float *arr1, float *arr2, uint32_t n_elements,float *covariance);
 
 #ifdef __cplusplus
 } /* extern "C" */
