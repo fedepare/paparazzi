@@ -113,6 +113,7 @@ extern bool calc_edgeflow_tot(struct opticflow_t *opticflow, struct image_t *img
 extern void kalman_filter_opticflow_velocity(float *velocity_x, float *velocity_y, float *acceleration_measurement, float fps,
                                       float *measurement_noise, float process_noise, bool reinitialize_kalman);
 
+extern void update_roi_dl(uint8_t *buf);
 #endif /* OPTICFLOW_CALCULATOR_H */
 
 

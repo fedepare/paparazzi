@@ -3,7 +3,7 @@
 import cv2
 import sys
 import argparse
-from os import path, getenv
+from os import path, getenv, environ
 
 # if PAPARAZZI_HOME not set, then assume the tree containing this
 # file is a reasonable substitute
@@ -17,11 +17,13 @@ class RtpViewer:
     running = False
     scale = 1
     rotate = 0
+    ac_id = 0
     frame = None
     mouse = dict()
 
     def __init__(self, src):
         # Create the video capture device
+        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'protocol_whitelist;file,rtp,udp'
         self.cap = cv2.VideoCapture(src)
 
         # Start the ivy interface
@@ -98,7 +100,7 @@ class RtpViewer:
 
             # Create a new message
             msg = PprzMessage("datalink", "VIDEO_ROI")
-            msg['ac_id'] = None
+            msg['ac_id'] = self.ac_id
             msg['startx'] = sx
             msg['starty'] = sy
             msg['width'] = abs(x - sx)
@@ -124,6 +126,7 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--port", type=int, default=5000, help="The port number to open for the RTP stream (5000 or 6000)")
     parser.add_argument("-s", "--scale", type=float, default=1., help="The scaling factor to apply to the incoming video stream (default: 1)")
     parser.add_argument("-r", "--rotate", type=int, default=0, help="The number of clockwise 90deg rotations to apply to the stream [0-3] (default: 0)")
+    parser.add_argument("-a", "--aircraft", type=int, default=0, help="The aircraft id to send message to (default: 0)")
     
     args = parser.parse_args()
 
@@ -132,6 +135,7 @@ if __name__ == '__main__':
     viewer = RtpViewer(filename)
     viewer.scale = args.scale
     viewer.rotate = args.rotate
+    viewer.ac_id = args.aircraft
 
     if not viewer.cap.isOpened():
         viewer.cleanup()

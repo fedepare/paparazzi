@@ -110,6 +110,7 @@
 
   <init fun="opticflow_module_init()"/>
   <periodic fun="opticflow_module_run()" autorun="TRUE"/>
+  <datalink message="VIDEO_ROI" fun="update_roi_dl(buf)"/>
 
   <makefile target="ap|nps">
     <!-- Include the needed Computer Vision files -->

@@ -65,7 +65,6 @@ inline void setGuided(void){
       <stay climb="nav_climb_vspeed" vmode="climb" wp="CLIMB"/>
     </block>
     <block key="s" name="Standby" strip_button="Standby" strip_icon="home.png">
-      <set var="tracker_glob.roi_defined" value="TRUE"/>
       <stay wp="STDBY"/>
     </block>
     <block key="s" name="Start">

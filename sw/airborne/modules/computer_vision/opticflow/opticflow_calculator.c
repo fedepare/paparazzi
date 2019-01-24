@@ -328,6 +328,23 @@ void opticflow_calc_init(struct opticflow_t *opticflow)
   init_object_tracking(opticflow, &tracker_glob);
 }
 
+#include "pprzlink/dl_protocol.h"
+void update_roi_dl(uint8_t *buf)
+{
+  tracker_glob.roi_centriod_x = DL_VIDEO_ROI_startx(buf) + DL_VIDEO_ROI_width(buf)/2;
+  tracker_glob.roi_centriod_y = DL_VIDEO_ROI_starty(buf) + DL_VIDEO_ROI_height(buf)/2;
+  tracker_glob.roi_w = DL_VIDEO_ROI_width(buf);
+  tracker_glob.roi_h = DL_VIDEO_ROI_height(buf);
+
+  tracker_glob.roi[0] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.w-1, Max(0.f, tracker_glob.roi_centriod_x - tracker_glob.roi_w/2));
+  tracker_glob.roi[1] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.h-1, Max(0.f, tracker_glob.roi_centriod_y - tracker_glob.roi_h/2));
+  tracker_glob.roi[2] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.w-1, tracker_glob.roi_centriod_x + tracker_glob.roi_w/2));
+  tracker_glob.roi[3] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.h-1, tracker_glob.roi_centriod_y + tracker_glob.roi_h/2));
+
+  tracker_glob.roi_defined = true;
+
+  printf("HERE\n\n");
+}
 
 /**
  * Run the optical flow on a new image frame
