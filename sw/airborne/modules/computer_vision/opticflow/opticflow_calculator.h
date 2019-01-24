@@ -95,6 +95,8 @@ struct object_tracker_t {
   float roi_h;
   float roi_w;
   uint16_t roi[4];
+
+  bool control_active;
 };
 
 extern struct object_tracker_t tracker_glob;

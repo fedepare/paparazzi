@@ -275,7 +275,7 @@ static void check_back_flow(struct opticflow_t *opticflow, struct flow_t *vecotr
 static struct flow_t *predict_flow_vectors(struct flow_t *flow_vectors, uint16_t n_points, float phi_diff,
     float theta_diff, float psi_diff, struct opticflow_t *opticflow);
 static void compute_global_flow(struct flow_t *vectors, struct opticflow_t *opticflow, struct opticflow_result_t *result);
-static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct object_tracker_t *tracker);
+void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker);
 
 struct object_tracker_t tracker_glob;
 /**
@@ -354,7 +354,7 @@ bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img, st
   // Switch between methods (0 = fast9/lukas-kanade, 1 = EdgeFlow)
   if (opticflow->method == 0) {
     flow_successful = calc_fast9_lukas_kanade(opticflow, img, result, tracker_glob.roi);
-    update_object_roi(opticflow, img, &tracker_glob);
+    update_object_roi(opticflow, img, result, &tracker_glob);
   } else if (opticflow->method == 1) {
     flow_successful = calc_edgeflow_tot(opticflow, img, result);
   }
@@ -380,6 +380,13 @@ bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img, st
 bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
                              struct opticflow_result_t *result, uint16_t *roi)
 {
+  if (roi){
+    if(roi[0] >= img->w) { roi[0] = 0; }
+    if(roi[1] >= img->h) { roi[1] = 0; }
+    if(roi[2] >= img->w) { roi[2] = img->w - 1; }
+    if(roi[3] >= img->h) { roi[3] = img->h - 1; }
+  }
+
   if (opticflow->just_switched_method) {
     // Create the image buffers
     image_create(&opticflow->img_gray, img->w, img->h, IMAGE_GRAYSCALE);
@@ -581,7 +588,6 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
 
   // compute flow from vectors
   compute_global_flow(vectors, opticflow, result);
-
   // TODO scale flow to rad/s here
 
   // ***************
@@ -605,14 +611,6 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
       float psi_diff = opticflow->img_gray.eulers.psi - opticflow->prev_img_gray.eulers.psi;
 
       if (strcmp(OPTICFLOW_CAMERA.dev_name, front_camera.dev_name) == 0) {
-        // bottom cam: just subtract a scaled version of the roll and pitch difference from the global flow vector:
-        diff_flow_x = phi_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_x; // phi_diff works better than (cam_state->rates.p)
-        diff_flow_y = theta_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_y;
-        result->flow_der_x = result->flow_x - diff_flow_x * opticflow->subpixel_factor *
-                             opticflow->derotation_correction_factor_x;
-        result->flow_der_y = result->flow_y - diff_flow_y * opticflow->subpixel_factor *
-                             opticflow->derotation_correction_factor_y;
-      } else {
         // frontal cam, predict individual flow vectors:
         struct flow_t *predicted_flow_vectors = predict_flow_vectors(vectors, opticflow->tracked_cnt, phi_diff, theta_diff,
                                                 psi_diff, opticflow);
@@ -625,6 +623,14 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
         // recompute flow from vectors
         compute_global_flow(predicted_flow_vectors, opticflow, result);
         free(predicted_flow_vectors);
+      } else {
+        // bottom cam: just subtract a scaled version of the roll and pitch difference from the global flow vector:
+        diff_flow_x = phi_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_x; // phi_diff works better than (cam_state->rates.p)
+        diff_flow_y = theta_diff * OPTICFLOW_CAMERA.camera_intrinsics.focal_y;
+        result->flow_der_x = result->flow_x - diff_flow_x * opticflow->subpixel_factor *
+                             opticflow->derotation_correction_factor_x;
+        result->flow_der_y = result->flow_y - diff_flow_y * opticflow->subpixel_factor *
+                             opticflow->derotation_correction_factor_y;
       }
     }
   }
@@ -1264,16 +1270,21 @@ void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t
   tracker->roi_h = 160;
   tracker->roi_w = 160;
 
-  tracker->roi[0] = (uint16_t)Max(0, tracker->roi_centriod_x - tracker->roi_w/2);
-  tracker->roi[1] = (uint16_t)Max(0, tracker->roi_centriod_y - tracker->roi_h/2);
-  tracker->roi[2] = (uint16_t)(tracker->roi_centriod_x + tracker->roi_w/2);
-  tracker->roi[3] = (uint16_t)(tracker->roi_centriod_y + tracker->roi_h/2);
+  tracker->roi[0] = (uint16_t)Min(opticflow->img_gray.w-1, Max(0.f, tracker->roi_centriod_x - tracker->roi_w/2));
+  tracker->roi[1] = (uint16_t)Min(opticflow->img_gray.h-1, Max(0.f, tracker->roi_centriod_y - tracker->roi_h/2));
+  tracker->roi[2] = (uint16_t)Max(0.f, Min(opticflow->img_gray.w-1, tracker->roi_centriod_x + tracker->roi_w/2));
+  tracker->roi[3] = (uint16_t)Max(0.f, Min(opticflow->img_gray.h-1, tracker->roi_centriod_y + tracker->roi_h/2));
+
+  tracker->control_active = false;
 }
 
-void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct object_tracker_t *tracker)
+#include "math.h"
+#include "guidance/guidance_h.h"
+#include "guidance/guidance_v.h"
+void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker)
 {
   if(tracker->roi_defined){
-    // todo what if all points lost... use optical flow?
+    // if not enough points to track use regular flow instead of corners
     if(opticflow->corner_cnt_prev > 3){
         // let us separate change in point locations into change due to motion and change due to lost/added points
       float flow_sum_x = 0.f, flow_sum_y = 0.f;  // sum of flow
@@ -1328,13 +1339,27 @@ void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struc
         tracker->roi_w *= scaler;
         tracker->roi_h *= scaler;
       }
+    } else {
+      // use regular flow to update image relative location
+      tracker->roi_centriod_x += result->flow_x;
+      tracker->roi_centriod_y += result->flow_y;
+
+      tracker->roi_w *= 1.f + result->div_size;
+      tracker->roi_h *= 1.f + result->div_size;
     }
 
     // update image roi
-    tracker->roi[0] = (uint16_t)Max(0, tracker->roi_centriod_x - tracker->roi_w/2);
-    tracker->roi[1] = (uint16_t)Max(0, tracker->roi_centriod_y - tracker->roi_h/2);
-    tracker->roi[2] = (uint16_t)Min(img->w-1, tracker->roi_centriod_x + tracker->roi_w/2);
-    tracker->roi[3] = (uint16_t)Min(img->h-1, tracker->roi_centriod_y + tracker->roi_h/2);
+    tracker->roi[0] = (uint16_t)Min(img->w-1, Max(0.f, tracker->roi_centriod_x - tracker->roi_w/2));
+    tracker->roi[1] = (uint16_t)Min(img->h-1, Max(0.f, tracker->roi_centriod_y - tracker->roi_h/2));
+    tracker->roi[2] = (uint16_t)Max(0.f, Min(img->w-1, tracker->roi_centriod_x + tracker->roi_w/2));
+    tracker->roi[3] = (uint16_t)Max(0.f, Min(img->h-1, tracker->roi_centriod_y + tracker->roi_h/2));
+    if(tracker->roi[2] - tracker->roi[0] < img->w / 6 || tracker->roi[3] - tracker->roi[1] < img->h / 6){
+      // roi too small, use entire frame
+      tracker->roi[0] = 1;
+      tracker->roi[1] = 1;
+      tracker->roi[2] = img->w-2;
+      tracker->roi[3] = img->h-2;
+    }
 
     // draw roi on image
     struct point_t roi_to_show[4];
@@ -1351,5 +1376,50 @@ void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struc
     static uint8_t white[4] = {127, 255, 127, 255};
     image_show_points_color(img, roi_to_show, 4, white);
 //#endif
+
+    // get position relative to frame center
+    int x = tracker->roi_centriod_x - OPTICFLOW_CAMERA.camera_intrinsics.center_x;
+    int y = tracker->roi_centriod_y - OPTICFLOW_CAMERA.camera_intrinsics.center_y;
+
+    // TODO implement body to cam rotation
+
+    int32_t f = (int32_t)roundf(sqrtf(OPTICFLOW_CAMERA.camera_intrinsics.focal_x * OPTICFLOW_CAMERA.camera_intrinsics.focal_x +
+        OPTICFLOW_CAMERA.camera_intrinsics.focal_y * OPTICFLOW_CAMERA.camera_intrinsics.focal_y));
+    struct FloatVect3 img_coord = {y, x, f};
+    struct FloatVect3 virt_coord;
+
+    // Body <-> LTP
+    struct FloatRMat *ltp_to_body_rmat = stateGetNedToBodyRMat_f();
+    float_rmat_vmult(&virt_coord, ltp_to_body_rmat, &img_coord);
+
+    struct FloatVect2 control_error = {-virt_coord.x / img->w, virt_coord.y / img->h};
+
+    static const float gain = 0.5f;
+    static const float deadband = 0.05f;
+    static int center_count = 0;
+    if(tracker->control_active){
+      if (fabsf(control_error.x) < deadband) {
+        control_error.x = 0.f;
+      }
+      if (fabsf(control_error.y) < deadband) {
+        control_error.y = 0.f;
+      }
+      guidance_h_set_guided_body_vel(control_error.x * gain * stateGetPositionEnu_f()->z, control_error.y * gain * stateGetPositionEnu_f()->z);
+      if (control_error.x < deadband && control_error.y < deadband){
+        if (center_count++ > 5){
+          guidance_v_set_guided_vz(0.25f);
+        }
+      } else {
+        if (center_count){
+          center_count--;
+        } else {
+          guidance_v_set_guided_vz(0.f);
+        }
+      }
+    }
   }
+
+  /*printf("(%f %f), (%f %f), (%f %f)\n", img_coord.y, img_coord.x, virt_coord.y, virt_coord.x,
+      stateGetNedToBodyEulers_f()->phi,stateGetNedToBodyEulers_f()->theta);*/
+
 }

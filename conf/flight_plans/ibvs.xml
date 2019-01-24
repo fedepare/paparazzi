@@ -1,6 +1,6 @@
 <!DOCTYPE flight_plan SYSTEM "./flight_plan.dtd">
 
-<flight_plan alt="1.5" ground_alt="0" lat0="51.9906361" lon0="4.3767874" max_dist_from_home="20" name="Bebop IBVS TU Delft Cyberzoo" security_height="0.4">
+<flight_plan alt="2" ground_alt="0" lat0="51.9906361" lon0="4.3767874" max_dist_from_home="20" name="Bebop IBVS TU Delft Cyberzoo" security_height="0.4">
   <header>
     #include "subsystems/datalink/datalink.h"
     #include "subsystems/electrical.h"
@@ -11,6 +11,15 @@
     //#include "modules/ibvs_sim/ibvs_sim.h"
     
     #define NPS_GAZEBO_WORLD "cyberzoo.world"
+#include "autopilot.h"
+inline void setNav(void){
+  autopilot_mode_auto2 = AP_MODE_NAV;
+}
+inline void setGuided(void){
+  autopilot_mode_auto2 = AP_MODE_GUIDED;
+  autopilot_static_set_mode(AP_MODE_GUIDED);
+}
+
 </header>
   <waypoints>
     <waypoint lat="51.990631" lon="4.376796" name="HOME"/>
@@ -18,19 +27,10 @@
     <waypoint name="STDBY" x="1.9" y="0.0"/>
     <waypoint name="TD" x="0.8" y="-1.7"/>
     <waypoint name="GOAL" x="1.9" y="0.0"/>
-    <waypoint name="TRAJECTORY" x="1.9" y="0.0"/>
-    <waypoint name="P1" x="0.1" y="0.3"/>
-    <waypoint name="P2" alt="3.0" x="-0.1" y="-.3"/>
-    <!-- <waypoint name="P3" alt="4.0" x="-.3" y="-.3"/> -->
-    <waypoint name="P3" x="-.2" y="-.2"/>
     <waypoint lat="51.9905836" lon="4.3767729" name="_CZ1"/>
     <waypoint lat="51.9906365" lon="4.3767138" name="_CZ2"/>
     <waypoint lat="51.990680" lon="4.376805" name="_CZ3"/>
     <waypoint lat="51.9906226" lon="4.3768699" name="_CZ4"/>
-    <waypoint lat="51.990594" lon="4.376776" name="_OZ1"/>
-    <waypoint lat="51.990636" lon="4.376733" name="_OZ2"/>
-    <waypoint lat="51.990671" lon="4.376806" name="_OZ3"/>
-    <waypoint lat="51.990624" lon="4.376852" name="_OZ4"/>
   </waypoints>
   <sectors>
     <sector color="red" name="CyberZoo">
@@ -38,12 +38,6 @@
       <corner name="_CZ2"/>
       <corner name="_CZ3"/>
       <corner name="_CZ4"/>
-    </sector>
-    <sector color="#FF9922" name="ObstacleZone">
-      <corner name="_OZ1"/>
-      <corner name="_OZ2"/>
-      <corner name="_OZ3"/>
-      <corner name="_OZ4"/>
     </sector>
   </sectors>
   <blocks>
@@ -74,34 +68,16 @@
       <set var="tracker_glob.roi_defined" value="TRUE"/>
       <stay wp="STDBY"/>
     </block>
-    <block key="g" name="START" strip_button="Go" strip_icon="lookfore.png">
-      <call_once fun="NavSetWaypointHere(WP_GOAL)"/>
-      <!--set var="opticflow.object_tracking" value="TRUE"/>
-      <set var="opticflow.object_tracking_set" value="TRUE"/-->
-      <deroute block="Standby"/>  
-    </block>                 
-    <block name="IBVS1" strip_button="IBVS1">  
-      <go wp="P1"/>      
-    </block> 
-    <block name="IBVS2" strip_button="IBVS2">      
-      <go wp="P2"/>
-      <deroute block="IBVS1"/>          
-    </block>  
-    <block name="IBVS_INIT" strip_button="IBVS_INIT">  
-      <!-- <set var="opticflow.shape_correct" value="TRUE"/> -->
-      <stay wp="P3"/>
-    </block>     
-    <block name="IBVS_GO" strip_button="IBVS_GO">   
-      <!-- <set var="object_to_track.set_guidance" value="TRUE" />      -->   
-      <!--set var="object_to_track.ibvs_go" value="TRUE" /-->
-      <go wp="P3"/>
-      <while cond="30 > stage_time"/> 
-    </block> 
-    <block name="IBVS_GO2" strip_button="IBVS_GO2">   
-      <!-- <set var="object_to_track.set_guidance" value="TRUE" />      -->   
-      <!--set var="object_to_track.ibvs_go2" value="TRUE" /-->
-      <while cond="30 > stage_time"/>      
-    </block> 
+    <block key="s" name="Start">
+      <set var="tracker_glob.control_active" value="TRUE"/>
+      <call_once fun="setGuided()"/>
+      <stay wp="STDBY"/>
+    </block>
+    <block name="Set Nav">
+      <set var="tracker_glob.control_active" value="FALSE"/>
+      <call_once fun="setNav()"/>
+      <stay wp="STDBY"/>
+    </block>
     <block key="l" name="Land here" strip_button="Land Here" strip_icon="land-right.png">
       <call_once fun="NavSetWaypointHere(WP_TD)"/>
       <go wp="TD"/>

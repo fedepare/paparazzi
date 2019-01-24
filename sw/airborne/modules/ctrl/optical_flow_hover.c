@@ -70,7 +70,7 @@ PRINT_CONFIG_VAR(OFH_OPTICAL_FLOW_ID)
 
 // The low pass filter constant for updating the vision measurements in the algorithm
 #ifndef OF_LP_CONST
-#define OF_LP_CONST 0.5
+#define OF_LP_CONST 0.1
 #endif
 
 // Whether the algorithm should be applied to the phi angle(1) or not(0)
@@ -304,7 +304,7 @@ void optical_flow_hover_init()
 void vertical_ctrl_module_init(void)
 {
   // filling the of_hover_ctrl struct with default values:
-  reset_vertical_vars();
+  //reset_vertical_vars();
 }
 
 /**
@@ -313,7 +313,7 @@ void vertical_ctrl_module_init(void)
 void horizontal_ctrl_module_init(void)
 {
   // filling the of_hover_ctrl struct with default values:
-  reset_horizontal_vars();
+  //reset_horizontal_vars();
 }
 
 /**
@@ -524,7 +524,7 @@ void vertical_ctrl_module_run(bool in_flight)
    * TIME
    ***********/
 
-  float div_factor; // factor that maps divergence in pixels as received from vision to 1 / frame
+  static float div_factor = -1.28f; // magic number comprising field of view etc.
 
   float dt = vision_time - prev_vision_timeZ;
 
@@ -537,21 +537,22 @@ void vertical_ctrl_module_run(bool in_flight)
    * VISION
    ***********/
 
-  float lp_factor = dt / OF_LP_CONST;
+  float lp_factor = dt / (OF_LP_CONST +  dt);
   Bound(lp_factor, 0.f, 1.f);
 
   // Vision
-  div_factor = -1.28f; // magic number comprising field of view etc.
   float new_divergence = (divergence_vision * div_factor) / dt;
 
   // deal with (unlikely) fast changes in divergence:
   static const float max_div_dt = 0.20f;
   if (fabsf(new_divergence - of_hover.divergence) > max_div_dt) {
-    if (new_divergence < of_hover.divergence) { new_divergence = of_hover.divergence - max_div_dt; }
-    else { new_divergence = of_hover.divergence + max_div_dt; }
+    if (new_divergence < of_hover.divergence) {
+      new_divergence = of_hover.divergence - max_div_dt;
+    } else {
+      new_divergence = of_hover.divergence + max_div_dt;
+    }
   }
   // low-pass filter the divergence:
-
   of_hover.divergence += (new_divergence - of_hover.divergence) * lp_factor;
   prev_vision_timeZ = vision_time;
 

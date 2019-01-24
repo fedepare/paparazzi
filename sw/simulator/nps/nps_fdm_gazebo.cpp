@@ -674,7 +674,7 @@ static void init_gazebo_video(void)
     cameras[i]->camera_intrinsics.center_y = cameras[i]->output_size.h / 2.0f;
 #if NPS_SIMULATE_MT9F002
     // See boards/bebop/mt9f002.c
-    if (cam->Name() == "front_camera") {
+    if (cam->Name() == "front_camera" && MT9F002_TARGET_FPS > 0) {  // TODO: update to look for mt9f002 sensor
       cameras[i]->output_size.w = MT9F002_OUTPUT_WIDTH;
       cameras[i]->output_size.h = MT9F002_OUTPUT_HEIGHT;
       cameras[i]->sensor_size.w = MT9F002_OUTPUT_WIDTH;
@@ -688,9 +688,16 @@ static void init_gazebo_video(void)
         .center_y = MT9F002_CENTER_Y,
         .Dhane_k = MT9F002_DHANE_K
       };
+      cameras[i]->fps = Min(cam->UpdateRate(), MT9F002_TARGET_FPS);
+      cam->SetUpdateRate(cameras[i]->fps);
     }
 #endif
-    cameras[i]->fps = cam->UpdateRate();
+//    if (cam->Name() == "bottom_camera" && MT9V117_TARGET_FPS > 0) {  // TODO: update to look for mt9V117 sensor
+//      cameras[i]->fps = Min(cam->UpdateRate(), MT9V117_TARGET_FPS);
+//      cam->SetUpdateRate(cameras[i]->fps);
+//    } else {
+      cameras[i]->fps = cam->UpdateRate();
+    //}
     cout << "ok" << endl;
   }
 }

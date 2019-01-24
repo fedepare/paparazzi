@@ -29,6 +29,7 @@
 
 #include "std.h"
 #include "mcu_periph/i2c.h"
+#include "generated/airframe.h"
 
 struct mt9v117_t {
   struct i2c_periph *i2c_periph;      ///< I2C peripheral used to communicate over

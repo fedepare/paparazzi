@@ -34,6 +34,11 @@ struct GainsPID {
   float d_err;                   ///< difference of error for the D-gain
 };
 
+// number of time steps used for calculating the covariance (oscillations) and the delay steps
+#ifndef COV_WINDOW_SIZE
+#define COV_WINDOW_SIZE (10*30)
+#endif
+
 struct OFhistory {
   float input[COV_WINDOW_SIZE];
   float OF[COV_WINDOW_SIZE];
@@ -42,13 +47,9 @@ struct OFhistory {
 
 struct OpticalFlowHoverControl {
   struct GainsPID PID;       ///< The struct with the PID gains
-
   float nominal_value;       ///< The nominal value of thrust, phi or theta depending on Z, Y, X
-
   float ramp;                ///< The ramp pused is increased with per dt
-
   float reduction_factor;    ///< Reduce the gain by this factor when oscillating
-
   float setpoint;            ///< setpoint for constant divergence/flow
   float cov_setpoint;        ///< for adaptive gain control, setpoint of the covariance (oscillations)
 };
