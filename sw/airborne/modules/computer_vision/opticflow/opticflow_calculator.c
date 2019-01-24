@@ -1270,10 +1270,10 @@ void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t
   tracker->roi_h = 160;
   tracker->roi_w = 160;
 
-  tracker->roi[0] = (uint16_t)Min(opticflow->img_gray.w-1, Max(0.f, tracker->roi_centriod_x - tracker->roi_w/2));
-  tracker->roi[1] = (uint16_t)Min(opticflow->img_gray.h-1, Max(0.f, tracker->roi_centriod_y - tracker->roi_h/2));
-  tracker->roi[2] = (uint16_t)Max(0.f, Min(opticflow->img_gray.w-1, tracker->roi_centriod_x + tracker->roi_w/2));
-  tracker->roi[3] = (uint16_t)Max(0.f, Min(opticflow->img_gray.h-1, tracker->roi_centriod_y + tracker->roi_h/2));
+  tracker->roi[0] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.w-1, Max(0.f, tracker->roi_centriod_x - tracker->roi_w/2));
+  tracker->roi[1] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.h-1, Max(0.f, tracker->roi_centriod_y - tracker->roi_h/2));
+  tracker->roi[2] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.w-1, tracker->roi_centriod_x + tracker->roi_w/2));
+  tracker->roi[3] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.h-1, tracker->roi_centriod_y + tracker->roi_h/2));
 
   tracker->control_active = false;
 }
