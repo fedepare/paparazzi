@@ -56,7 +56,6 @@
 #define ACT_FAST 1
 // TODO: these are now adapted, but perhaps later could be a setting:
 uint16_t n_time_steps = 10;
-uint16_t n_agents = 25;
 
 // What methods are run to determine divergence, lateral flow, etc.
 // SIZE_DIV looks at line sizes and only calculates divergence
@@ -66,7 +65,7 @@ uint16_t n_agents = 25;
 #define LINEAR_FIT 1
 
 #ifndef OPTICFLOW_CORNER_METHOD
-#define OPTICFLOW_CORNER_METHOD ACT_FAST
+#define OPTICFLOW_CORNER_METHOD EXHAUSTIVE_FAST
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_CORNER_METHOD)
 
@@ -117,7 +116,7 @@ PRINT_CONFIG_VAR(OPTICFLOW_PYRAMID_LEVEL)
 PRINT_CONFIG_VAR(OPTICFLOW_FAST9_ADAPTIVE)
 
 #ifndef OPTICFLOW_FAST9_THRESHOLD
-#define OPTICFLOW_FAST9_THRESHOLD 20
+#define OPTICFLOW_FAST9_THRESHOLD 35
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_FAST9_THRESHOLD)
 
@@ -189,16 +188,6 @@ PRINT_CONFIG_VAR(OPTICFLOW_ACTFAST_LONG_STEP)
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_ACTFAST_SHORT_STEP)
 
-#ifndef OPTICFLOW_ACTFAST_LONG_STEP_OBJECT
-#define OPTICFLOW_ACTFAST_LONG_STEP_OBJECT 3
-#endif
-PRINT_CONFIG_VAR(OPTICFLOW_ACTFAST_LONG_STEP_OBJECT)
-
-#ifndef OPTICFLOW_ACTFAST_SHORT_STEP_OBJECT
-#define OPTICFLOW_ACTFAST_SHORT_STEP_OBJECT 2
-#endif
-PRINT_CONFIG_VAR(OPTICFLOW_ACTFAST_SHORT_STEP_OBJECT)
-
 #ifndef OPTICFLOW_ACTFAST_GRADIENT_METHOD
 #define OPTICFLOW_ACTFAST_GRADIENT_METHOD 1
 #endif
@@ -244,7 +233,7 @@ PRINT_CONFIG_VAR(OPTICFLOW_SHAPE_CORRECT)
 // Tracking back flow to make the accepted flow vectors more robust:
 // Default is false, as it does take extra processing time
 #ifndef OPTICFLOW_TRACK_BACK
-#define OPTICFLOW_TRACK_BACK FALSE
+#define OPTICFLOW_TRACK_BACK TRUE
 #endif
 PRINT_CONFIG_VAR(OPTICFLOW_TRACK_BACK)
 
@@ -275,7 +264,7 @@ static void check_back_flow(struct opticflow_t *opticflow, struct flow_t *vecotr
 static struct flow_t *predict_flow_vectors(struct flow_t *flow_vectors, uint16_t n_points, float phi_diff,
     float theta_diff, float psi_diff, struct opticflow_t *opticflow);
 static void compute_global_flow(struct flow_t *vectors, struct opticflow_t *opticflow, struct opticflow_result_t *result);
-void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker);
+static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker);
 
 struct object_tracker_t tracker_glob;
 /**
@@ -342,8 +331,6 @@ void update_roi_dl(uint8_t *buf)
   tracker_glob.roi[3] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.h-1, tracker_glob.roi_centriod_y + tracker_glob.roi_h/2));
 
   tracker_glob.roi_defined = true;
-
-  printf("HERE\n\n");
 }
 
 /**
@@ -353,6 +340,7 @@ void update_roi_dl(uint8_t *buf)
  * @param[in] *img The image frame to calculate the optical flow from
  * @param[out] *result The optical flow result
  */
+#include "mcu_periph/sys_time.h"
 bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result)
 {
   bool flow_successful = false;
@@ -370,7 +358,9 @@ bool opticflow_calc_frame(struct opticflow_t *opticflow, struct image_t *img, st
 
   // Switch between methods (0 = fast9/lukas-kanade, 1 = EdgeFlow)
   if (opticflow->method == 0) {
+    //float start = get_sys_time_float();
     flow_successful = calc_fast9_lukas_kanade(opticflow, img, result, tracker_glob.roi);
+    //printf("time: %f ms\n", (get_sys_time_float() - start) * 1000.f);
     update_object_roi(opticflow, img, result, &tracker_glob);
   } else if (opticflow->method == 1) {
     flow_successful = calc_edgeflow_tot(opticflow, img, result);
@@ -458,7 +448,7 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     } else if (opticflow->corner_method == ACT_FAST) {
       // ACT-FAST corner detection:
       act_fast(&opticflow->prev_img_gray, opticflow->fast9_threshold, &opticflow->corner_cnt,
-               &opticflow->fast9_ret_corners, n_agents, n_time_steps,
+               &opticflow->fast9_ret_corners, opticflow->max_track_corners, n_time_steps,
                opticflow->actfast_long_step, opticflow->actfast_short_step, opticflow->actfast_min_gradient,
                opticflow->actfast_gradient_method);
     }
@@ -474,13 +464,11 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
         }
         if (opticflow->corner_method == ACT_FAST) {
           n_time_steps++;
-          n_agents++;
         }
       } else if (opticflow->corner_cnt > opticflow->max_track_corners * 2 && opticflow->fast9_threshold < FAST9_HIGH_THRESHOLD) {
         opticflow->fast9_threshold++;
-        if (opticflow->corner_method == ACT_FAST && n_time_steps > 5 && n_agents > 10) {
+        if (opticflow->corner_method == ACT_FAST && n_time_steps > 5) {
           n_time_steps--;
-          n_agents--;
         }
       }
     }
@@ -965,9 +953,16 @@ static void manage_flow_features(struct opticflow_t *opticflow, uint16_t *roi)
   // allocation new corners
   // no need for "per region" re-detection when there are no previous corners
   if ((!opticflow->fast9_region_detect) || (opticflow->corner_cnt == 0)) {
-    fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
-                 opticflow->fast9_padding, opticflow->fast9_padding, &opticflow->corner_cnt,
-                 &opticflow->fast9_rsize, &opticflow->fast9_ret_corners, roi);
+    if (opticflow->corner_method == EXHAUSTIVE_FAST) {
+      fast9_detect(&opticflow->prev_img_gray, opticflow->fast9_threshold, opticflow->fast9_min_distance,
+                   opticflow->fast9_padding, opticflow->fast9_padding, &opticflow->corner_cnt,
+                   &opticflow->fast9_rsize, &opticflow->fast9_ret_corners, roi);
+    } else if (opticflow->corner_method == ACT_FAST) {
+        act_fast(&opticflow->prev_img_gray, opticflow->fast9_threshold, &opticflow->corner_cnt,
+                 &opticflow->fast9_ret_corners, opticflow->max_track_corners, n_time_steps,
+                 opticflow->actfast_long_step, opticflow->actfast_short_step, opticflow->actfast_min_gradient,
+                 opticflow->actfast_gradient_method);
+    }
   } else {
     // allocating memory and initializing the 2d array that holds the number of corners per region and its index (for the sorting)
     uint16_t **region_count = calloc(opticflow->fast9_num_regions, sizeof(uint16_t *));
@@ -1287,10 +1282,10 @@ void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t
   tracker->roi_h = 160;
   tracker->roi_w = 160;
 
-  tracker->roi[0] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.w-1, Max(0.f, tracker->roi_centriod_x - tracker->roi_w/2));
-  tracker->roi[1] = (uint16_t)Min(OPTICFLOW_CAMERA.output_size.h-1, Max(0.f, tracker->roi_centriod_y - tracker->roi_h/2));
-  tracker->roi[2] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.w-1, tracker->roi_centriod_x + tracker->roi_w/2));
-  tracker->roi[3] = (uint16_t)Max(0.f, Min(OPTICFLOW_CAMERA.output_size.h-1, tracker->roi_centriod_y + tracker->roi_h/2));
+  tracker->roi[0] = 1;
+  tracker->roi[1] = 1;
+  tracker->roi[2] = OPTICFLOW_CAMERA.output_size.w-2;
+  tracker->roi[3] = OPTICFLOW_CAMERA.output_size.h-2;
 
   tracker->control_active = false;
 }
@@ -1298,7 +1293,8 @@ void init_object_tracking(struct opticflow_t *opticflow, struct object_tracker_t
 #include "math.h"
 #include "guidance/guidance_h.h"
 #include "guidance/guidance_v.h"
-void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker)
+#include "subsystems/datalink/telemetry.h"
+static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struct opticflow_result_t *result, struct object_tracker_t *tracker)
 {
   if(tracker->roi_defined){
     // if not enough points to track use regular flow instead of corners
@@ -1352,9 +1348,12 @@ void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struc
         // update roi size
         float scaler = change_sum/sum;
         //printf("x %.2f, y %.2f, w %.2f, h %.2f, change %f %f, %f %f\n", tracker->roi_centriod_x, tracker->roi_centriod_y, tracker->roi_w, tracker->roi_h,
-        //    change_sum/sum, tracker->roi_w*scaler, tracker->roi_h*scaler);
-        tracker->roi_w *= scaler;
-        tracker->roi_h *= scaler;
+        //    change_sum/sum, 1.f + result->div_size, tracker->roi_w*scaler, tracker->roi_h*scaler);
+        // outlier detection
+        if (fabsf(scaler - (1.f + result->div_size)) / (1.f + result->div_size) < 0.1f){
+          tracker->roi_w *= scaler;
+          tracker->roi_h *= scaler;
+        }
       }
     } else {
       // use regular flow to update image relative location
@@ -1389,27 +1388,44 @@ void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struc
     roi_to_show[3].x = tracker->roi[2];
     roi_to_show[3].y = tracker->roi[3];
 
-//#if OPTICFLOW_SHOW_CORNERS
+#if OPTICFLOW_SHOW_CORNERS
     static uint8_t white[4] = {127, 255, 127, 255};
     image_show_points_color(img, roi_to_show, 4, white);
-//#endif
+#endif
 
     // get position relative to frame center
-    int x = tracker->roi_centriod_x - OPTICFLOW_CAMERA.camera_intrinsics.center_x;
-    int y = tracker->roi_centriod_y - OPTICFLOW_CAMERA.camera_intrinsics.center_y;
+    float x = tracker->roi_centriod_x - OPTICFLOW_CAMERA.camera_intrinsics.center_x;
+    float y = tracker->roi_centriod_y - OPTICFLOW_CAMERA.camera_intrinsics.center_y;
 
     // TODO implement body to cam rotation
 
-    int32_t f = (int32_t)roundf(sqrtf(OPTICFLOW_CAMERA.camera_intrinsics.focal_x * OPTICFLOW_CAMERA.camera_intrinsics.focal_x +
-        OPTICFLOW_CAMERA.camera_intrinsics.focal_y * OPTICFLOW_CAMERA.camera_intrinsics.focal_y));
-    struct FloatVect3 img_coord = {y, x, f};
+    //int32_t f = (int32_t)roundf(sqrtf(OPTICFLOW_CAMERA.camera_intrinsics.focal_x * OPTICFLOW_CAMERA.camera_intrinsics.focal_x +
+        //OPTICFLOW_CAMERA.camera_intrinsics.focal_y * OPTICFLOW_CAMERA.camera_intrinsics.focal_y));
+    int32_t f = 300;
+    struct FloatVect3 img_coord = {-y, x, f};
     struct FloatVect3 virt_coord;
 
-    // Body <-> LTP
-    struct FloatRMat *ltp_to_body_rmat = stateGetNedToBodyRMat_f();
-    float_rmat_vmult(&virt_coord, ltp_to_body_rmat, &img_coord);
+    // Body <-> LTP, no psi
+    struct FloatRMat ltp2body;
+    FLOAT_MAT33_ZERO(ltp2body);
+    struct FloatEulers *eulers = stateGetNedToBodyEulers_f();
+    const float sphi   = sinf(eulers->phi);
+    const float cphi   = cosf(eulers->phi);
+    const float stheta = sinf(eulers->theta);
+    const float ctheta = cosf(eulers->theta);
 
-    struct FloatVect2 control_error = {-virt_coord.x / img->w, virt_coord.y / img->h};
+    RMAT_ELMT(ltp2body, 0, 0) = ctheta;
+    RMAT_ELMT(ltp2body, 0, 2) = -stheta;
+    RMAT_ELMT(ltp2body, 1, 0) = sphi * stheta;
+    RMAT_ELMT(ltp2body, 1, 1) = cphi;
+    RMAT_ELMT(ltp2body, 1, 2) = sphi * ctheta;
+    RMAT_ELMT(ltp2body, 2, 0) = cphi * stheta;
+    RMAT_ELMT(ltp2body, 2, 1) = -sphi;
+    RMAT_ELMT(ltp2body, 2, 2) = cphi * ctheta;
+
+    float_rmat_transp_vmult(&virt_coord, &ltp2body, &img_coord);
+
+    struct FloatVect2 control_error = {virt_coord.x / img->w, virt_coord.y / img->h};
 
     static const float gain = 0.5f;
     static const float deadband = 0.05f;
@@ -1434,6 +1450,10 @@ void update_object_roi(struct opticflow_t *opticflow, struct image_t *img, struc
         }
       }
     }
+    DOWNLINK_SEND_OBJECT_TRACKING(DefaultChannel, DefaultDevice,
+                                 &x, &y,
+                                 &tracker->roi_w, &tracker->roi_h,
+                                 &virt_coord.x, &virt_coord.y);
   }
 
   /*printf("(%f %f), (%f %f), (%f %f)\n", img_coord.y, img_coord.x, virt_coord.y, virt_coord.x,

@@ -9,7 +9,7 @@
       </velocity_decay>
       
       <inertial>
-        <mass>0.536</mass><!-- With bumpers. Tuned for correct nominal hover thrust, mass is higher than in real life (~0.40kg) -->
+        <mass>0.45</mass><!-- With bumpers. Tuned for correct nominal hover thrust, mass is higher than in real life (~0.40kg) -->
         <inertia>
           <ixx> 0.000906 </ixx>
           <iyy> 0.001242 </iyy>

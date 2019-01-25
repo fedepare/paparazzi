@@ -1640,7 +1640,14 @@
     </message>
 
     <!-- 211 is free -->
-    <!-- 212 is free -->
+    <message name="OBJECT_TRACKING" id="212">
+      <field name="roi_x"     type="float"/>
+      <field name="roi_y"     type="float"/>
+      <field name="roi_w"     type="float"/>
+      <field name="roi_h"     type="float"/>
+      <field name="virt_x"    type="float"/>
+      <field name="virt_y"    type="float"/>
+    </message>
 
     <message name="TUNE_VERT" id="213">
       <field name="z_sp"      type="int32" alt_unit="m"    alt_unit_coef="0.0039063"/>

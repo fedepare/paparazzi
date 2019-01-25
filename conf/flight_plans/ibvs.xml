@@ -91,7 +91,7 @@ inline void setGuided(void){
       <exception cond="!nav_is_in_flight()" deroute="Landed"/>
       <exception cond="0.10 > GetPosAlt()" deroute="Landed"/>
       <call_once fun="NavStartDetectGround()"/>
-      <stay climb="-0.05" vmode="climb" wp="TD"/>
+      <stay climb="NAV_DESCEND_VSPEED" vmode="climb" wp="TD"/>
     </block>
     <block name="Landed">
       <call_once fun="NavKillThrottle()"/>

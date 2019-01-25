@@ -29,7 +29,7 @@
 
 #include "std.h"
 #include "mcu_periph/i2c.h"
-#include "generated/airframe.h"
+//#include "generated/airframe.h"
 
 #define CFG_SCALER_M_MIN 16
 #define CFG_SCALER_M_MAX 128

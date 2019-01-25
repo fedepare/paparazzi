@@ -448,6 +448,7 @@ void mt9v117_init(struct mt9v117_t *mt)
   write_var(mt, MT9V117_AWB_VAR, MT9V117_AWB_PIXEL_THRESHOLD_COUNT_OFFSET, 50000, 4);
   write_var(mt, MT9V117_AE_RULE_VAR, MT9V117_AE_RULE_ALGO_OFFSET, MT9V117_AE_RULE_ALGO_AVERAGE, 2);
 
+
   /* Set pixclk pad slew to 6 and data out pad slew to 1 */
   write_reg(mt, MT9V117_PAD_SLEW, read_reg(mt, MT9V117_PAD_SLEW, 2) | 0x0600 | 0x0001, 2);
 
@@ -458,6 +459,9 @@ void mt9v117_init(struct mt9v117_t *mt)
   write_var(mt, MT9V117_CAM_CTRL_VAR, MT9V117_CAM_OUTPUT_FORMAT_OFFSET,
             read_var(mt, MT9V117_CAM_CTRL_VAR, MT9V117_CAM_OUTPUT_FORMAT_OFFSET, 2) |
             MT9V117_CAM_OUTPUT_FORMAT_BT656_ENABLE, 2);
+
+  /* Set autoexposure luma */
+  write_var(mt, MT9V117_CAM_CTRL_VAR, MT9V117_AE_LUMA, MT9V117_TARGET_LUMA, 2);
 
   /* Apply the configuration */
   write_var(mt, MT9V117_SYSMGR_VAR, MT9V117_SYSMGR_NEXT_STATE_OFFSET, MT9V117_SYS_STATE_ENTER_CONFIG_CHANGE, 1);
