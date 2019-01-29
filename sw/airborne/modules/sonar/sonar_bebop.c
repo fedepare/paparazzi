@@ -220,6 +220,45 @@ void *sonar_bebop_read(void *data __attribute__((unused)))
 #endif
     usleep(10000); //100Hz
   }
-  usleep(10000); //100Hz
   return NULL;
 }
+
+
+#if SONAR_BEBOP_FILTER_NARROW_OBSTACLES
+
+#ifndef SONAR_BEBOP_FILTER_NARROW_OBSTACLES_JUMP
+#define SONAR_BEBOP_FILTER_NARROW_OBSTACLES_JUMP 0.4f
+#endif
+PRINT_CONFIG_VAR(SONAR_BEBOP_FILTER_NARROW_OBSTACLES_JUMP)
+
+#ifndef SONAR_BEBOP_FILTER_NARROW_OBSTACLES_TIME
+#define SONAR_BEBOP_FILTER_NARROW_OBSTACLES_TIME 1.0f
+#endif
+PRINT_CONFIG_VAR(SONAR_BEBOP_FILTER_NARROW_OBSTACLES_TIME)
+
+static float sonar_filter_narrow_obstacles(float distance_sonar)
+{
+  static float previous_distance = 0;
+  static float z0 = 0;
+  bool obstacle_is_in_view = false;
+  float diff_pre_cur = distance_sonar - previous_distance;
+  if (diff_pre_cur < -SONAR_BEBOP_FILTER_NARROW_OBSTACLES_JUMP) {
+    z0 = previous_distance;
+    obstacle_is_in_view = true;
+    SysTimeTimerStart(sonar_bebop_spike_timer);
+  }
+  previous_distance = distance_sonar;
+  float time_since_reset = SysTimeTimer(sonar_bebop_spike_timer);
+  if ((diff_pre_cur > SONAR_BEBOP_FILTER_NARROW_OBSTACLES_JUMP) || (time_since_reset > USEC_OF_SEC(SONAR_BEBOP_FILTER_NARROW_OBSTACLES_TIME)) ) {
+
+    obstacle_is_in_view = false;
+  }
+
+  if (obstacle_is_in_view) {
+    return z0;
+  } else {
+    return distance_sonar;
+  }
+}
+#endif
+

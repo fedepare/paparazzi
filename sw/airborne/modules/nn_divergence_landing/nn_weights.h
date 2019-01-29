@@ -37,7 +37,7 @@
 #define CTRNN 2
 
 #ifndef NN_TYPE
-#define NN_TYPE RNN
+#define NN_TYPE NN
 #endif
 
 #ifndef NN_VERSION

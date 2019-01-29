@@ -17,7 +17,7 @@
   </header>
   <init fun="nn_init()"/>
   <periodic fun="nn_periodic()" freq="2" autorun="FALSE"/>
-  <makefile target="ap">
+  <makefile target="ap|nps">
     <file name="nn.c"/>
   </makefile>
 </module>

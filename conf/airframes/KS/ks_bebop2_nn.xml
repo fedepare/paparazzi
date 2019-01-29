@@ -51,6 +51,7 @@
       <define name="PIPE_RX_BUFFER_SIZE" value="16384"/>
     </module-->
     
+    <module name="bebop_cam.xml"/>
     <module name="video_thread">
       <define name="MT9V117_TARGET_FPS" value="45"/>
     </module>
@@ -264,7 +265,8 @@
     <define name="JSBSIM_MODEL" value="simple_x_quad_ccw" type="string"/>
     <define name="SENSORS_PARAMS" value="nps_sensors_params_default.h" type="string"/>
 
-    <define name="GAZEBO_AC_NAME" value="simple_x_quad" type="string"/>    
+    <define name="GAZEBO_WORLD" value="cyberzoo.world" type="string"/>
+    <define name="GAZEBO_AC_NAME" value="bebop" type="string"/>    
     <define name="ACTUATOR_THRUSTS" value="1.55, 1.55, 1.55, 1.55" type="float[]"/>
     <define name="ACTUATOR_TORQUES" value="0.155, 0.155, 0.155, 0.155" type="float[]"/>
     

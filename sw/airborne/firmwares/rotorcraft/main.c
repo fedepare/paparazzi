@@ -43,7 +43,7 @@ int main(void)
 {
   main_init();
 
-#ifdef LIMIT_EVENT_POLLING
+#if LIMIT_EVENT_POLLING
   /* Limit main loop frequency to 1kHz.
    * This is a kludge until we can better leverage threads and have real events.
    * Without this limit the event flags will constantly polled as fast as possible,
