@@ -58,6 +58,9 @@
 #ifndef MT9V117_DHANE_K
 #define MT9V117_DHANE_K 1.0f
 #endif
+#ifndef MT9V117_TARGET_LUMA
+#define MT9V117_TARGET_LUMA 18000
+#endif
 
 /* Camera structure */
 struct video_config_t bottom_camera = {
@@ -447,7 +450,6 @@ void mt9v117_init(struct mt9v117_t *mt)
   /* Set basic settings */
   write_var(mt, MT9V117_AWB_VAR, MT9V117_AWB_PIXEL_THRESHOLD_COUNT_OFFSET, 50000, 4);
   write_var(mt, MT9V117_AE_RULE_VAR, MT9V117_AE_RULE_ALGO_OFFSET, MT9V117_AE_RULE_ALGO_AVERAGE, 2);
-
 
   /* Set pixclk pad slew to 6 and data out pad slew to 1 */
   write_reg(mt, MT9V117_PAD_SLEW, read_reg(mt, MT9V117_PAD_SLEW, 2) | 0x0600 | 0x0001, 2);

@@ -25,8 +25,7 @@
  */
 
 #include "math/pprz_stat.h"
-#include <string.h>
-#include <stdlib.h>
+
 
 /*********
  * Integer implementations
@@ -54,6 +53,9 @@ int32_t mean_i(int32_t *array, uint32_t n_elements)
   return (int32_t)(sum / n_elements);
 }
 
+#ifdef LINUX
+#include <string.h>
+#include <stdlib.h>
 // Comparison function for qsort
 static int cmpfunc_i(const void * a, const void * b)
 {
@@ -84,6 +86,7 @@ int32_t median_i(int32_t *array, uint32_t n_elements)
     return (sorted_array[half_n_elements] + sorted_array[half_n_elements - 1]) / 2;
   }
 }
+#endif
 
 /** Compute the variance of an array of values (integer).
  *  The variance is a measure of how far a set of numbers is spread out
@@ -161,6 +164,7 @@ float mean_f(float *array, uint32_t n_elements)
   return (sum_f(array, n_elements) / n_elements);
 }
 
+#ifdef LINUX
 // Comparison function for qsort
 static int cmpfunc_f(const void * a, const void * b)
 {
@@ -191,6 +195,7 @@ float median_f(float *array, uint32_t n_elements)
     return (sorted_array[half_n_elements] + sorted_array[half_n_elements - 1]) / 2.f;
   }
 }
+#endif
 
 /** Compute the variance of an array of values (float).
  *  The variance is a measure of how far a set of numbers is spread out

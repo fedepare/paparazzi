@@ -47,9 +47,13 @@ struct OFhistory {
 
 struct OpticalFlowHoverControl {
   struct GainsPID PID;       ///< The struct with the PID gains
+
   float nominal_value;       ///< The nominal value of thrust, phi or theta depending on Z, Y, X
+
   float ramp;                ///< The ramp pused is increased with per dt
+
   float reduction_factor;    ///< Reduce the gain by this factor when oscillating
+
   float setpoint;            ///< setpoint for constant divergence/flow
   float cov_setpoint;        ///< for adaptive gain control, setpoint of the covariance (oscillations)
 };

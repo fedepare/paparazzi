@@ -41,6 +41,7 @@ extern "C" {
  */
 extern int32_t mean_i(int32_t *array, uint32_t n_elements);
 
+#ifdef LINUX
 /** Compute the median value of an array
  *  This is implemented using floats to handle scaling of all variables
  *  @param[in] *array The array
@@ -48,6 +49,7 @@ extern int32_t mean_i(int32_t *array, uint32_t n_elements);
  *  @return median
  */
 int32_t median_i(int32_t *array, uint32_t n_elements);
+#endif
 
 /** Compute the variance of an array of values (integer).
  *  The variance is a measure of how far a set of numbers is spread out
@@ -86,6 +88,7 @@ extern float sum_f(float *array, uint32_t n_elements);
  */
 extern float mean_f(float *arr, uint32_t n_elements);
 
+#ifdef LINUX
 /** Compute the median value of an array (float)
  *  This is implemented using floats to handle scaling of all variables
  *  @param[in] *array The array
@@ -93,6 +96,7 @@ extern float mean_f(float *arr, uint32_t n_elements);
  *  @return median
  */
 extern float median_f(float *array, uint32_t n_elements);
+#endif
 
 /** Compute the variance of an array of values (float).
  *  The variance is a measure of how far a set of numbers is spread out

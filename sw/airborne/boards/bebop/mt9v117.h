@@ -29,11 +29,6 @@
 
 #include "std.h"
 #include "mcu_periph/i2c.h"
-//#include "generated/airframe.h"
-
-#ifndef MT9V117_TARGET_LUMA
-#define MT9V117_TARGET_LUMA 18000
-#endif
 
 struct mt9v117_t {
   struct i2c_periph *i2c_periph;      ///< I2C peripheral used to communicate over
