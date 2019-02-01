@@ -1351,8 +1351,8 @@ static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img
         //    change_sum/sum, 1.f + result->div_size, tracker->roi_w*scaler, tracker->roi_h*scaler);
         // outlier detection
         if (fabsf(scaler - (1.f + result->div_size)) / (1.f + result->div_size) < 0.1f){
-          tracker->roi_w *= scaler;
-          tracker->roi_h *= scaler;
+          //tracker->roi_w *= scaler;
+          //tracker->roi_h *= scaler;
         }
       }
     } else {
@@ -1360,8 +1360,8 @@ static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img
       tracker->roi_centriod_x += result->flow_x;
       tracker->roi_centriod_y += result->flow_y;
 
-      tracker->roi_w *= 1.f + result->div_size;
-      tracker->roi_h *= 1.f + result->div_size;
+      //tracker->roi_w *= 1.f + result->div_size;
+      //tracker->roi_h *= 1.f + result->div_size;
     }
 
     // update image roi
@@ -1440,13 +1440,13 @@ static void update_object_roi(struct opticflow_t *opticflow, struct image_t *img
       guidance_h_set_guided_body_vel(control_error.x * gain * stateGetPositionEnu_f()->z, control_error.y * gain * stateGetPositionEnu_f()->z);
       if (control_error.x < deadband && control_error.y < deadband){
         if (center_count++ > 5){
-          guidance_v_set_guided_vz(0.25f);
+          //guidance_v_set_guided_vz(0.25f);
         }
       } else {
         if (center_count){
           center_count--;
         } else {
-          guidance_v_set_guided_vz(0.f);
+          //guidance_v_set_guided_vz(0.f);
         }
       }
     }

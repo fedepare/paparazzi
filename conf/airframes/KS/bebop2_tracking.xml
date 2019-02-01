@@ -50,7 +50,7 @@
     
     <!-- <module name="geo_mag"/>
     <module name="send_imu_mag_current"/> -->
-    <module name="air_data"/>
+    <module name="bebop_cam"/>
     <!-- <module name="gps" type="ubx_ucenter"/> -->
     <!--module name="logger_file">
       <define name="FILE_LOGGER_PATH" value="/data/ftp/internal_000"/>
@@ -58,6 +58,7 @@
     
     <module name="video_thread">
       <define name="MT9V117_TARGET_FPS" value="30"/>
+      <define name="MT9V117_TARGET_LUMA" value="13000"/>
     </module>
     
     <module name="pose_history"/>
