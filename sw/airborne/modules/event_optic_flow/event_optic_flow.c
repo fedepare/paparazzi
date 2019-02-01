@@ -358,7 +358,7 @@ void event_optic_flow_periodic(void) {
   eofState.NNew = 0;
   struct flowStats new_stats;
   flowStatsInit(&new_stats);
-  eofState.status = processInput(&new_stats, &eofState.NNew);
+  processInput(&new_stats, &eofState.NNew);
 
   // Update statistics with low pass filter, updated with s1 = s0 + (n - s0)*dt/(tau + dt)
   for (uint16_t i = 0; i < N_FIELD_DIRECTIONS; i++) {
@@ -371,12 +371,8 @@ void event_optic_flow_periodic(void) {
   }
   eofState.stats.eventRate += (eofState.NNew/dt - eofState.stats.eventRate) * kfFactor;
 
-  if (eofState.status == UPDATE_STATS) {
-    // If new events are received, recompute flow field
-    // In case the flow field is ill-posed, do not update
-    eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
+  eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
               inlierMaxDiff, minEventRate, minPosVariance, minR2, power);
-  }
 
   if(eofState.status != UPDATE_SUCCESS){
     return;

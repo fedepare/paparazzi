@@ -9,9 +9,9 @@
         <define name="INDI_RPM_FEEDBACK" value="TRUE"/>
       </module-->
       
-      <!--module name="logger_file">
+      <module name="logger_file">
         <define name="FILE_LOGGER_PATH" value="/data/ftp/internal_000/paparazzi/logs"/>
-      </module-->
+      </module>
     
       <define name="LIMIT_EVENT_POLLING" value="true"/>
       <define name="INS_INT_VEL_ID" value="ABI_DISABLE"/>
@@ -44,7 +44,7 @@
     <module name="ins" type=""/>
     <!--module name="guidance" type="indi"/-->
 
-    <!--module name="event_optic_flow">
+    <module name="event_optic_flow">
       <define name="DVS_PIPE" value="pipe0"/>
     </module>
     
@@ -52,7 +52,7 @@
       <define name="USE_PIPE0_READER" value="/tmp/seesfifo_cs"/>
       <define name="USE_PIPE0_WRITER" value="/tmp/seesfifo_sc"/>
       <define name="PIPE_RX_BUFFER_SIZE" value="16384"/>
-    </module-->
+    </module>
     
     <module name="bebop_cam.xml"/>
     <module name="video_thread">
@@ -66,11 +66,11 @@
       <!--define name="VIEWVIDEO_QUALITY_FACTOR" value="60"/>
     </module-->
     
-    <module name="cv_opticflow">
+    <!--module name="cv_opticflow">
       <define name="OPTICFLOW_METHOD" value="0"/>
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
       <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
-    </module>
+    </module-->
     
     <module name="nn_divergence_landing"/>
   </firmware>

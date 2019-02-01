@@ -104,7 +104,7 @@ void pipe_arch_periph_init(struct pipe_periph *p, char *read_name, char* write_n
 uint16_t pipe_char_available(struct pipe_periph *p)
 {
   pthread_mutex_lock(&pipe_mutex);
-  int32_t available = p->rx_insert_idx - p->rx_extract_idx;
+  int32_t available = (int32_t)p->rx_insert_idx - (int32_t)p->rx_extract_idx;
   if (available < 0) {
     available += PIPE_RX_BUFFER_SIZE;
   }
