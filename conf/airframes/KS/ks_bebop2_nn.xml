@@ -5,10 +5,13 @@
   <firmware name="rotorcraft">
     <target name="ap" board="bebop2">
       <module name="stabilization" type="indi_simple"/>
+      <!--module name="stabilization" type="indi">
+        <define name="INDI_RPM_FEEDBACK" value="TRUE"/>
+      </module-->
       
-      <module name="logger_file">
+      <!--module name="logger_file">
         <define name="FILE_LOGGER_PATH" value="/data/ftp/internal_000/paparazzi/logs"/>
-      </module>
+      </module-->
     
       <define name="LIMIT_EVENT_POLLING" value="true"/>
       <define name="INS_INT_VEL_ID" value="ABI_DISABLE"/>
@@ -67,8 +70,6 @@
       <define name="OPTICFLOW_METHOD" value="0"/>
       <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
       <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
-      <!--define name="OPTICFLOW_FPS" value="45"/>
-      <define name="CAMERA_ROTATED_180" value="TRUE"/-->
     </module>
     
     <module name="nn_divergence_landing"/>
@@ -108,6 +109,13 @@
     <set servo="BOTTOM_RIGHT" value="motor_mixing.commands[MOTOR_BACK_RIGHT]"/>
     <set servo="BOTTOM_LEFT" value="motor_mixing.commands[MOTOR_BACK_LEFT]"/>
   </command_laws>
+  
+  <!--command_laws>
+    <set servo="TOP_LEFT"     value="autopilot_get_motors_on() ? actuators_pprz[0] : -MAX_PPRZ"/>
+    <set servo="TOP_RIGHT"    value="autopilot_get_motors_on() ? actuators_pprz[1] : -MAX_PPRZ"/>
+    <set servo="BOTTOM_RIGHT" value="autopilot_get_motors_on() ? actuators_pprz[2] : -MAX_PPRZ"/>
+    <set servo="BOTTOM_LEFT"  value="autopilot_get_motors_on() ? actuators_pprz[3] : -MAX_PPRZ"/>
+  </command_laws-->
 
   <!-- Magnetometer still needs to be calibrated -->
   <section name="IMU" prefix="IMU_">
@@ -143,9 +151,10 @@
 
   <section name="INS" prefix="INS_">
     <define name="USE_GPS_ALT" value="1"/>
+    <define name="USE_GPS_ALT_SPEED" value="1"/>
     <!-- trust GPS a lot: -->
     <define name="VFF_R_GPS" value="0.01"/> 
-    <define name="VFF_VZ_R_GPS" value="0.01"/>
+    <define name="VFF_VZ_R_GPS" value="0.1"/>
     <define name="SONAR_UPDATE_ON_AGL" value="TRUE"/>
   </section>
 
@@ -210,16 +219,17 @@
     <define name="FILTER_YAW_RATE" value="FALSE"/>
 
     <!-- reference acceleration for attitude control -->
-    <define name="REF_ERR_P" value="600.0"/>
-    <define name="REF_ERR_Q" value="600.0"/>
-    <define name="REF_ERR_R" value="600.0"/>
-    <define name="REF_RATE_P" value="28.0"/>
-    <define name="REF_RATE_Q" value="28.0"/>
-    <define name="REF_RATE_R" value="28.0"/>
+    <define name="REF_ERR_P" value="380.0"/>
+    <define name="REF_ERR_Q" value="380.0"/>
+    <define name="REF_ERR_R" value="380.0"/>
+    <define name="REF_RATE_P" value="23.0"/>
+    <define name="REF_RATE_Q" value="23.0"/>
+    <define name="REF_RATE_R" value="23.0"/>
 
     <!-- second order filter parameters -->
     <define name="FILT_CUTOFF" value="3.2"/>
     <define name="FILT_CUTOFF_R" value="3.2"/>
+    <define name="ESTIMATION_FILT_CUTOFF" value="3.2f"/>
 
     <!-- first order actuator dynamics -->
     <define name="ACT_DYN_P" value="0.06"/>
@@ -229,6 +239,20 @@
     <!-- Adaptive Learning Rate -->
     <define name="USE_ADAPTIVE" value="FALSE"/>
     <define name="ADAPTIVE_MU" value="0.0001"/>
+    
+    <!-- control effectiveness -->
+    <define name="G1_ROLL" value="{18.f, -18.f, -18.f , 18.f}"/>
+    <define name="G1_PITCH" value="{15.f , 15.f, -15.f, -15.f }"/>
+    <define name="G1_YAW" value="{0.85f, -0.85f, 0.85f, -0.85f}"/>
+    <define name="G1_THRUST" value="{-.45f, -.45f, -.45f, -.45f}"/>
+    <!--Counter torque effect of spinning up a rotor-->
+    <define name="G2" value="{ 110.f,   -110.f,   110.f,   -110.f}"/>
+
+    <!-- first order actuator dynamics -->
+    <define name="ACT_DYN" value="{0.08f, 0.08f, 0.08f, 0.08f}"/>
+
+    <!--Priority for each axis (roll, pitch, yaw and thrust)-->
+    <define name="WLS_PRIORITIES" value="{1000.f, 1000.f, 1.f, 100.f}"/>
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
@@ -242,8 +266,8 @@
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <define name="REF_MAX_SPEED" value="2" unit="m/s"/>
     <define name="MAX_BANK" value="30" unit="deg"/>
-    <define name="PGAIN" value="200"/> <!-- GPS: 250 no GPS: 200--> 
-    <define name="DGAIN" value="200"/> <!-- GPS: 200 no GPS: 200-->
+    <define name="PGAIN" value="230"/> <!-- GPS: 250 no GPS: 200--> 
+    <define name="DGAIN" value="220"/> <!-- GPS: 200 no GPS: 200-->
     <define name="IGAIN" value="10"/> <!-- GPS: 10 no GPS: 10-->
     <define name="GUIDANCE_H_VGAIN" value="75"/>
     <define name="GUIDANCE_H_AGAIN" value="35"/>

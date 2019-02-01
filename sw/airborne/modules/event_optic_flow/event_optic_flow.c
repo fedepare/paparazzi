@@ -358,7 +358,7 @@ void event_optic_flow_periodic(void) {
   eofState.NNew = 0;
   struct flowStats new_stats;
   flowStatsInit(&new_stats);
-  enum updateStatus status = processInput(&new_stats, &eofState.NNew);
+  eofState.status = processInput(&new_stats, &eofState.NNew);
 
   // Update statistics with low pass filter, updated with s1 = s0 + (n - s0)*dt/(tau + dt)
   for (uint16_t i = 0; i < N_FIELD_DIRECTIONS; i++) {
@@ -371,11 +371,15 @@ void event_optic_flow_periodic(void) {
   }
   eofState.stats.eventRate += (eofState.NNew/dt - eofState.stats.eventRate) * kfFactor;
 
-  if (status == UPDATE_STATS) {
+  if (eofState.status == UPDATE_STATS) {
     // If new events are received, recompute flow field
     // In case the flow field is ill-posed, do not update
-    status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
+    eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
               inlierMaxDiff, minEventRate, minPosVariance, minR2, power);
+  }
+
+  if(eofState.status != UPDATE_SUCCESS){
+    return;
   }
 
   // run extra derotation due to camera offset
@@ -402,9 +406,6 @@ void event_optic_flow_periodic(void) {
       body_flow_filtered.y,
       eofState.field.confidence,
       -body_flow_filtered.z);
-
-  // Set status globally
-  eofState.status = status;
 
   // the imu already has it's own filter so just remove outliers with median filter
   UpdateMedianFilterVect3Float(vel_filter, body_flow);
@@ -501,8 +502,11 @@ enum updateStatus processInput(struct flowStats* s, int32_t *N) {
     e.u = (float)flow_msgs[i].u * INT16_TO_FLOAT;
     e.v = (float)flow_msgs[i].v * INT16_TO_FLOAT;
     flowStatsUpdate(s, e);
-    returnStatus = UPDATE_STATS;
     (*N)++;
+  }
+
+  if (nb_msgs){
+    returnStatus = UPDATE_STATS;
   }
 #endif
   return returnStatus;

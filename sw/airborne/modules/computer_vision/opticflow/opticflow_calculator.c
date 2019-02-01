@@ -461,6 +461,16 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     free(back_vectors);
   }
 
+  if (result->tracked_cnt == 0) {
+    // We got no flow
+    result->flow_x = 0;
+    result->flow_y = 0;
+
+    free(vectors);
+    image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
+    return false;
+  }
+
   if (opticflow->show_flow) {
     uint8_t color[4] = {0, 0, 0, 0};
     uint8_t bad_color[4] = {0, 0, 0, 0};
@@ -496,16 +506,16 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
   }
 
   // Get the median flow
-  qsort(vectors, result->tracked_cnt, sizeof(struct flow_t), cmp_flow);
-  if (result->tracked_cnt == 0) {
-    // We got no flow
-    result->flow_x = 0;
-    result->flow_y = 0;
+  float sum_x = 0.f, sum_y = 0.f;
+  for (int i = 0; i < result->tracked_cnt; i++){
+    sum_x += vectors[i].flow_x;
+    sum_y += vectors[i].flow_y;
+  }
+  result->flow_x = sum_x / result->tracked_cnt;
+  result->flow_y = sum_y / result->tracked_cnt;
 
-    free(vectors);
-    image_switch(&opticflow->img_gray, &opticflow->prev_img_gray);
-    return false;
-  } else if (result->tracked_cnt % 2) {
+  /*qsort(vectors, result->tracked_cnt, sizeof(struct flow_t), cmp_flow);
+  if (result->tracked_cnt % 2) {
     // Take the median point
     result->flow_x = vectors[result->tracked_cnt / 2].flow_x;
     result->flow_y = vectors[result->tracked_cnt / 2].flow_y;
@@ -513,7 +523,7 @@ bool calc_fast9_lukas_kanade(struct opticflow_t *opticflow, struct image_t *img,
     // Take the average of the 2 median points
     result->flow_x = (vectors[result->tracked_cnt / 2 - 1].flow_x + vectors[result->tracked_cnt / 2].flow_x) / 2.f;
     result->flow_y = (vectors[result->tracked_cnt / 2 - 1].flow_y + vectors[result->tracked_cnt / 2].flow_y) / 2.f;
-  }
+  }*/
 
   // TODO scale flow to rad/s here
 

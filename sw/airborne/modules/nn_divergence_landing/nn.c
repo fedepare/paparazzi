@@ -65,7 +65,6 @@ static float divergence, divergence_dot, thrust;
 
 #if PERIODIC_TELEMETRY
 #include "subsystems/datalink/telemetry.h"
-#include "subsystems/ins/ins_int.h"
 #include "autopilot.h"
 /**
  * Send optical flow telemetry information
@@ -74,13 +73,9 @@ static float divergence, divergence_dot, thrust;
  */
 static void nn_landing_telem_send(struct transport_tx *trans, struct link_device *dev)
 {
-  // get filtered accel directly from ins
-  struct NedCoor_f ltp_accel;
-  ACCELS_FLOAT_OF_BFP(ltp_accel, ins_int.ltp_accel);
-
   pprz_msg_send_NN_LANDING(trans, dev, AC_ID,
                                &divergence, &divergence_dot,
-                               &(ltp_accel.z), &(stateGetSpeedNed_f()->z), &(stateGetPositionNed_f()->z),
+                               &(stateGetAccelNed_f()->z), &(stateGetSpeedNed_f()->z), &(stateGetPositionNed_f()->z),
                                &thrust, &autopilot.mode);
 }
 #endif
@@ -167,7 +162,6 @@ static float predict_nn(float in[], float dt)
   return layer2_out[0];
 }
 
-//float thrust_effectiveness = 0.112f; // transfer function from G to thrust percentage
 float thrust_effectiveness = 0.05f; // transfer function from G to thrust percentage
 static int nn_run(float D, float Ddot, float dt)
 {
@@ -177,11 +171,11 @@ static int nn_run(float D, float Ddot, float dt)
 
   if(autopilot_get_mode() != AP_MODE_GUIDED){
     first_run = true;
+    guidance_v_set_guided_z(-3.9);
     return 0;
   }
 
   if (first_run){
-    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
     start_time = get_sys_time_float();
     zero_neurons();
     first_run = false;
@@ -189,13 +183,14 @@ static int nn_run(float D, float Ddot, float dt)
 
   // Stabilise the vehicle and improve the estimate of the nominal throttle
   if(get_sys_time_float() - start_time < 3.f){
+    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
     // wait a few seconds for the Guided controller to settle
     return 0;
   }
 
   if(get_sys_time_float() - start_time < 5.f){
     // get good estimate to nominal throttle
-    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2;
+    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2.f;
 
     // initialise network by running zeros through it
     static float zero_input[] = {0.f, 0.f};
@@ -207,7 +202,7 @@ static int nn_run(float D, float Ddot, float dt)
   thrust = predict_nn(input, dt);
 
   // limit commands
-  Bound(thrust, -0.8f, 0.5f);
+  Bound(thrust, -7.848f, 4.905f); // [-0.8g, 0.5g]
   guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
 
   return 1;
