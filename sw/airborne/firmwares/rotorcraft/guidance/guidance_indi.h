@@ -32,6 +32,11 @@
 #include "math/pprz_algebra_int.h"
 #include "math/pprz_algebra_float.h"
 
+enum {
+  GUIDANCE_INDI_HOR_SP_FLAG,
+  GUIDANCE_INDI_VERT_SP_FLAG
+};
+
 extern void guidance_indi_enter(void);
 extern void guidance_indi_run(float heading_sp);
 extern void stabilization_attitude_set_setpoint_rp_quat_f(struct FloatEulers* indi_rp_cmd, bool in_flight, float heading);

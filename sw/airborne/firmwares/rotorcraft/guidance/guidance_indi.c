@@ -70,10 +70,6 @@ float guidance_indi_speed_gain = 1.8;
 abi_event accel_sp_ev;
 static void accel_sp_cb(uint8_t sender_id, uint8_t flag, struct FloatVect3 *accel_sp);
 struct FloatVect3 indi_accel_sp = {0.0, 0.0, 0.0};
-enum {
-  HOR_SP_FLAG,
-  VERT_SP_FLAG
-};
 uint8_t indi_accel_sp_flag = 0;
 float time_of_accel_sp_hor = 0.f;
 float time_of_accel_sp_vert = 0.f;
@@ -163,13 +159,13 @@ void guidance_indi_run(float heading_sp)
   guidance_indi_propagate_filters(&eulers_yxz);
 
   // If the horizontal acceleration setpoint is set over ABI message
-  if (bit_is_set(indi_accel_sp_flag, HOR_SP_FLAG)) {
+  if (bit_is_set(indi_accel_sp_flag, GUIDANCE_INDI_HOR_SP_FLAG)) {
     sp_accel.x = indi_accel_sp.x;
     sp_accel.y = indi_accel_sp.y;
     float dt = get_sys_time_float() - time_of_accel_sp_hor;
     // If the input command is not updated after a timeout, switch back to flight plan control
     if (dt > 0.5) {
-      ClearBit(indi_accel_sp_flag, HOR_SP_FLAG);
+      ClearBit(indi_accel_sp_flag, GUIDANCE_INDI_HOR_SP_FLAG);
     }
   } else {
     // Get set-point from flight plan and use linear controller to find the acceleration setpoint
@@ -184,12 +180,12 @@ void guidance_indi_run(float heading_sp)
   }
 
   // If the horizontal acceleration setpoint is set over ABI message
-  if (bit_is_set(indi_accel_sp_flag, VERT_SP_FLAG)) {
+  if (bit_is_set(indi_accel_sp_flag, GUIDANCE_INDI_VERT_SP_FLAG)) {
     sp_accel.z = indi_accel_sp.z;
     float dt = get_sys_time_float() - time_of_accel_sp_vert;
     // If the input command is not updated after a timeout, switch back to flight plan control
     if (dt > 0.5) {
-      ClearBit(indi_accel_sp_flag, VERT_SP_FLAG);
+      ClearBit(indi_accel_sp_flag, GUIDANCE_INDI_VERT_SP_FLAG);
     }
   } else {
     // Get set-point from flight plan and use linear controller to find the acceleration setpoint
@@ -369,13 +365,13 @@ UNUSED void guidance_indi_calcG(struct FloatMat33 *Gmat)
 static void accel_sp_cb(uint8_t sender_id __attribute__((unused)), uint8_t flag, struct FloatVect3 *accel_sp)
 {
   indi_accel_sp_flag |= flag;
-  if (bit_is_set(flag, HOR_SP_FLAG)) {
+  if (bit_is_set(flag, GUIDANCE_INDI_HOR_SP_FLAG)) {
     indi_accel_sp.x = accel_sp->x;
     indi_accel_sp.y = accel_sp->y;
     time_of_accel_sp_hor = get_sys_time_float();
   }
 
-  if (bit_is_set(flag, VERT_SP_FLAG)) {
+  if (bit_is_set(flag, GUIDANCE_INDI_VERT_SP_FLAG)) {
     indi_accel_sp.z = accel_sp->z;
     time_of_accel_sp_vert = get_sys_time_float();
   }

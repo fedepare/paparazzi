@@ -44,10 +44,10 @@ void fc_read_msg(void)
 
     uint8_t accel_sp_flag = 0;
     if (flag == 0 || flag == 1){
-      SetBit(accel_sp_flag, 0);
+      SetBit(accel_sp_flag, GUIDANCE_INDI_HOR_SP_FLAG);
     }
     if (flag == 1){
-      SetBit(accel_sp_flag, 1);
+      SetBit(accel_sp_flag, GUIDANCE_INDI_VERT_SP_FLAG);
     }
 
     AbiSendMsgACCEL_SP(ACCEL_SP_FCR_ID, accel_sp_flag, &u);

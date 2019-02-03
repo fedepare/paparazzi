@@ -63,7 +63,7 @@
 PRINT_CONFIG_VAR(EOF_ENABLE_DEROTATION)
 
 #ifndef EOF_FILTER_TIME_CONST
-#define EOF_FILTER_TIME_CONST 0.1f
+#define EOF_FILTER_TIME_CONST 0.05f
 #endif
 PRINT_CONFIG_VAR(EOF_FILTER_TIME_CONST)
 
@@ -401,7 +401,7 @@ void event_optic_flow_periodic(void) {
       body_flow_filtered.x,
       body_flow_filtered.y,
       eofState.field.confidence,
-      -body_flow_filtered.z);
+      body_flow_filtered.z);
 
   // the imu already has it's own filter so just remove outliers with median filter
   UpdateMedianFilterVect3Float(vel_filter, body_flow);

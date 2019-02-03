@@ -27,6 +27,8 @@
 #include "modules/nn_divergence_landing/nn.h"
 #include "modules/nn_divergence_landing/nn_weights.h"
 
+#include "std.h"
+
 #include "stdio.h"
 
 #include "subsystems/gps.h"
@@ -44,7 +46,10 @@
 
 #include "guidance/guidance_h.h"
 #include "guidance/guidance_v.h"
+#include "guidance/guidance_indi.h"
 #include "autopilot.h"
+
+#include "subsystems/abi.h"
 
 float input_layer_out[nr_input_neurons] = {0};
 float hidden_layer_out[nr_hidden_neurons] = {0};
@@ -167,6 +172,8 @@ static int nn_run(float D, float Ddot, float dt)
 {
   static bool first_run = true;
   static float start_time = 0.f;
+  static float nominal_throttle_sum = 0.f;
+  static float nominal_throttle_samples = 0.f;
   static float nominal_throttle = 0.f;
 
   if(autopilot_get_mode() != AP_MODE_GUIDED){
@@ -177,20 +184,23 @@ static int nn_run(float D, float Ddot, float dt)
 
   if (first_run){
     start_time = get_sys_time_float();
+    nominal_throttle = 0.f;
     zero_neurons();
     first_run = false;
   }
 
   // Stabilise the vehicle and improve the estimate of the nominal throttle
-  if(get_sys_time_float() - start_time < 3.f){
-    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
+  if(get_sys_time_float() - start_time < 4.f){
     // wait a few seconds for the Guided controller to settle
     return 0;
   }
 
   if(get_sys_time_float() - start_time < 5.f){
     // get good estimate to nominal throttle
-    nominal_throttle = (nominal_throttle + (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ) / 2.f;
+    nominal_throttle_sum += (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
+    nominal_throttle_samples++;
+
+    nominal_throttle = nominal_throttle_sum / nominal_throttle_samples;
 
     // initialise network by running zeros through it
     static float zero_input[] = {0.f, 0.f};
@@ -203,26 +213,23 @@ static int nn_run(float D, float Ddot, float dt)
 
   // limit commands
   Bound(thrust, -7.848f, 4.905f); // [-0.8g, 0.5g]
+
+  // add drag compensation
+  //thrust -= 0.25 * stateGetSpeedNed_f()->z * stateGetSpeedNed_f()->z;
+
   guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
 
   return 1;
 
-  /*
   struct FloatVect3 accel_sp;
-  uint8_t accel_sp_flag = 0b00000010; // vertical accel only
+  uint8_t accel_sp_flag = 0;
+  SetBit(accel_sp_flag, GUIDANCE_INDI_VERT_SP_FLAG);   // vertical accel only
 
-  float input[] = {D, Ddot};
-  accel_sp.z = thrust = predict_nn(input, dt);
+  accel_sp.z = -thrust;
 
-  // limit commands
-  Bound(accel_sp.z, -0.8, 0.5);
-
-  // AbiSendMsgACCEL_SP(ACCEL_SP_DVS_ID, accel_sp_flag, &accel_sp);
-
-  guidance_v_set_guided_th(accel_sp.z);
+  AbiSendMsgACCEL_SP(ACCEL_SP_DVS_ID, accel_sp_flag, &accel_sp);
 
   return 1;
-  */
 }
 
 /* Use optical flow estimates */
