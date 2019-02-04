@@ -215,7 +215,7 @@ static int nn_run(float D, float Ddot, float dt)
   Bound(thrust, -7.848f, 4.905f); // [-0.8g, 0.5g]
 
   // add drag compensation
-  //thrust -= 0.25 * stateGetSpeedNed_f()->z * stateGetSpeedNed_f()->z;
+  //thrust -= 0.3 * stateGetSpeedNed_f()->z * stateGetSpeedNed_f()->z;
 
   guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
 

@@ -57,18 +57,18 @@
     <!--module name="bebop_cam.xml"/>
     <module name="video_thread">
       <define name="MT9V117_TARGET_FPS" value="45"/>
-    </module-->
+    </module>
     
+    <module name="cv_opticflow">
+      <define name="OPTICFLOW_METHOD" value="0"/>
+      <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
+      <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
+    </module-->
+
     <!--module name="video_rtp_stream">
       <define name="VIEWVIDEO_CAMERA" value="bottom_camera"/>
       <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="2"/>
       <define name="VIEWVIDEO_QUALITY_FACTOR" value="40"/>
-    </module-->
-    
-    <!--module name="cv_opticflow">
-      <define name="OPTICFLOW_METHOD" value="0"/>
-      <define name="OPTICFLOW_CAMERA" value="bottom_camera"/>
-      <define name="OPTICFLOW_MEDIAN_FILTER" value="TRUE"/>
     </module-->
     
     <module name="nn_divergence_landing"/>
