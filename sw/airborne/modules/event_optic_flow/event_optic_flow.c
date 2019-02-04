@@ -374,14 +374,12 @@ void event_optic_flow_periodic(void) {
   eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
               inlierMaxDiff, minEventRate, minPosVariance, minR2, power);
 
-  if(eofState.status != UPDATE_SUCCESS){
-    return;
-  }
-
-  // run extra derotation due to camera offset
-  if (enableDerotation && agl > 0.3f && agl < 10.f){
-    eofState.field.wx -= -eofState.rates.q * DVS_BODY_TO_CAM_Z / agl;
-    eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
+  if(eofState.status == UPDATE_SUCCESS){
+    // run extra derotation due to camera offset
+    if (enableDerotation && agl > 0.3f && agl < 10.f){
+      eofState.field.wx -= -eofState.rates.q * DVS_BODY_TO_CAM_Z / agl;
+      eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
+    }
   }
 
   struct FloatVect3 body_flow, body_flow_filtered;

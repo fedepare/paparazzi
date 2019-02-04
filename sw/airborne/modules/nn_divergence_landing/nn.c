@@ -208,6 +208,11 @@ static int nn_run(float D, float Ddot, float dt)
     return 0;
   }
 
+  // it is possible that the function was not called enough times, not good
+  if(nominal_throttle == 0 || nominal_throttle_samples < 2){
+    nominal_throttle = guidance_v_nominal_throttle;
+  }
+
   float input[] = {D, Ddot};
   thrust = predict_nn(input, dt);
 

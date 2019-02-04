@@ -41,7 +41,7 @@
 #endif
 
 #ifndef NN_VERSION
-#define NN_VERSION 0
+#define NN_VERSION 1
 #endif
 
 #if NN_TYPE == NN && NN_VERSION == 0  // slow
