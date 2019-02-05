@@ -51,6 +51,24 @@
 
 #include "subsystems/abi.h"
 
+float thrust_effectiveness = 0.05f; // transfer function from G to thrust percentage
+
+#ifndef NN_FILTER_CUTOFF
+#define NN_FILTER_CUTOFF 1.5f
+#endif
+
+#ifndef NN_THRUST_P_GAIN
+#define NN_THRUST_P_GAIN 0.7
+#endif
+#ifndef NN_THRUST_I_GAIN
+#define NN_THRUST_I_GAIN 0.3
+#endif
+float nn_thrust_p_gain = NN_THRUST_P_GAIN;
+float nn_thrust_i_gain = NN_THRUST_I_GAIN;
+
+Butterworth2LowPass accel_ned_filt;
+Butterworth2LowPass thrust_filt;
+
 float input_layer_out[nr_input_neurons] = {0};
 float hidden_layer_out[nr_hidden_neurons] = {0};
 float layer2_out[nr_output_neurons] = {0};
@@ -80,7 +98,7 @@ static void nn_landing_telem_send(struct transport_tx *trans, struct link_device
 {
   pprz_msg_send_NN_LANDING(trans, dev, AC_ID,
                                &divergence, &divergence_dot,
-                               &(stateGetAccelNed_f()->z), &(stateGetSpeedNed_f()->z), &(stateGetPositionNed_f()->z),
+                               &accel_ned_filt.o[0], &(stateGetSpeedNed_f()->z), &(stateGetPositionNed_f()->z),
                                &thrust, &autopilot.mode);
 }
 #endif
@@ -167,24 +185,26 @@ static float predict_nn(float in[], float dt)
   return layer2_out[0];
 }
 
-float thrust_effectiveness = 0.05f; // transfer function from G to thrust percentage
+
+static float nominal_throttle = 0.f;
+static bool active_control = false;
 static int nn_run(float D, float Ddot, float dt)
 {
   static bool first_run = true;
   static float start_time = 0.f;
   static float nominal_throttle_sum = 0.f;
   static float nominal_throttle_samples = 0.f;
-  static float nominal_throttle = 0.f;
 
   if(autopilot_get_mode() != AP_MODE_GUIDED){
     first_run = true;
     guidance_v_set_guided_z(-3.9);
+    active_control = false;
     return 0;
   }
 
   if (first_run){
     start_time = get_sys_time_float();
-    nominal_throttle = 0.f;
+    nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
     zero_neurons();
     first_run = false;
   }
@@ -207,12 +227,6 @@ static int nn_run(float D, float Ddot, float dt)
     predict_nn(zero_input, dt);
     return 0;
   }
-
-  // it is possible that the function was not called enough times, not good
-  if(nominal_throttle == 0 || nominal_throttle_samples < 2){
-    nominal_throttle = guidance_v_nominal_throttle;
-  }
-
   float input[] = {D, Ddot};
   thrust = predict_nn(input, dt);
 
@@ -222,7 +236,9 @@ static int nn_run(float D, float Ddot, float dt)
   // add drag compensation
   //thrust -= 0.3 * stateGetSpeedNed_f()->z * stateGetSpeedNed_f()->z;
 
-  guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
+  // activate closed loop control
+  active_control = true;
+  //guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
 
   return 1;
 
@@ -267,6 +283,7 @@ void nn_init(void)
   divergence = 0.f;
   divergence_dot = 0.f;
   thrust = 0.f;
+  nominal_throttle = guidance_v_nominal_throttle;
 
 #if PERIODIC_TELEMETRY
   register_periodic_telemetry(DefaultPeriodic, PPRZ_MSG_ID_NN_LANDING, nn_landing_telem_send);
@@ -274,6 +291,38 @@ void nn_init(void)
 
   // bind to optical flow messages to get divergence
   AbiBindMsgOPTICAL_FLOW(OFL_NN_ID, &optical_flow_ev, div_cb);
+
+  float tau = 1.f / (2.f * M_PI * NN_FILTER_CUTOFF);
+  float sample_time = 1.f / PERIODIC_FREQUENCY;
+  init_butterworth_2_low_pass(&accel_ned_filt, tau, sample_time, 0.0);
+  init_butterworth_2_low_pass(&thrust_filt, tau, sample_time, 0.0);
+}
+
+/**
+ * Low pass the accelerometer measurements to remove noise from vibrations.
+ */
+void nn_cntrl(void)
+{
+  static float error_integrator = 0.f;
+  struct NedCoor_f *accel = stateGetAccelNed_f();
+  update_butterworth_2_low_pass(&accel_ned_filt, accel->z);
+  update_butterworth_2_low_pass(&thrust_filt, thrust);
+
+  float error = thrust_filt.o[0] + accel_ned_filt.o[0]; // rotate accel to enu
+  BoundAbs(error, 1.f / (nn_thrust_p_gain + 0.01f)); // limit effect of integrator to max 1m/s
+
+  error_integrator += error / PERIODIC_FREQUENCY;
+  BoundAbs(error_integrator, 1.f / (nn_thrust_i_gain + 0.01f));  // limit effect of integrator to max 1m/s
+
+  // FF + P + I
+  float accel_sp = (thrust + error*nn_thrust_p_gain + error_integrator*nn_thrust_i_gain)*thrust_effectiveness
+      + nominal_throttle;
+
+  if(active_control){
+    guidance_v_set_guided_th(accel_sp);
+  } else {
+    error_integrator = 0.f;
+  }
 }
 
 /*

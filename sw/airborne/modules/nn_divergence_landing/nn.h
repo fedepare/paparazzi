@@ -28,10 +28,14 @@
 
 #include "std.h"
 
+// modules
 extern void nn_init(void);
+extern void nn_cntrl(void);
 extern void nn_periodic(void);
 
 // settings
 extern float thrust_effectiveness;
+extern float nn_thrust_p_gain;
+extern float nn_thrust_i_gain;
 
 #endif  // EVENT_OPTICAL_FLOW_NN_H
