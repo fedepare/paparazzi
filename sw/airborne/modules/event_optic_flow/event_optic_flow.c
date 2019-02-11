@@ -176,7 +176,6 @@ bool record_switch = RECORD_SWITCH;
 #define EVENT_BYTE_SIZE 13 // +1 for separator
 static const float power = 1.f;
 static uint16_t mode;
-static bool mode_switched;
 
 struct MedianFilter3Float rate_filter;
 struct MedianFilter3Float vel_filter;
@@ -289,7 +288,6 @@ void event_optic_flow_start(void) {
   InitMedianFilterVect3Float(vel_filter, 5);
 
   mode = autopilot_get_mode();
-  mode_switched = false;
 }
 
 // there is a delay between the incoming rate and the flow
@@ -335,7 +333,6 @@ void event_optic_flow_periodic(void) {
     eofState.field.wx_filtered = 0.f;
     eofState.field.wy_filtered = 0.f;
     eofState.field.D_filtered  = 0.f;
-    mode_switched = true;
     mode = autopilot_get_mode();
   }
   // Timing bookkeeping, do this after the most uncertain computations,
@@ -374,14 +371,6 @@ void event_optic_flow_periodic(void) {
   eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
               inlierMaxDiff, minEventRate, minPosVariance, minR2, power);
 
-  if(eofState.status == UPDATE_SUCCESS){
-    // run extra derotation due to camera offset
-    if (enableDerotation && agl > 0.3f && agl < 10.f){
-      eofState.field.wx -= -eofState.rates.q * DVS_BODY_TO_CAM_Z / agl;
-      eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
-    }
-  }
-
   struct FloatVect3 body_flow, body_flow_filtered;
   struct FloatVect3 cam_flow_filtered = {eofState.field.wx_filtered, eofState.field.wy_filtered, eofState.field.D_filtered};
   struct FloatVect3 cam_flow = {eofState.field.wx, eofState.field.wy, eofState.field.D};
@@ -401,13 +390,15 @@ void event_optic_flow_periodic(void) {
       eofState.field.confidence,
       body_flow_filtered.z);
 
-  // the imu already has it's own filter so just remove outliers with median filter
-  UpdateMedianFilterVect3Float(vel_filter, body_flow);
+  if(eofState.status == UPDATE_SUCCESS){
+    // the imu already has it's own filter so just remove outliers with median filter
+    UpdateMedianFilterVect3Float(vel_filter, body_flow);
 
-  if (agl > 0.f && agl < 10.f){
-    AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
-        agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
-        eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
+    if (agl > 0.f && agl < 10.f){
+      AbiSendMsgVELOCITY_ESTIMATE(VEL_DVS_ID, get_sys_time_usec(),
+          agl*body_flow.x, agl*body_flow.y, agl*body_flow.z,
+          eofState.field.confidence, eofState.field.confidence, -1.f);//eofState.field.confidence);
+    }
   }
 }
 

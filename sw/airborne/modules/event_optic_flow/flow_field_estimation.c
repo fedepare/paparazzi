@@ -135,6 +135,11 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
               - A[2][2] * A[0][1] * A[0][1];
 
   if (nValidDirections < 2 || fabsf(det) < DET_MIN_RESOLUTION) {
+    // slowly reduce to zero, as no input likely means no motion
+    float tau = 0.04 * filterFactor;
+    lowPassFilterWithThreshold(&field->wx_filtered, 0, tau, inlierMaxDiff);
+    lowPassFilterWithThreshold(&field->wy_filtered, 0, tau, inlierMaxDiff);
+    lowPassFilterWithThreshold(&field->D_filtered,  0, tau, inlierMaxDiff);
     return UPDATE_WARNING_SINGULAR;
   }
 
@@ -175,11 +180,17 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
   field->wy = p[1];
   field->D  = p[2];
 
+  // run extra derotation due to camera offset
+  /*if (enableDerotation && agl > 0.3f && agl < 10.f){
+    eofState.field.wx -= -eofState.rates.q * DVS_BODY_TO_CAM_Z / agl;
+    eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
+  }*/
+
   field->confidence = c_rate * c_var_max * c_R2;
   float tau = field->confidence * filterFactor;
-  lowPassFilterWithThreshold(&field->wx_filtered, p[0], tau, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->wy_filtered, p[1], tau, inlierMaxDiff);
-  lowPassFilterWithThreshold(&field->D_filtered,  p[2], tau, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->wx_filtered, field->wx, tau, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->wy_filtered, field->wy, tau, inlierMaxDiff);
+  lowPassFilterWithThreshold(&field->D_filtered,  field->D, tau, inlierMaxDiff);
   field->ts = s->ts;
 
   // If no problem was found, update is successful
