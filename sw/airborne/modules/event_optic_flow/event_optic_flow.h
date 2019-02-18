@@ -64,7 +64,6 @@ extern float kfTimeConst;
 extern float inlierMaxDiff;
 extern float derotationMovingAverageTimeConst;
 extern float minPosVariance;
-extern float minEventRate;
 extern float minR2;
 extern bool irLedSwitch;
 extern bool record_switch;

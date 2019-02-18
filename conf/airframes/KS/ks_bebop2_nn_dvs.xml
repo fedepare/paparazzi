@@ -188,10 +188,10 @@
 
   <section name="STABILIZATION_ATTITUDE_INDI" prefix="STABILIZATION_INDI_">
     <!-- control effectiveness, can be obtained by switching on "adaptive" in the indi settings -->
-    <define name="G1_P" value="0.080"/>
-    <define name="G1_Q" value="0.050"/>
-    <define name="G1_R" value="0.0010"/>
-    <define name="G2_R" value="0.236"/>
+    <define name="G1_P" value="0.040"/>
+    <define name="G1_Q" value="0.040"/>
+    <define name="G1_R" value="0.0014"/>
+    <define name="G2_R" value="0.2"/>
 
     <!-- Here it is assumed that your removed the damping from your bebop2!
          The dampers do not really damp, but cause oscillation. By removing/
@@ -241,7 +241,7 @@
     <define name="HOVER_KP" value="300"/> <!-- GPS: 400 no GPS: 300--> 
     <define name="HOVER_KD" value="100"/> <!-- GPS: 120 no GPS: 100--> 
     <define name="HOVER_KI" value="20"/> <!-- GPS: 20 no GPS: 20--> 
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.67"/>
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.665"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
   </section>
 
@@ -262,8 +262,8 @@
   </section>
 
   <section name="NAVIGATION" prefix="NAV_">
-    <define name="CLIMB_VSPEED" value="1.0"/>
-    <define name="DESCEND_VSPEED" value="-0.75"/>
+    <define name="CLIMB_VSPEED" value="0.5"/>
+    <define name="DESCEND_VSPEED" value="-0.5"/>
   </section>
 
   <section name="SIMULATOR" prefix="NPS_">

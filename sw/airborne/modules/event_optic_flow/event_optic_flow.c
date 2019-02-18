@@ -77,18 +77,13 @@ PRINT_CONFIG_VAR(EOF_FILTER_RETENTION_TIME_CONST)
 #endif
 PRINT_CONFIG_VAR(EOF_INLIER_MAX_DIFF)
 
-#ifndef EOF_MIN_EVENT_RATE
-#define EOF_MIN_EVENT_RATE 1000.f
-#endif
-PRINT_CONFIG_VAR(EOF_MIN_EVENT_RATE)
-
 #ifndef EOF_MIN_POSITION_VARIANCE
-#define EOF_MIN_POSITION_VARIANCE 0.1f
+#define EOF_MIN_POSITION_VARIANCE 0.08f
 #endif
 PRINT_CONFIG_VAR(EOF_MIN_POSITION_VARIANCE)
 
 #ifndef EOF_MIN_R2
-#define EOF_MIN_R2 0.05f    // was 0.01f
+#define EOF_MIN_R2 0.04f
 #endif
 PRINT_CONFIG_VAR(EOF_MIN_R2)
 
@@ -159,7 +154,6 @@ float inlierMaxDiff = EOF_INLIER_MAX_DIFF;
 
 // Confidence thresholds
 float minPosVariance = EOF_MIN_POSITION_VARIANCE;
-float minEventRate = EOF_MIN_EVENT_RATE;
 float minR2 = EOF_MIN_R2;
 
 // Logging controls
@@ -174,7 +168,6 @@ bool record_switch = RECORD_SWITCH;
 //static const float LENS_DISTANCE_TO_CENTER = 0.13f; // approximate distance of lens focal length to center of OptiTrack markers
 
 #define EVENT_BYTE_SIZE 13 // +1 for separator
-static const float power = 1.f;
 static uint16_t mode;
 
 struct MedianFilter3Float rate_filter;
@@ -369,7 +362,7 @@ void event_optic_flow_periodic(void) {
   eofState.stats.eventRate += (eofState.NNew/dt - eofState.stats.eventRate) * kfFactor;
 
   eofState.status = recomputeFlowField(&eofState.field, &eofState.stats, filterFactor,
-              inlierMaxDiff, minEventRate, minPosVariance, minR2, power);
+              inlierMaxDiff, minPosVariance, minR2);
 
   struct FloatVect3 body_flow, body_flow_filtered;
   struct FloatVect3 cam_flow_filtered = {eofState.field.wx_filtered, eofState.field.wy_filtered, eofState.field.D_filtered};

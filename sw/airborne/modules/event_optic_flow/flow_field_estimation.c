@@ -73,8 +73,7 @@ void flowStatsUpdate(struct flowStats *s, struct flowEvent e)
 
 enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s,
                                      float filterFactor, float inlierMaxDiff,
-                                     float minEventRate, float minPosVariance, float minR2,
-                                     float power)
+                                     float minPosVariance, float minR2)
 {
   // Define persistent variables
   static uint32_t i;
@@ -91,18 +90,17 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
   // Loop over all directions and collect total flow field information
   for (i = 0; i < N_FIELD_DIRECTIONS; i++) {
     // Skip if too few new events were added along this direction
-    // If the 'moving' number of events is below 1, skip
-    if (s->N[i] < 3.f) {
+    // If the 'moving' number of events is below 0.25, skip
+    if (s->N[i] < 0.25f) {
       varS[i] = 0.f;
       c_var[i] = 0.f;
       continue;
     }
 
     // Compute position variances and confidence values from mean statistics
-    varS[i] = (s->sumSS[i] - s->sumS[i]*s->sumS[i]/s->N[i]) / s->N[i];
+    varS[i] = (s->sumSS[i] - s->sumS[i]*s->sumS[i] / s->N[i]) / s->N[i];
 
     if (varS[i] < minPosVariance) {
-      //c_var[i] *= powf(varS[i] / minPosVariance, power);
       c_var[i] = varS[i] / minPosVariance;
     } else {
       c_var[i] = 1.f;
@@ -155,7 +153,6 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
   float R2 = 1.f - residualSumSquares / totalSumSquares;
   float c_R2 = 1.f;
   if (R2 < minR2) {
-    //c_R2 *= powf(R2 / minR2, power);
     c_R2 = R2 / minR2;
     if (c_R2 < 0.f) {
       c_R2 = 0.f;
@@ -170,12 +167,6 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
     }
   }
 
-  // Compute rate confidence value
-  float c_rate = 1.f;
-  if (s->eventRate < minEventRate) {
-    c_rate = s->eventRate / minEventRate;//powf(s->eventRate / minEventRate, power);
-  }
-
   field->wx = p[0];
   field->wy = p[1];
   field->D  = p[2];
@@ -186,7 +177,7 @@ enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *
     eofState.field.wy -= eofState.rates.p * DVS_BODY_TO_CAM_Z / agl;
   }*/
 
-  field->confidence = c_rate * c_var_max * c_R2;
+  field->confidence = c_var_max * c_R2;
   float tau = field->confidence * filterFactor;
   lowPassFilterWithThreshold(&field->wx_filtered, field->wx, tau, inlierMaxDiff);
   lowPassFilterWithThreshold(&field->wy_filtered, field->wy, tau, inlierMaxDiff);

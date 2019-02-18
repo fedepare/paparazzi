@@ -114,9 +114,8 @@ void flowStatsUpdate(struct flowStats *s, struct flowEvent e);
 /**
  * Recomputation of the flow field using the latest statistics.
  */
-enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s,
-                                     float filterFactor, float inlierMaxDiff, float minEventRate, float minPosVariance,
-                                     float minR2, float power);
+enum updateStatus recomputeFlowField(struct flowField *field, struct flowStats *s, float filterFactor,
+                                     float inlierMaxDiff, float minPosVariance, float minR2);
 
 /**
  * Simple derotation of the optic flow field parameters.
