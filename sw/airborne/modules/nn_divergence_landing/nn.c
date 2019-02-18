@@ -73,16 +73,20 @@ float input_layer_out[nr_input_neurons] = {0};
 float hidden_layer_out[nr_hidden_neurons] = {0};
 float layer2_out[nr_output_neurons] = {0};
 
-static float sigmoid(float val)
-{
-  return 1.f / (1.f + expf(-val));
-}
-
+#if NN_TYPE == NN || NN_TYPE == RNN
 static float relu(float val)
 {
   BoundLower(val, 0.f);
   return val;
 }
+
+#elif NN_TYPE == CTRNN
+
+static float sigmoid(float val)
+{
+  return 1.f / (1.f + expf(-val));
+}
+#endif
 
 static float divergence, divergence_dot, thrust;
 
@@ -119,19 +123,18 @@ static float predict_nn(float in[], float dt)
 {
   int i,j;
 
-#if NN_TYPE == NN || NN_TYPE == RNN
-
+  for (i = 0; i < nr_input_neurons; i++){
 #if NN_TYPE == NN
-  for (i = 0; i < nr_input_neurons; i++){
     input_layer_out[i] = in[i] + bias0[i];
-  }
 #elif NN_TYPE == RNN
-  for (i = 0; i < nr_input_neurons; i++){
-    input_layer_out[i] = in[i] + bias0[i] + input_layer_out[0]*recurrent_weights0[0];
-  }
+    input_layer_out[i] = in[i] + bias0[i] + input_layer_out[i]*recurrent_weights0[i];
+#elif NN_TYPE == CTRNN
+    input_layer_out[i] += (in[i] - input_layer_out[i]) * dt / (dt + time_const0[i]);
 #endif
+  }
 
   float potential;
+#if NN_TYPE == NN || NN_TYPE == RNN
   for (i = 0; i < nr_hidden_neurons; i++){
     potential = 0.f;
     for (j = 0; j < nr_input_neurons; j++){
@@ -155,30 +158,20 @@ static float predict_nn(float in[], float dt)
   }
 
 #elif NN_TYPE == CTRNN
-  input_layer_out[0] = D + bias0[0];
-  input_layer_out[1] = Ddot + bias0[1];
-
-  float derivative;
-  for (i = 0; i < nr_hidden_neurons; i++)
-  {
-    derivative = 0.f;
-    for (j = 0; j < nr_input_neurons; j++)
-    {
-      derivative += sigmoid(input_layer_out[j] + bias0[j])*layer1_weights[j][i];
+  for (i = 0; i < nr_hidden_neurons; i++) {
+    potential = 0.f;
+    for (j = 0; j < nr_input_neurons; j++) {
+      potential += tanhf(gain0[j]*(input_layer_out[j] + bias0[j]))*layer1_weights[j][i];
     }
-    derivative = (derivative - hidden_layer_out[i]) / (time_const1[i] + dt);
-    hidden_layer_out[i] = hidden_layer_out[i] + dt*derivative;
+    hidden_layer_out[i] += (potential - hidden_layer_out[i]) * dt / (time_const1[i] + dt);
   }
 
-  for (i = 0; i < nr_output_neurons; i++)
-  {
-    derivative = 0.f;
-    for (j = 0; j < nr_hidden_neurons; j++)
-    {
-      derivative += sigmoid(hidden_layer_out[j] + bias1[j])*layer2_weights[j][i];
+  for (i = 0; i < nr_output_neurons; i++) {
+    potential = 0.f;
+    for (j = 0; j < nr_hidden_neurons; j++) {
+      potential += tanhf(gain1[j]*(hidden_layer_out[j] + bias1[j]))*layer2_weights[j][i];
     }
-    derivative = (derivative - layer2_out[i]) / (time_const2[i] + dt);
-    layer2_out[i] = layer2_out[i] + dt*derivative;
+    layer2_out[i] += (potential - layer2_out[i]) * dt / (time_const2[i] + dt);
   }
 #endif
 
@@ -227,6 +220,7 @@ static int nn_run(float D, float Ddot, float dt)
     predict_nn(zero_input, dt);
     return 0;
   }
+
   float input[] = {D, Ddot};
   thrust = predict_nn(input, dt);
 
@@ -330,14 +324,7 @@ void nn_cntrl(void)
  */
 void nn_periodic(void)
 {
-  static uint16_t steps = 0;
-  float input[] = {0.f, 0.f};
-  if (steps >= 10){
-    input[0] = 1.f;
-    input[1] = 1.f;
-  } else {
-    steps++;
-  }
-  printf("%f\n", predict_nn(input, 0.05));
+  float input[] = {1.f, 1.f};
+  printf("%f\n", predict_nn(input, 0.025));
 }
 
