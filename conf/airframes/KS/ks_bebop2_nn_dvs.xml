@@ -238,10 +238,10 @@
   </section>
 
   <section name="GUIDANCE_V" prefix="GUIDANCE_V_">
-    <define name="HOVER_KP" value="300"/> <!-- GPS: 400 no GPS: 300--> 
+    <define name="HOVER_KP" value="350"/> <!-- GPS: 400 no GPS: 300--> 
     <define name="HOVER_KD" value="100"/> <!-- GPS: 120 no GPS: 100--> 
     <define name="HOVER_KI" value="20"/> <!-- GPS: 20 no GPS: 20--> 
-    <define name="NOMINAL_HOVER_THROTTLE" value="0.665"/>
+    <define name="NOMINAL_HOVER_THROTTLE" value="0.685"/>
     <define name="ADAPT_THROTTLE_ENABLED" value="FALSE"/>
   </section>
 

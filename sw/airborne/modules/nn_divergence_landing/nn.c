@@ -66,6 +66,8 @@ float thrust_effectiveness = 0.05f; // transfer function from G to thrust percen
 float nn_thrust_p_gain = NN_THRUST_P_GAIN;
 float nn_thrust_i_gain = NN_THRUST_I_GAIN;
 
+#define ACTIVE_CTRL true
+
 Butterworth2LowPass accel_ned_filt;
 Butterworth2LowPass thrust_filt;
 
@@ -230,9 +232,13 @@ static int nn_run(float D, float Ddot, float dt)
   // add drag compensation
   //thrust -= 0.3 * stateGetSpeedNed_f()->z * stateGetSpeedNed_f()->z;
 
+#if ACTIVE_CTRL
   // activate closed loop control
   active_control = true;
-  //guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
+#else
+  // set throttle using linear transform
+  guidance_v_set_guided_th(thrust*thrust_effectiveness + nominal_throttle);
+#endif
 
   return 1;
 
