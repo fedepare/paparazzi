@@ -29,6 +29,10 @@
 
 // Header with network parameters
 #include "modules/spiking_landing/twolayer/network_conf.h"
+
+// Header for UART communication
+#include "modules/uart_driver/uart_driver.h"
+
 // #include "modules/spiking_landing/threelayer/network_conf.h"
 
 // Paparazzi headers
@@ -99,7 +103,7 @@ static Butterworth2LowPass thrust_filt;
 
 // Variables retained between module calls
 // For divergence + derivative, low-passed acceleration, thrust
-float divergence, divergence_dot, acc_lp, thrust, thrust_lp;
+float divergence, divergence_dot, acc_lp, thrust, upboard_thrust, thrust_lp;
 float acceleration_sp;
 float div_gt, divdot_gt;
 float div_gt_tmp;
@@ -228,6 +232,9 @@ static void sl_optical_flow_cb(uint8_t sender_id, uint32_t stamp,
   }
   div_gt = div_gt_tmp;
 
+  // Send divergence to upboard
+  uart_driver_tx_event(divergence, divergence_dot);
+
   // Run the spiking network
   sl_run(divergence, divergence_dot);
 }
@@ -282,6 +289,11 @@ static void sl_run(float divergence, float divergence_dot) {
   net.in[0] = divergence;
   net.in[1] = divergence_dot;
   thrust = forward_network(&net) * 9.81f;
+
+  // Get most recent upboard thrust
+  pthread_mutex_lock(rx_mutex);
+  upboard_thrust = uart_rx_buffer.thrust * 9.81f;
+  pthread_mutex_unlock(rx_mutex);
 
   // Bound thrust to limits (-0.8g, 0.5g)
   Bound(thrust, -7.848f, 4.905f);
