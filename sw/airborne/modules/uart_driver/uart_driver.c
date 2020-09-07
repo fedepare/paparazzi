@@ -30,6 +30,9 @@
 
 #include "modules/uart_driver/uart_driver.h"
 
+// Header for UART communication
+#include "modules/spiking_landing/spiking_landing.h"
+
 /* add pprz messages for jetson heartbeat later */
 // #include "subsystems/datalink/telemetry.h"
 
@@ -37,9 +40,6 @@
 
 /* deep copied variable */
 thrust_frame_t uart_rx_buffer;
-
-/* mutex for rx struct */
-pthread_mutex_t* rx_mutex;
 
 // tx: finally send a hex array to jetson
 static uint8_t send_to_jetson(uint8_t *s, uint8_t len) {
@@ -68,7 +68,7 @@ static void tx_data_struct(divergence_packet_t *uart_packet_tx) {
   memcpy(tx_string, uart_packet_tx, sizeof(divergence_packet_t));
 
   #ifdef DBG
-  printf("[TX] cnt: %i, div: %f, divdot: %f\n", uart_packet_tx->data.cnt, uart_packet_tx->data.divergence, uart_packet_tx->data.divergence_dot);
+  printf("[TX] div: %f, reset: %i\n", uart_packet_tx->data.divergence, uart_packet_tx->data.reset_net);
   #endif
   
   // send "stringed" struct
@@ -171,12 +171,13 @@ static void parse(uint8_t c) {
       if (packet_type == DATA_FRAME) {
         /* checksum matches, proceed to populate the data struct */
         /* hope this is atomic, vo reads from externed dr_data */
-        pthread_mutex_lock(rx_mutex);
         memcpy(&uart_rx_buffer, &databuf, sizeof(thrust_frame_t));
-        pthread_mutex_unlock(rx_mutex);
+
+        // overwrite global variable
+        thrust = uart_rx_buffer.thrust;
 
         #ifdef DBG
-        printf("[RX] cnt: %i, thrust: %f\n", uart_rx_buffer.cnt, uart_rx_buffer.thrust);
+        printf("[RX] thrust: %f\n", uart_rx_buffer.thrust);
         #endif
       }
     
@@ -220,42 +221,10 @@ void uart_driver_rx_event(void) {
   }
 }
 
-
-void uart_driver_init() {
-
-  /* mutex for rx struct */
-  rx_mutex = malloc(sizeof(pthread_mutex_t));
-  pthread_mutex_init(rx_mutex, NULL);
-
-}
-
-// send data to jetson every few milliseconds
-void uart_driver_tx_loop() {
-  static int cnt = 0;
-  cnt++;
-
-  // TODO: send actual values
-  divergence_packet_t uart_packet_tx = {
-    .info = {
-      .packet_type = DATA_FRAME,
-      .packet_length = 3 + sizeof(divergence_packet_t),
-    },
-    .data = {
-      .cnt = cnt,
-      .divergence = 0.75f,
-      .divergence_dot = 0.14f,
-    },
-  };
-
-  /* send to jetson */
-  tx_data_struct(&uart_packet_tx);
-
-}
+void uart_driver_init() {}
 
 // event-triggered function to send data to jetson
-void uart_driver_tx_event(float divergence, float divergence_dot) {
-  static int cnt = 0;
-  cnt++;
+void uart_driver_tx_event(float divergence, uint8_t reset_net) {
 
   divergence_packet_t uart_packet_tx = {
     .info = {
@@ -263,9 +232,8 @@ void uart_driver_tx_event(float divergence, float divergence_dot) {
       .packet_length = 3 + sizeof(divergence_packet_t),
     },
     .data = {
-      .cnt = cnt,
       .divergence = divergence,
-      .divergence_dot = divergence_dot,
+      .reset_net = reset_net,
     },
   };
 

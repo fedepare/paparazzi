@@ -77,6 +77,7 @@ PRINT_CONFIG_VAR(SL_OPTICAL_FLOW_ID)
 // Other default values
 // Closed-loop thrust control, else linear transform
 #define SL_ACTIVE_CONTROL true
+// #define SL_UART_CONTROL
 
 // Gains for closed-loop control
 #ifndef SL_THRUST_EFFECT
@@ -152,6 +153,8 @@ static void init_globals(void);
 
 // Module initialization function
 static void sl_init() {
+
+#ifndef SL_UART_CONTROL  
   // Build network
   net = build_network(conf.in_size, conf.in_enc_size, conf.hid_size,
                       conf.out_size);
@@ -165,6 +168,7 @@ static void sl_init() {
   printf("\n============== Network configuration ===============\n\n");
   print_network(&net);
   printf("==================================================\n\n");
+#endif
 
   // Fill settings
   sl_settings.thrust_effect = SL_THRUST_EFFECT;
@@ -232,9 +236,6 @@ static void sl_optical_flow_cb(uint8_t sender_id, uint32_t stamp,
   }
   div_gt = div_gt_tmp;
 
-  // Send divergence to upboard
-  uart_driver_tx_event(divergence, divergence_dot);
-
   // Run the spiking network
   sl_run(divergence, divergence_dot);
 }
@@ -256,12 +257,21 @@ static void sl_run(float divergence, float divergence_dot) {
   }
 
   // TODO: here we reset the network in between runs!
+  uint8_t reset_flag = 0;
   if (first_run) {
     start_time = get_sys_time_float();
     nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
-    reset_network(&net);
+    reset_flag = 1;
     first_run = false;
+#ifndef SL_UART_CONTROL
+    reset_network(&net);
+#endif
   }
+
+  // Send divergence to upboard over UART
+#ifdef SL_UART_CONTROL
+  uart_driver_tx_event(divergence, reset_flag);
+#endif
 
   // Let the vehicle settle
   if (get_sys_time_float() - start_time < 5.0f) {
@@ -283,6 +293,9 @@ static void sl_run(float divergence, float divergence_dot) {
     record = 0;
   }
 
+  // SNN onboard paparazzi
+  // ifdef: uart_driver event-triggered RX loop overwrites thurst (see "modules/uart_driver/uart_driver.c")
+#ifndef SL_UART_CONTROL
   // Forward spiking net to get action/thrust for control
   // Converting to G's and clamping happens here, in simulation this was done in
   // environment
@@ -290,17 +303,13 @@ static void sl_run(float divergence, float divergence_dot) {
   net.in[1] = divergence_dot;
   thrust = forward_network(&net) * 9.81f;
 
-  // Get most recent upboard thrust
-  pthread_mutex_lock(rx_mutex);
-  upboard_thrust = uart_rx_buffer.thrust * 9.81f;
-  pthread_mutex_unlock(rx_mutex);
-
   // Bound thrust to limits (-0.8g, 0.5g)
   Bound(thrust, -7.848f, 4.905f);
 
   // Get spike count
   // No need to reset, since that is done in reset_network()
   spike_count = net.hid->s_count + net.out->s_count;
+#endif
 
   // Set control mode: active closed-loop control or linear transform
   if (SL_ACTIVE_CONTROL) {

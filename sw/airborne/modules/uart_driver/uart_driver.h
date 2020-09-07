@@ -60,9 +60,8 @@ LOIHI LANDER - TX DIVERGENCE
 */
 
 typedef struct __attribute__((packed)) {
-  int cnt;
   float divergence;
-  float divergence_dot;
+  uint8_t reset_net;
 } divergence_frame_t;
 
 typedef struct __attribute__((packed)) {
@@ -75,7 +74,6 @@ LOIHI LANDER - RX THRUST
 */
 
 typedef struct __attribute__((packed)) {
-  int cnt;
   float thrust;
 } thrust_frame_t;
 
@@ -85,12 +83,10 @@ typedef struct __attribute__((packed)) {
 } thrust_packet_t;
 
 extern thrust_frame_t uart_rx_buffer;
-extern pthread_mutex_t* rx_mutex;
 
 extern void uart_driver_rx_event(void);
 extern void uart_driver_init(void);
-extern void uart_driver_tx_loop(void);
-extern void uart_driver_tx_event(float divergence, float divergence_dot);
+extern void uart_driver_tx_event(float divergence, uint8_t reset_net);
 
 #ifdef __cplusplus
 } /* extern "C" */
