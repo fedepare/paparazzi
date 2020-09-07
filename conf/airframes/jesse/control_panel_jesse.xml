@@ -93,7 +93,7 @@
             <program name="Server"/>
             <program name="GCS"/>
             <program name="NatNet" command="sw/ground_segment/misc/natnet2ivy">
-                <arg flag="-ac 9999" constant="@AC_ID"/>
+                <arg flag="-ac 1" constant="@AC_ID"/>
             </program>
             <program name="Messages">
                 <arg flag="-g" constant="300x300-1000+600"/>

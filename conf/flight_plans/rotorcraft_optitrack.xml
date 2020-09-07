@@ -132,56 +132,6 @@
             <call_once fun="setNav()"/>
             <stay wp="STDBY_HIGH"/>
         </block>
-        <block name="ascend 0.1">
-            <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.1"/>
-            <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.1"/>-->
-            <stay climb="0.1" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="descend 0.1">
-            <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="ascend 0.2"/>
-            <!--            <exception cond="0.5 > GetPosAlt()" deroute="ascend 0.2"/>-->
-            <stay climb="-0.1" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="ascend 0.2">
-            <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.2"/>
-            <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.2"/>-->
-            <stay climb="0.2" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="descend 0.2">
-            <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="ascend 0.3"/>
-            <!--            <exception cond="0.5 > GetPosAlt()" deroute="ascend 0.3"/>-->
-            <stay climb="-0.2" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="ascend 0.3">
-            <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.3"/>
-            <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.3"/>-->
-            <stay climb="0.3" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="descend 0.3">
-            <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="ascend 0.5"/>
-            <!--            <exception cond="0.5 > GetPosAlt()" deroute="ascend 0.5"/>-->
-            <stay climb="-0.3" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="ascend 0.5">
-            <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.5"/>
-            <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.5"/>-->
-            <stay climb="0.5" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="descend 0.5">
-            <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="ascend 0.7"/>
-            <!--            <exception cond="0.5 > GetPosAlt()" deroute="ascend 0.7"/>-->
-            <stay climb="-0.5" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="ascend 0.7">
-            <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.7"/>
-            <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 0.7"/>-->
-            <stay climb="0.7" vmode="climb" wp="STDBY"/>
-        </block>
-        <block name="descend 0.7">
-            <exception cond="0.5 > stateGetPositionEnu_f()->z" deroute="ascend 1."/>
-            <!--            <exception cond="0.5 > GetPosAlt()" deroute="ascend 1."/>-->
-            <stay climb="-0.7" vmode="climb" wp="STDBY"/>
-        </block>
         <block name="ascend 1.">
             <exception cond="stateGetPositionEnu_f()->z >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 1."/>
             <!--            <exception cond="GetPosAlt() >= WaypointAlt(WP_STDBY_HIGH)" deroute="descend 1."/>-->
