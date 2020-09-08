@@ -268,11 +268,6 @@ static void sl_run(float divergence, float divergence_dot) {
     first_run = false;
   }
 
-  // Send divergence to upboard over UART
-#ifdef SL_UART_CONTROL
-  uart_driver_tx_event(divergence, reset_flag);
-#endif
-
   // Let the vehicle settle
   if (get_sys_time_float() - start_time < 5.0f) {
     return;
