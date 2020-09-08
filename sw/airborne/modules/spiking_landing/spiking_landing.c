@@ -257,15 +257,15 @@ static void sl_run(float divergence, float divergence_dot) {
   }
 
   // TODO: here we reset the network in between runs!
-  uint8_t reset_flag = 0;
   if (first_run) {
     start_time = get_sys_time_float();
     nominal_throttle = (float)stabilization_cmd[COMMAND_THRUST] / MAX_PPRZ;
-    reset_flag = 1;
-    first_run = false;
-#ifndef SL_UART_CONTROL
+#ifdef SL_UART_CONTROL
+    uart_driver_tx_event(divergence, (uint8_t)1);
+#else
     reset_network(&net);
 #endif
+    first_run = false;
   }
 
   // Send divergence to upboard over UART
@@ -294,8 +294,12 @@ static void sl_run(float divergence, float divergence_dot) {
   }
 
   // SNN onboard paparazzi
-  // ifdef: uart_driver event-triggered RX loop overwrites thurst (see "modules/uart_driver/uart_driver.c")
-#ifndef SL_UART_CONTROL
+  // ifdef:
+  // - Send divergence to upboard over UART
+  // - UART event-triggered RX loop overwrites thrust (see "modules/uart_driver/uart_driver.c")
+#ifdef SL_UART_CONTROL
+  uart_driver_tx_event(divergence, (uint8_t)0);
+#else
   // Forward spiking net to get action/thrust for control
   // Converting to G's and clamping happens here, in simulation this was done in
   // environment
